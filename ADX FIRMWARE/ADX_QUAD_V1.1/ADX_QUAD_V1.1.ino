@@ -33,15 +33,7 @@
 // ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
 // CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-//===========================================================================================================
-// Modifications by P.E.Colla (LU7DZ)
-//
-// * Add selective support to facilities (#define USDX 1)
-// * Structure the code to facilitate to add functions but preserving the original hardware (#undef USDX)
-// * Implement code on uSDX hardware (LCD 16x2,Encoder,Buttons)
-// * Add CW functionality
-// * Add configuration parameters
-//
+
 //*****************[ SI5351 VFO CALIBRATION PROCEDURE ]****************************************
 // For SI5351 VFO Calibration Procedure follow these steps:
 // 1 - Connect CAL test point and GND test point on ADX PCB to a Frequency meter or Scope that can measure 1 Mhz up to 1Hz accurately.
@@ -105,16 +97,20 @@ uint16_t TX_State = 0;
 
 unsigned long Cal_freq = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
+/*
 unsigned long F_FT8;
 unsigned long F_FT4; 
 unsigned long F_JS8;
 unsigned long F_WSPR;
+*/
+unsigned long f[4]      = { 7074000, 7047500, 7078000, 7038600};      
 unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           { 7074000, 7047500, 7078000, 7038600},   //40m [1]
                           {10136000,10140000,10130000,10138700},   //30m [2]
                           {14074000,14080000,14078000,14095600},   //20m [3]
                           {18100000,18104000,18104000,18104600},   //17m [4]
                           {21074000,21140000,21078000,21094600}};  //21m [5]                           
+uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
  
 uint16_t Band_slot;
 uint16_t Band = 0;
@@ -159,41 +155,55 @@ void setup_si5351() {
   
 }
 
-//************************************[ MODE Assign ]**********************************
+/*-----------------------------------------------------------------------------------*
+ * LED management functions
+ *-----------------------------------------------------------------------------------*/
+void resetLED() {               //Turn-off all LEDs
+   
+   digitalWrite(WSPR, LOW); 
+   digitalWrite(JS8, LOW); 
+   digitalWrite(FT4, LOW); 
+   digitalWrite(FT8, LOW); 
+ 
+}
+void setLED(uint8_t pin) {      //Turn-on LED {pin}
+   resetLED();
+   digitalWrite(pin,HIGH);
+}
+void blinkLED(uint8_t pin) {    //Blink 3 times LED {pin}
+   
+   uint8_t n=3;
+   while (n>0) {
+       digitalWrite(pin,HIGH);
+       delay(BDLY);
+       digitalWrite(pin,LOW);
+       delay(BDLY);
+       n--;
+   }
+}
+
+void callibrateLED(){           //Set callibration mode
+
+   digitalWrite(WSPR, HIGH); 
+   digitalWrite(FT8, HIGH);
+   delay(DELAY_CAL);        
+  
+}
+
+/*----------------------------------------------------------*
+ * Mode assign
+ *----------------------------------------------------------*/
 void Mode_assign(){
   
    EEPROM.get(EEPROM_MODE,mode);
-
-if ( mode == 1){
-   freq1 = F_WSPR;
-   setLED(WSPR);
-}
-
-if ( mode == 2){
-   freq1 = F_JS8;
-   setLED(JS8);
-}
-
-if ( mode == 3){
-   freq1 = F_FT4;
-   setLED(FT4);
-}
-
-if ( mode == 4){
-  freq1 = F_FT8;  
-  setLED(FT8);
-}
-
-freq = freq1; 
+   int i=4-mode;
+   freq=f[i];
+   setLED(LED[i]);
 
 }
-
-//********************************[ END OF MODE ASSIGN ]*******************************
-//********************************************************************************
-//******************************** [ FUNCTIONS ] *********************************
-//********************************************************************************
-
-//*********************[ Band dependent Frequency Assign Function ]********************
+/*----------------------------------------------------------*
+ * Frequency assign (band dependant)
+ *----------------------------------------------------------*/
 void Freq_assign(){
 
     uint8_t b;
@@ -207,53 +217,28 @@ void Freq_assign(){
       case 15 : b=5;break;
       default : b=1;break; 
     }
-
-    F_FT8 =slot[b,0];
-    F_FT4 =slot[b,1];
-    F_JS8 =slot[b,2];
-    F_WSPR=slot[b,3];
+    for (int i=0;i>3;i++) {
+      f[i]=slot[b,i];
+    }
           
 }
-//************************[ End of Frequency assign function ]*************************  
-void resetLED() {
-   
-   digitalWrite(WSPR, LOW); 
-   digitalWrite(JS8, LOW); 
-   digitalWrite(FT4, LOW); 
-   digitalWrite(FT8, LOW); 
- 
-}
-void setLED(uint8_t pin) {
-   resetLED();
-   digitalWrite(pin,HIGH);
-}
-void blinkLED(uint8_t pin) {
-   
-   uint8_t n=3;
-   while (n>0) {
-       digitalWrite(pin,HIGH);
-       delay(BDLY);
-       digitalWrite(pin,LOW);
-       delay(BDLY);
-       n--;
-   }
-}
 
-void callibrateLED(){
-
-   digitalWrite(WSPR, HIGH); 
-   digitalWrite(FT8, HIGH);
-   delay(DELAY_CAL);        
-  
-}
-
-//******************************[ Band  Assign Function ]******************************
+/*----------------------------------------------------------*
+ * Band assignment based on selected slot
+ *----------------------------------------------------------*/
 
 void Band_assign(){
 
  resetLED();
  EEPROM.get(EEPROM_BAND,Band_slot);
 
+ Band=Bands[3-Band_slot];
+ blinkLED(slot[4-Band_slot]);
+ delay(DELAY_WAIT);
+ Freq_assign();
+ Mode_assign();
+
+ /*
  if (Band_slot == 1){
     Band = Bands[0];
     blinkLED(WSPR);
@@ -273,18 +258,14 @@ void Band_assign(){
     Band = Bands[3];
     blinkLED(FT8);
   }
+*/
 
-
-  delay(DELAY_WAIT);
-  Freq_assign();
-  Mode_assign();
 
 
 }
-//***************************[ End of Band assign function ]***************************  
-
-
-//*******************************[ Manual TX FUNCTION ]********************************
+/*----------------------------------------------------------*
+ * Manually turn TX while pressed
+ *----------------------------------------------------------*/
 void ManualTX(){
  
     digitalWrite(RX,LOW);
@@ -304,53 +285,18 @@ void ManualTX(){
     TX_State = 0;
 
 }
-//********************************[ END OF Manual TX ]*********************************
-
-//******************************[ BAND SELECT Function]********************************
+/*----------------------------------------------------------*
+ * Select band to operate
+ *----------------------------------------------------------*/
 void Band_Select(){
 
    digitalWrite(TX,1);
    addr = 50; 
    EEPROM.get(addr,Band_slot);
    resetLED();
-   
-
-   if (Band_slot == 1){
-      blinkLED(WSPR);
-   }
-
-   if (Band_slot == 2){
-       blinkLED(JS8);
-   }
-
-   if (Band_slot == 3){
-      blinkLED(FT4);
-
-   }
- 
-   if (Band_slot == 4){
-      blinkLED(FT8);
-   }
-
+   blinkLED(LED[4-Band_slot]);
    while (true) {
-
-      if (Band_slot == 1){
-         setLED(WSPR);
-      }
-
-      if (Band_slot == 2){
-         setLED(JS8);
-      }
-
-      if (Band_slot == 3){
-         setLED(FT4);
-
-      }
-
-      if (Band_slot == 4){
-         setLED(FT8);
-      }
-
+      setLED(LED[4-Band_slot]);
       UP_State = digitalRead(UP);
       DOWN_State = digitalRead(DOWN);
     
@@ -358,7 +304,7 @@ void Band_Select(){
          delay(100);     
          UP_State = digitalRead(UP);
          if ((UP_State == LOW)&&(DOWN_State == HIGH)) {
-            Band_slot = Band_slot - 1;
+            Band_slot--;
             if (Band_slot < 1){
                Band_slot = 4;
             }
@@ -369,7 +315,7 @@ void Band_Select(){
          delay(100);      
          DOWN_State = digitalRead(DOWN);
          if ((UP_State == HIGH)&&(DOWN_State == LOW)) {
-            Band_slot = Band_slot + 1;
+            Band_slot++;
             if (Band_slot > 4){
                Band_slot = 1;
             }
@@ -391,10 +337,9 @@ void Band_Select(){
 }
 
 }
-  
-//*********************************[ END OF BAND SELECT ]*****************************
-
-//************************** [SI5351 VFO Calibration Function] ************************
+/*----------------------------------------------------------*
+ * Calibration function
+ *----------------------------------------------------------*/
 void Calibration(){
 
   resetLED();
@@ -419,7 +364,7 @@ void Calibration(){
            EEPROM.put(EEPROM_CALLIBRATION, cal_factor); 
            si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
     
-  // Set CLK2 output
+  // Set Calibration CLK output
   
            si5351.set_freq(Cal_freq * 100, CAL_CLOCK);
            si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for lower power for calibration
@@ -437,18 +382,20 @@ void Calibration(){
            EEPROM.put(addr, cal_factor);    
            si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
 
-  // Set CLK2 output
+  // Set Calbration Clock output
            
-           si5351.set_freq(Cal_freq * 100, SI5351_CLK2);
-           si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
-           si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable clock2 
+           si5351.set_freq(Cal_freq * 100, CAL_CLOCK);
+           si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for lower power for Calibration
+           si5351.set_clock_pwr(CAL_CLOCK, 1); // Enable clock2 
 
         }
      } 
 
   }
 }
-//****************************** [ End Of Calibration Function ]****************************************
+/*----------------------------------------------------------*
+ * Initialization function from EEPROM
+ *----------------------------------------------------------*/
 
 //*********************************[ INITIALIZATION FUNCTION ]******************************************
 void INIT(){
@@ -525,8 +472,11 @@ void setup()
 
 }
  
-//**************************[ END OF SETUP FUNCTION ]************************
-
+//*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
+/*---------------------------------------------------------------------------*
+ *  checkMode
+ *  manage change in mode during run-time
+ *---------------------------------------------------------------------------*/
 void checkMode() {
 
   UP_State = digitalRead(UP);
