@@ -33,7 +33,15 @@
 // ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
 // CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
+//===========================================================================================================
+// Modifications by P.E.Colla (LU7DZ)
+//
+// * Add selective support to facilities (#define USDX 1)
+// * Structure the code to facilitate to add functions but preserving the original hardware (#undef USDX)
+// * Implement code on uSDX hardware (LCD 16x2,Encoder,Buttons)
+// * Add CW functionality
+// * Add configuration parameters
+//
 //*****************[ SI5351 VFO CALIBRATION PROCEDURE ]****************************************
 // For SI5351 VFO Calibration Procedure follow these steps:
 // 1 - Connect CAL test point and GND test point on ADX PCB to a Frequency meter or Scope that can measure 1 Mhz up to 1Hz accurately.
