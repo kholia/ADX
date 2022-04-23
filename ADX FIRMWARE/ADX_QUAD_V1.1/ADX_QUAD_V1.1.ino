@@ -50,22 +50,26 @@
 #include <si5351.h>
 #include "Wire.h"
 #include <EEPROM.h>
-
 #include <stdint.h>
-
 //********************************[ DEFINES ]***************************************************
-#define UP          2           // UP Switch
-#define DOWN        3           // DOWN Switch
-#define TXSW        4           // TX Switch
-#define TX         13           //TX LED
+
+/*----------------------------*
+ * Pin Assignment             *
+ *----------------------------*/
+
+#define UP          2           //UP Switch
+#define DOWN        3           //DOWN Switch
+#define TXSW        4           //TX Switch
+#define RX          8           //RX Switch
 #define WSPR        9           //WSPR LED 
 #define JS8        10           //JS8 LED
 #define FT4        11           //FT4 LED
 #define FT8        12           //FT8 LED
-#define RX          8           // RX SWITCH
-#define SI5351_REF  25000000UL  //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
+#define TX         13           //TX LED
 
+#define SI5351_REF  25000000UL  //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
 #define CPU_CLOCK   16000000UL  //Processor clock
+
 #define VOX_MAXTRY  10          //Max number of attempts to detect an audio incoming signal
 #define CNT_MAX     65000       //Max count of timer1
 #define FRQ_MAX     30000       //Max divisor for frequency allowed
@@ -94,8 +98,8 @@ unsigned long freq;
 unsigned long freq1;
 int32_t cal_factor;
 uint16_t TX_State = 0;
-
 unsigned long Cal_freq = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
+
 
 /*
 unsigned long F_FT8;
@@ -103,7 +107,7 @@ unsigned long F_FT4;
 unsigned long F_JS8;
 unsigned long F_WSPR;
 */
-unsigned long f[4]      = { 7074000, 7047500, 7078000, 7038600};      
+unsigned long f[4]      = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
 unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           { 7074000, 7047500, 7078000, 7038600},   //40m [1]
                           {10136000,10140000,10130000,10138700},   //30m [2]
@@ -137,6 +141,7 @@ int Band2 = 30; // Band 2
 int Band3 = 20; // Band 3
 int Band4 = 17; // Band 4
 */
+
 uint16_t Bands[4]={40,30,20,17}; //Band1,Band2,Band3,Band4
 /*--------------------------------------------------------------------------------------------*
  * Initialize DDS SI5351 object
@@ -166,10 +171,12 @@ void resetLED() {               //Turn-off all LEDs
    digitalWrite(FT8, LOW); 
  
 }
+
 void setLED(uint8_t pin) {      //Turn-on LED {pin}
    resetLED();
    digitalWrite(pin,HIGH);
 }
+
 void blinkLED(uint8_t pin) {    //Blink 3 times LED {pin}
    
    uint8_t n=3;
@@ -189,7 +196,6 @@ void callibrateLED(){           //Set callibration mode
    delay(DELAY_CAL);        
   
 }
-
 /*----------------------------------------------------------*
  * Mode assign
  *----------------------------------------------------------*/
@@ -237,30 +243,6 @@ void Band_assign(){
  delay(DELAY_WAIT);
  Freq_assign();
  Mode_assign();
-
- /*
- if (Band_slot == 1){
-    Band = Bands[0];
-    blinkLED(WSPR);
- }
-
- if (Band_slot == 2){
-    Band = Bands[1];
-    blinkLED(JS8);
- }
-
- if (Band_slot == 3){
-    Band = Bands[2];
-    blinkLED(FT4);
- }
-
- if (Band_slot == 4){
-    Band = Bands[3];
-    blinkLED(FT8);
-  }
-*/
-
-
 
 }
 /*----------------------------------------------------------*
