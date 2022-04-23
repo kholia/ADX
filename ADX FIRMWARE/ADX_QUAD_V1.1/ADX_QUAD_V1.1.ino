@@ -6,13 +6,26 @@
 //*********************************************************************************************************
 // Required Libraries
 // ----------------------------------------------------------------------------------------------------------------------
-// Etherkit Si5351 (Needs to be installed via Library Manager to arduino ide) - SI5351 Library by Jason Mildrum (NT7S) - https://github.com/etherkit/Si5351Arduino
+// Etherkit Si5351 (Needs to be installed via Library Manager to arduino ide) - 
+//          SI5351 Library by Jason Mildrum (NT7S) - https://github.com/etherkit/Si5351Arduino
 // Arduino "Wire.h" I2C library(built-into arduino ide)
 // Arduino "EEPROM.h" EEPROM Library(built-into arduino ide)
 //*************************************[ LICENCE and CREDITS ]*********************************************
 //  FSK TX Signal Generation code by: Burkhard Kainka(DK7JD) - http://elektronik-labor.de/HF/SDRtxFSK2.html
 //  SI5351 Library by Jason Mildrum (NT7S) - https://github.com/etherkit/Si5351Arduino
-
+//*-----------------------------------------------------------------------------------------------------------------*
+//* Modified by Dr. P.E.Colla (LU7DZ)                                                                               
+//*     - re-style of the code to facilitate customization for multiple boards
+//*     - implement multiboard support (#define USDX 1)
+//*         - remap of pushbuttons
+//*         - (optional) rotary enconder
+//*         - (optional) LCD display (same as uSDX)
+//*     - changes to compatibilize with Pixino board (http://www.github.com/lu7did/Pixino
+//*     - add CW support (includes keyer support)
+//*     - add CAT support
+//*     - add timeout & watchdog support
+//* Forked version of the original ADX firmware located at http://www.github.com/lu7did/ADX
+//*-----------------------------------------------------------------------------------------------------------------*
 // License
 // -------
 // Permission is hereby granted, free of charge, to any person obtaining
@@ -45,7 +58,6 @@
 //     The waveform is Square wave so freqency calculation can be performed esaily.
 // 7 - If you read as accurate as possible 1000000 Hz then calibration is done. 
 // 8 - Power off ADX.
- 
 //*******************************[ LIBRARIES ]*************************************************
 #include <si5351.h>
 #include "Wire.h"
@@ -53,19 +65,28 @@
 #include <stdint.h>
 //********************************[ DEFINES ]***************************************************
 
+#define USDX        1
+
 /*----------------------------*
  * Pin Assignment             *
  *----------------------------*/
+#ifndef USDX
+   #define UP          2           //UP Switch
+   #define DOWN        3           //DOWN Switch
+   #define TXSW        4           //TX Switch
+   #define RX          8           //RX Switch
+   #define WSPR        9           //WSPR LED 
+   #define JS8        10           //JS8 LED
+   #define FT4        11           //FT4 LED
+   #define FT8        12           //FT8 LED
+   #define TX         13           //TX LED
+#else
 
-#define UP          2           //UP Switch
-#define DOWN        3           //DOWN Switch
-#define TXSW        4           //TX Switch
-#define RX          8           //RX Switch
-#define WSPR        9           //WSPR LED 
-#define JS8        10           //JS8 LED
-#define FT4        11           //FT4 LED
-#define FT8        12           //FT8 LED
-#define TX         13           //TX LED
+
+   #define TX         13           //(PB5) TX LED
+        
+#endif //USDX  -- Pin Assignment remap --
+
 
 #define SI5351_REF  25000000UL  //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
 #define CPU_CLOCK   16000000UL  //Processor clock
@@ -101,12 +122,6 @@ uint16_t TX_State = 0;
 unsigned long Cal_freq = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
 
-/*
-unsigned long F_FT8;
-unsigned long F_FT4; 
-unsigned long F_JS8;
-unsigned long F_WSPR;
-*/
 unsigned long f[4]      = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
 unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           { 7074000, 7047500, 7078000, 7038600},   //40m [1]
@@ -114,13 +129,12 @@ unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           {14074000,14080000,14078000,14095600},   //20m [3]
                           {18100000,18104000,18104000,18104600},   //17m [4]
                           {21074000,21140000,21078000,21094600}};  //21m [5]                           
+#ifndef USDX
 uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
+#endif //USDX
  
 uint16_t Band_slot;
 uint16_t Band = 0;
-uint16_t UP_State;
-uint16_t DOWN_State;
-uint16_t TXSW_State;
 //**********************************[ BAND SELECT ]************************************************
 
 /*
@@ -164,22 +178,32 @@ void setup_si5351() {
  * LED management functions
  *-----------------------------------------------------------------------------------*/
 void resetLED() {               //Turn-off all LEDs
-   
+
+#ifndef USDX   
    digitalWrite(WSPR, LOW); 
    digitalWrite(JS8, LOW); 
    digitalWrite(FT4, LOW); 
    digitalWrite(FT8, LOW); 
+#endif //USDX
  
 }
 
-void setLED(uint8_t pin) {      //Turn-on LED {pin}
+void setLED(uint8_t LEDpin) {      //Turn-on LED {pin}
    resetLED();
+   
+#ifndef USDX 
+   uint8_t pin=LED[LEDpin];  
    digitalWrite(pin,HIGH);
+#else
+
+#endif //USDX
 }
 
-void blinkLED(uint8_t pin) {    //Blink 3 times LED {pin}
-   
+void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
+
+#ifndef USDX   
    uint8_t n=3;
+   uint8_t pin=LED[LEDpin];
    while (n>0) {
        digitalWrite(pin,HIGH);
        delay(BDLY);
@@ -187,14 +211,18 @@ void blinkLED(uint8_t pin) {    //Blink 3 times LED {pin}
        delay(BDLY);
        n--;
    }
+#else
+
+#endif //USDX   
 }
 
 void callibrateLED(){           //Set callibration mode
 
+#ifndef USDX
    digitalWrite(WSPR, HIGH); 
    digitalWrite(FT8, HIGH);
    delay(DELAY_CAL);        
-  
+#endif //USDX  
 }
 /*----------------------------------------------------------*
  * Mode assign
@@ -204,7 +232,7 @@ void Mode_assign(){
    EEPROM.get(EEPROM_MODE,mode);
    int i=4-mode;
    freq=f[i];
-   setLED(LED[i]);
+   setLED(i);
 
 }
 /*----------------------------------------------------------*
@@ -249,12 +277,14 @@ void Band_assign(){
  * Manually turn TX while pressed
  *----------------------------------------------------------*/
 void ManualTX(){
- 
+
+#ifndef USDX  
     digitalWrite(RX,LOW);
+#endif //USDX
+    
     si5351.output_enable(RX_CLOCK, 0);   //RX off
   
-    while(TXSW_State==LOW) {
-       TXSW_State = digitalRead(TXSW);
+    while(getTXSW()==LOW) {
        digitalWrite(TX,1);
        si5351.set_freq(freq1*100ULL, TX_CLOCK);
        si5351.output_enable(TX_CLOCK, 1);   //TX on
@@ -267,6 +297,49 @@ void ManualTX(){
     TX_State = 0;
 
 }
+bool getSwitch(uint8_t pin) {
+    bool state=digitalRead(pin);
+    if (state==HIGH) {
+       delay(100);
+       state=digitalRead(pin);
+       if (state==HIGH) {
+          return HIGH;
+       } else {
+         return LOW;   
+       }
+    } else {
+      return LOW;
+    }
+  
+}
+bool getUPState() {
+
+#ifndef USDX
+    return getSwitch(UP);
+#else
+
+#endif //USDX
+
+  
+}
+bool getDOWNState() {
+
+#ifndef USDX
+    return getSwitch(DOWN);
+#else
+
+#endif //USDX
+}
+
+bool getTXSW() {
+#ifndef USDX
+    return getSwitch(TXSW);
+
+#else
+
+#endif //USDX
+}
+
 /*----------------------------------------------------------*
  * Select band to operate
  *----------------------------------------------------------*/
@@ -276,45 +349,32 @@ void Band_Select(){
    addr = 50; 
    EEPROM.get(addr,Band_slot);
    resetLED();
-   blinkLED(LED[4-Band_slot]);
+   blinkLED(4-Band_slot);
+   
    while (true) {
-      setLED(LED[4-Band_slot]);
-      UP_State = digitalRead(UP);
-      DOWN_State = digitalRead(DOWN);
+      setLED(4-Band_slot);
+      
     
-      if ((UP_State == LOW)&&(DOWN_State == HIGH)) {
-         delay(100);     
-         UP_State = digitalRead(UP);
-         if ((UP_State == LOW)&&(DOWN_State == HIGH)) {
-            Band_slot--;
-            if (Band_slot < 1){
-               Band_slot = 4;
-            }
-         }
+      if ((getUPState() == LOW)&&(getDOWNState() == HIGH)) {
+          Band_slot--;
+          if (Band_slot < 1){
+             Band_slot = 4;
+          }
       } 
    
-      if ((UP_State == HIGH)&&(DOWN_State == LOW)) {
-         delay(100);      
-         DOWN_State = digitalRead(DOWN);
-         if ((UP_State == HIGH)&&(DOWN_State == LOW)) {
-            Band_slot++;
-            if (Band_slot > 4){
-               Band_slot = 1;
-            }
+      if ((getUPState() == HIGH)&&(getDOWNState() == LOW)) {
+         Band_slot++;
+         if (Band_slot > 4){
+            Band_slot = 1;
          }
       }
                                                 
-      TX_State = digitalRead(TXSW);
 
-      if (TX_State == LOW) {
-         delay(100); 
-         TX_State = digitalRead(TXSW);
-         if (TX_State == LOW) {
-            digitalWrite(TX,0);
-            EEPROM.put(EEPROM_BAND,Band_slot);
-            Band_assign();
-            return; 
-         }
+      if (getTXSW() == LOW) {
+         digitalWrite(TX,0);
+         EEPROM.put(EEPROM_BAND,Band_slot);
+         Band_assign();
+         return; 
       } 
 }
 
@@ -336,41 +396,30 @@ void Calibration(){
   
   while (true) {
 
-     UP_State = digitalRead(UP);
 
-     if (UP_State == LOW) {
-        delay(50);  
-        UP_State = digitalRead(UP);
-        if (UP_State == LOW) {
-           cal_factor = cal_factor - 100;
-           EEPROM.put(EEPROM_CALLIBRATION, cal_factor); 
-           si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
+     if (getUPState() == LOW) {
+        cal_factor = cal_factor - 100;
+        EEPROM.put(EEPROM_CALLIBRATION, cal_factor); 
+        si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
     
   // Set Calibration CLK output
   
-           si5351.set_freq(Cal_freq * 100, CAL_CLOCK);
-           si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for lower power for calibration
-           si5351.set_clock_pwr(CAL_CLOCK, 1); // Enable the clock for calibration
-        }  
+        si5351.set_freq(Cal_freq * 100, CAL_CLOCK);
+        si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for lower power for calibration
+        si5351.set_clock_pwr(CAL_CLOCK, 1); // Enable the clock for calibration
      } 
    
-     DOWN_State = digitalRead(DOWN);
 
-     if (DOWN_State == LOW) {
-        delay(50);      
-        DOWN_State = digitalRead(DOWN);
-        if (DOWN_State == LOW) {
-           cal_factor = cal_factor + 100;
-           EEPROM.put(addr, cal_factor);    
-           si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
+     if (getDOWNState() == LOW) {
+        cal_factor = cal_factor + 100;
+        EEPROM.put(addr, cal_factor);    
+        si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
 
   // Set Calbration Clock output
            
-           si5351.set_freq(Cal_freq * 100, CAL_CLOCK);
-           si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for lower power for Calibration
-           si5351.set_clock_pwr(CAL_CLOCK, 1); // Enable clock2 
-
-        }
+        si5351.set_freq(Cal_freq * 100, CAL_CLOCK);
+        si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for lower power for Calibration
+        si5351.set_clock_pwr(CAL_CLOCK, 1); // Enable clock2 
      } 
 
   }
@@ -414,10 +463,14 @@ void INIT(){
 
 }
 
+/*--------------------------------------------------------------------------*
+ * definePinOut
+ * isolate pin definition on a board conditional procedure out of the main
+ * setup() flow
+ *--------------------------------------------------------------------------*/
+void definePinOut() {
 
-//*************************************[ SETUP FUNCTION ]************************************** 
-void setup()
-{
+#ifndef USDX
    pinMode(UP,   INPUT);
    pinMode(DOWN, INPUT);
    pinMode(TXSW, INPUT);
@@ -431,11 +484,19 @@ void setup()
 
    pinMode(6,    INPUT);  //PD6=AN0 must be grounded
    pinMode(7,    INPUT);  //PD7=AN1=HiZ
-  
+#else  //Definition for alternate board
+   
+#endif //USDX define board
+}
+
+//*************************************[ SETUP FUNCTION ]************************************** 
+void setup()
+{
+   definePinOut();
    INIT();
    setup_si5351();
   
-   if ( digitalRead(DOWN) == LOW ) {
+   if ( getDOWNState() == LOW ) {
       Calibration();
     }
  
@@ -448,12 +509,15 @@ void setup()
   ACSR |= (1<<ACIC);  // Analog Comparator Capture Input
   
   pinMode(7, INPUT); //PD7 = AN1 = HiZ, PD6 = AN0 = 0
+
+#ifndef USDX  
   digitalWrite(RX,LOW);
+#endif //USDX
 
   Mode_assign(); 
 
 }
- 
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
 /*---------------------------------------------------------------------------*
  *  checkMode
@@ -461,64 +525,38 @@ void setup()
  *---------------------------------------------------------------------------*/
 void checkMode() {
 
-  UP_State = digitalRead(UP);
-  DOWN_State = digitalRead(DOWN);
 
-  if ((UP_State == LOW)&&(DOWN_State == LOW)&&(TX_State == 0)) {
-     delay(100); 
-     UP_State = digitalRead(UP);
-     DOWN_State = digitalRead(DOWN);
-     if ((UP_State == LOW)&&(DOWN_State == LOW)&&(TX_State == 0)) {
-        Band_Select();
- 
-     }
+  if ((getUPState() == LOW)&&(getDOWNState() == LOW)&&(TX_State == 0)) {
+     Band_Select();
   }
 
-  if ((UP_State == LOW)&&(DOWN_State == HIGH)&&(TX_State == 0)) {
-     delay(50); 
-     UP_State = digitalRead(UP);
-     if ((UP_State == LOW)&&(DOWN_State == HIGH)&&(TX_State == 0)) {
-        mode = mode - 1;
-        if (mode < 1){
-           mode = 4;
-        }
+  if ((getUPState() == LOW)&&(getDOWNState() == HIGH)&&(TX_State == 0)) {
+     mode = mode - 1;
+     if (mode < 1){
+        mode = 4;
+     }
 
-        addr = 40;
-        EEPROM.put(addr, mode); 
-        Mode_assign();
-     }           
+     addr = 40;
+     EEPROM.put(addr, mode); 
+     Mode_assign();
   } 
    
-  DOWN_State = digitalRead(DOWN);
 
-  if ((UP_State == HIGH) && (DOWN_State == LOW)&&(TX_State == 0)) {
-     delay(50); 
-     
-     DOWN_State = digitalRead(DOWN);
-     if ((UP_State == HIGH) && (DOWN_State == LOW)&&(TX_State == 0)) {
-        mode = mode + 1;
+  if ((getUPState() == HIGH) && (getDOWNState() == LOW)&&(TX_State == 0)) {
+     mode = mode + 1;
+     if (mode > 4){
+        mode = 1;
+     }
 
-        if (mode > 4){
-           mode = 1;
-        }
-
-        addr = 40;
-        EEPROM.put(addr, mode); 
-        Mode_assign();
-     }                
+     addr = 40;
+     EEPROM.put(addr, mode); 
+     Mode_assign();
   } 
 
-  TXSW_State = digitalRead(TXSW);
 
-if ((TXSW_State == LOW) && (TX_State == 0)) {
-   delay(50); 
- 
-   TXSW_State = digitalRead(TXSW);
-   if ((TXSW_State == LOW) && (TX_State == 0)) {
-      Mode_assign();
-      ManualTX();
-   }
-  
+if ((getTXSW() == LOW) && (TX_State == 0)) {
+   Mode_assign();
+   ManualTX();
  }
  
 }
@@ -571,7 +609,11 @@ uint16_t FSKtx = 0;
           if (FSKtx == 0){
              TX_State = 1;
              digitalWrite(TX,HIGH);
+
+#ifndef USDX
              digitalWrite(RX,LOW);
+#endif //USDX
+             
              si5351.output_enable(RX_CLOCK, 0);   //RX off
              si5351.output_enable(TX_CLOCK, 1);   //TX on
           }
@@ -591,8 +633,12 @@ uint16_t FSKtx = 0;
  si5351.output_enable(TX_CLOCK, 0);       //TX CLK off
  si5351.set_freq(freq*100ULL, RX_CLOCK);  //Change frequency of RX clock  
  si5351.output_enable(RX_CLOCK, 1);       //RX on
- TX_State = 0;                            //
+ TX_State = 0;  
+ 
+#ifndef USDX 
  digitalWrite(RX,HIGH);                   //
+#endif //USDX No RX line used 
+ 
  FSKtx = 0;                               //Prepare for next cycle
      
 }
