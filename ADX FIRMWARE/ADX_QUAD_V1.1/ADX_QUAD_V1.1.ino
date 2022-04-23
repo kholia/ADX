@@ -65,29 +65,39 @@
 #include <stdint.h>
 //********************************[ DEFINES ]***************************************************
 
-#define USDX        1
+#define USDX        1     //Use a modified uSDX board as base (D6/D7 --> D5/D8)
+#define LEDS        1     //Use on-board LEDS
+#define EE          1     //User EEPROM for persistence
+#define PUSH        1     //Use UP-DOWN-TXSW Push buttons
 
 /*----------------------------*
  * Pin Assignment             *
  *----------------------------*/
-#ifndef USDX
+   #define AIN0        6           //(PD6)
+   #define AIN1        7           //(PD7)
+   #define TX         13           //(PB5) TX LED
+
+#ifdef PUSH
    #define UP          2           //UP Switch
    #define DOWN        3           //DOWN Switch
    #define TXSW        4           //TX Switch
+#endif //PUSH
+
+#ifndef USDX
    #define RX          8           //RX Switch
+#endif //USDX  -- Pin Assignment remap --
+
+#ifdef LEDS
    #define WSPR        9           //WSPR LED 
    #define JS8        10           //JS8 LED
    #define FT4        11           //FT4 LED
    #define FT8        12           //FT8 LED
-   #define TX         13           //TX LED
-#else
+#endif //LEDS
 
 
-   #define TX         13           //(PB5) TX LED
-        
-#endif //USDX  -- Pin Assignment remap --
-
-
+/*------------------------------------*
+ * General purpose global define      *
+ * -----------------------------------*/
 #define SI5351_REF  25000000UL  //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
 #define CPU_CLOCK   16000000UL  //Processor clock
 
@@ -99,28 +109,27 @@
 #define RX_CLOCK    SI5351_CLK1 //RX Clock
 #define CAL_CLOCK   SI5351_CLK2 //Callibration clock
 
-#define EEPROM_CALLIBRATION 10
-#define EEPROM_MODE 40
-#define EEPROM_BAND 50
-#define EEPROM_TEMP 30
-
-#define EEPROM_SAVE 100
 #define BDLY        250
 #define DELAY_WAIT  BDLY*4
 #define DELAY_CAL   DELAY_WAIT/10
 
-//*******************************[ VARIABLE DECLARATIONS ]*************************************
-uint32_t val;
-//uint16_t temp;
-uint32_t val_EE; 
-uint16_t addr = 0;
-uint16_t mode;
-unsigned long freq; 
-unsigned long freq1;
-int32_t cal_factor;
-uint16_t TX_State = 0;
-unsigned long Cal_freq = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
+#ifdef EE
+#define EEPROM_CAL  10
+#define EEPROM_MODE 40
+#define EEPROM_BAND 50
+#define EEPROM_TEMP 30
+#define EEPROM_SAVE 100
+#endif //EEPROM
 
+//*******************************[ VARIABLE DECLARATIONS ]*************************************
+
+uint16_t mode;
+uint16_t TX_State = 0;
+uint16_t Band_slot;
+uint16_t Band = 0;
+
+unsigned long freq; 
+unsigned long Cal_freq = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
 unsigned long f[4]      = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
 unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
@@ -129,12 +138,12 @@ unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           {14074000,14080000,14078000,14095600},   //20m [3]
                           {18100000,18104000,18104000,18104600},   //17m [4]
                           {21074000,21140000,21078000,21094600}};  //21m [5]                           
-#ifndef USDX
+
+#ifdef LEDS
 uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
-#endif //USDX
+#endif //LEDS  -- Board LEDS
  
-uint16_t Band_slot;
-uint16_t Band = 0;
+
 //**********************************[ BAND SELECT ]************************************************
 
 /*
@@ -149,13 +158,6 @@ uint16_t Band = 0;
  Supported Bands are: 80m, 40m, 30m, 20m,17m, 15m
 */
 
-/*
-int Band1 = 40; // Band 1 // These are my default bands. Feel free to swap with yours
-int Band2 = 30; // Band 2
-int Band3 = 20; // Band 3
-int Band4 = 17; // Band 4
-*/
-
 uint16_t Bands[4]={40,30,20,17}; //Band1,Band2,Band3,Band4
 /*--------------------------------------------------------------------------------------------*
  * Initialize DDS SI5351 object
@@ -165,6 +167,12 @@ Si5351 si5351;
 void setup_si5351() {
 //------------------------------- SET SI5351 VFO -----------------------------------  
 // The crystal load value needs to match in order to have an accurate calibration
+
+  uint32_t cal_factor=0;
+
+#ifdef EE
+  EEPROM.get(EEPROM_CAL,cal_factor);
+#endif //EEPROM
   
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
@@ -179,29 +187,28 @@ void setup_si5351() {
  *-----------------------------------------------------------------------------------*/
 void resetLED() {               //Turn-off all LEDs
 
-#ifndef USDX   
+#ifdef LEDS  
    digitalWrite(WSPR, LOW); 
    digitalWrite(JS8, LOW); 
    digitalWrite(FT4, LOW); 
    digitalWrite(FT8, LOW); 
-#endif //USDX
+#endif //LEDS
  
 }
 
 void setLED(uint8_t LEDpin) {      //Turn-on LED {pin}
    resetLED();
    
-#ifndef USDX 
+#ifdef LEDS 
    uint8_t pin=LED[LEDpin];  
    digitalWrite(pin,HIGH);
-#else
+#endif //LEDS
 
-#endif //USDX
 }
 
 void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 
-#ifndef USDX   
+#ifdef LEDS   
    uint8_t n=3;
    uint8_t pin=LED[LEDpin];
    while (n>0) {
@@ -211,25 +218,26 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
        delay(BDLY);
        n--;
    }
-#else
-
-#endif //USDX   
+#endif //LEDS   
 }
 
 void callibrateLED(){           //Set callibration mode
 
-#ifndef USDX
+#ifdef LEDS
    digitalWrite(WSPR, HIGH); 
    digitalWrite(FT8, HIGH);
    delay(DELAY_CAL);        
-#endif //USDX  
+#endif //LEDS  
 }
 /*----------------------------------------------------------*
  * Mode assign
  *----------------------------------------------------------*/
 void Mode_assign(){
-  
+
+#ifdef EE 
    EEPROM.get(EEPROM_MODE,mode);
+#endif //EEPROM
+   
    int i=4-mode;
    freq=f[i];
    setLED(i);
@@ -264,7 +272,10 @@ void Freq_assign(){
 void Band_assign(){
 
  resetLED();
+
+#ifdef EE
  EEPROM.get(EEPROM_BAND,Band_slot);
+#endif //EEPROM
 
  Band=Bands[3-Band_slot];
  blinkLED(slot[4-Band_slot]);
@@ -286,7 +297,7 @@ void ManualTX(){
   
     while(getTXSW()==LOW) {
        digitalWrite(TX,1);
-       si5351.set_freq(freq1*100ULL, TX_CLOCK);
+       si5351.set_freq(freq*100ULL, TX_CLOCK);
        si5351.output_enable(TX_CLOCK, 1);   //TX on
        TX_State = 1;   
     }
@@ -297,7 +308,11 @@ void ManualTX(){
     TX_State = 0;
 
 }
+/*----------------------------------------------------------*
+ * get value for a digital pin and return after debouncing
+ *----------------------------------------------------------*/
 bool getSwitch(uint8_t pin) {
+  
     bool state=digitalRead(pin);
     if (state==HIGH) {
        delay(100);
@@ -312,32 +327,32 @@ bool getSwitch(uint8_t pin) {
     }
   
 }
+/*----------------------------------------------------------*
+ * read UP switch
+ *----------------------------------------------------------*/
 bool getUPState() {
 
-#ifndef USDX
+#ifdef PUSH
     return getSwitch(UP);
-#else
-
-#endif //USDX
-
-  
+#endif //PUSH 
 }
+/*----------------------------------------------------------*
+ * read DOWN Switch
+ *----------------------------------------------------------*/
 bool getDOWNState() {
 
-#ifndef USDX
+#ifdef PUSH
     return getSwitch(DOWN);
-#else
-
-#endif //USDX
+#endif //PUSH
 }
-
+/*----------------------------------------------------------*
+ * read TXSW switch
+ *----------------------------------------------------------*/
 bool getTXSW() {
-#ifndef USDX
+#ifdef PUSH
     return getSwitch(TXSW);
+#endif //PUSH
 
-#else
-
-#endif //USDX
 }
 
 /*----------------------------------------------------------*
@@ -346,15 +361,16 @@ bool getTXSW() {
 void Band_Select(){
 
    digitalWrite(TX,1);
-   addr = 50; 
-   EEPROM.get(addr,Band_slot);
+
+#ifdef EE   
+   EEPROM.get(EEPROM_BAND,Band_slot);
+#endif //EEPROM
+   
    resetLED();
    blinkLED(4-Band_slot);
    
    while (true) {
       setLED(4-Band_slot);
-      
-    
       if ((getUPState() == LOW)&&(getDOWNState() == HIGH)) {
           Band_slot--;
           if (Band_slot < 1){
@@ -367,12 +383,15 @@ void Band_Select(){
          if (Band_slot > 4){
             Band_slot = 1;
          }
-      }
-                                                
+      }                                               
 
       if (getTXSW() == LOW) {
          digitalWrite(TX,0);
+
+#ifdef EE
          EEPROM.put(EEPROM_BAND,Band_slot);
+#endif //EEPROM
+         
          Band_assign();
          return; 
       } 
@@ -385,21 +404,28 @@ void Band_Select(){
 void Calibration(){
 
   resetLED();
-  uint8_t n=4;
-  
+  uint8_t  n=4;
+  uint32_t cal_factor=0;
+   
   while (n>0) {
      callibrateLED();
      n--;
   }
-  
-  EEPROM.get(EEPROM_CALLIBRATION,cal_factor);
+
+#ifdef EE  
+  EEPROM.get(EEPROM_CAL,cal_factor);
+#endif //EEPROM
   
   while (true) {
 
 
      if (getUPState() == LOW) {
         cal_factor = cal_factor - 100;
-        EEPROM.put(EEPROM_CALLIBRATION, cal_factor); 
+
+#ifdef EE
+        EEPROM.put(EEPROM_CAL, cal_factor); 
+#endif //EEPROM
+        
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
     
   // Set Calibration CLK output
@@ -412,7 +438,11 @@ void Calibration(){
 
      if (getDOWNState() == LOW) {
         cal_factor = cal_factor + 100;
-        EEPROM.put(addr, cal_factor);    
+
+#ifdef EE
+        EEPROM.put(EEPROM_CAL, cal_factor);    
+#endif //EEPROM
+        
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
 
   // Set Calbration Clock output
@@ -432,11 +462,15 @@ void Calibration(){
 void INIT(){
 
  uint16_t temp;
+ uint32_t cal_factor;
+
+ #ifdef EE
+ 
  EEPROM.get(EEPROM_TEMP,temp);
 
  if (temp != EEPROM_SAVE){
 
-    EEPROM.put(EEPROM_CALLIBRATION,100000);
+    EEPROM.put(EEPROM_CAL,100000);
     EEPROM.put(EEPROM_MODE,4);
     EEPROM.put(EEPROM_TEMP,EEPROM_SAVE);
     EEPROM.put(EEPROM_BAND,1);
@@ -449,11 +483,13 @@ void INIT(){
     ------------------------------------------------*/
 
    EEPROM.get(EEPROM_TEMP,temp);
-   EEPROM.get(EEPROM_CALLIBRATION,cal_factor);
+   EEPROM.get(EEPROM_CAL,cal_factor);
    EEPROM.get(EEPROM_MODE,mode);
    EEPROM.get(EEPROM_BAND,Band_slot);
 
  }  
+
+#endif // EEPROM
 
  Band_assign();
  Freq_assign();
@@ -470,23 +506,29 @@ void INIT(){
  *--------------------------------------------------------------------------*/
 void definePinOut() {
 
-#ifndef USDX
+#ifdef PUSH
+
    pinMode(UP,   INPUT);
    pinMode(DOWN, INPUT);
    pinMode(TXSW, INPUT);
-   
-   pinMode(TX,   OUTPUT);
+#endif //PUSH
+
+#ifndef USDX   
+   pinMode(RX,   OUTPUT);
+#endif //USDX define board
+
+
+#ifdef LEDX
    pinMode(WSPR, OUTPUT);
    pinMode(JS8,  OUTPUT);
    pinMode(FT4,  OUTPUT);
    pinMode(FT8,  OUTPUT);
-   pinMode(RX,   OUTPUT);
+#endif //LEDS
 
+   pinMode(TX,   OUTPUT);
    pinMode(6,    INPUT);  //PD6=AN0 must be grounded
    pinMode(7,    INPUT);  //PD7=AN1=HiZ
-#else  //Definition for alternate board
-   
-#endif //USDX define board
+
 }
 
 //*************************************[ SETUP FUNCTION ]************************************** 
@@ -536,8 +578,10 @@ void checkMode() {
         mode = 4;
      }
 
-     addr = 40;
-     EEPROM.put(addr, mode); 
+#ifdef EE
+     EEPROM.put(EEPROM_MODE, mode); 
+#endif //EEPROM
+     
      Mode_assign();
   } 
    
@@ -548,8 +592,10 @@ void checkMode() {
         mode = 1;
      }
 
-     addr = 40;
-     EEPROM.put(addr, mode); 
+#ifdef EEPROM
+     EEPROM.put(EEPROM_MODE, mode); 
+#endif //EEPROM
+     
      Mode_assign();
   } 
 
