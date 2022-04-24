@@ -72,16 +72,44 @@
 //
 #define VERSION     "1.0b"
 #define USDX        1     //Use a modified uSDX board as base (D6/D7 --> D5/D8)
-//#define LEDS        1     //Use on-board LEDS
-//#define EE          1     //User EEPROM for persistence
-//#define PUSH        1     //Use UP-DOWN-TXSW Push buttons
+#define LEDS        1     //Use on-board LEDS
+#define EE          1     //User EEPROM for persistence
+#define PUSH        1     //Use UP-DOWN-TXSW Push buttons
 
 #define DEBUG       1     //Debug trace over Serial
+#define CAT         1
 
-#ifdef DEBUG
+//*---- Consistency rules
+
+#if (defined(USDX))   //Rule for conflicting board commands & interface
+#undef LEDS
+#undef EE
+#undef PUSH
+#endif
+
+#if  (defined(DEBUG) || defined(CAT))
 char hi[200];
 #define BAUD 38400
-#endif //DEBUG
+#define _SERIAL 1
+#endif //DEBUG or CAT
+
+
+#if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
+
+#undef  DEBUG
+#endif // CAT && DEBUG
+
+#ifdef CAT
+
+#define BAUD             115200                 //Baudrate used for serial communications
+#define CATCMD_SIZE          32
+
+char CATcmd[CATCMD_SIZE];
+volatile uint8_t cat_active = 0;
+volatile uint32_t rxend_event = 0;
+
+#endif
+
 
 /*----------------------------*
  * Pin Assignment             *
@@ -206,7 +234,334 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 
 }
 
+/*-----------------------------------------------------------------------------------------------------*
+ *                                     CAT SubSystem                                                   *
+ * cloned from uSDX (QCX-SSB) firmware                                                                 *                                    
+ * ----------------------------------------------------------------------------------------------------*/
+#ifdef CAT
 
+// CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX, source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
+// https://www.kenwood.com/i/products/info/amateur/ts_480/pdf/ts_480_pc.pdf
+
+void switch_RXTX(bool t);
+
+void Command_GETFreqA()
+{
+  sprintf(hi,"FA%011ld;",freq);
+  Serial.print(hi);
+}
+
+void Command_SETFreqA()
+{
+  char Catbuffer[16];
+  strncpy(Catbuffer,CATcmd+2,11);
+  Catbuffer[11]='\0';
+
+  freq=(uint32_t)atol(Catbuffer);
+  Command_GETFreqA();
+}
+
+void Command_GETFreqB()
+{
+ Command_GETFreqA();    //While A/B VFO isn't implemented changes the unique VFO
+}
+
+void Command_SETFreqB()
+{
+  Command_SETFreqA();    //While A/B VFO isnt't implemented changes the unique VFO
+}
+
+void Command_IF()
+{
+
+  char txrx = (getWord(SSW,TXON)==true ? '1' : '0');
+  
+  sprintf(hi,"IF%011ld",freq);   //Freq
+  Serial.print(hi);
+  sprintf(hi,"00000");       //Empty
+  Serial.print(hi);
+  sprintf(hi,"+0000");      //RIT (not implemented)
+  Serial.print(hi);
+  sprintf(hi,"0");          //RIT OFF
+  Serial.print(hi);
+  sprintf(hi,"0");          //XIT OFF
+  Serial.print(hi);
+  sprintf(hi,"0");          //Always 0
+  Serial.print(hi);
+  sprintf(hi,"00");         //Memory channel 00
+  Serial.print(hi);
+  sprintf(hi,"%c",txrx);    //RX/TX Status
+  Serial.print(hi);
+  sprintf(hi,"%c",modeTS480());
+  Serial.print(hi);
+  sprintf(hi,"0000000;");   //Constants
+  Serial.print(hi);
+  
+  /*
+  char Catbuffer[32];
+  unsigned int g,m,k,h;
+  uint32_t tf;
+  
+  tf=freq;
+  g=(unsigned int)(tf/1000000000lu);
+  tf-=g*1000000000lu;
+  m=(unsigned int)(tf/1000000lu);
+  tf-=m*1000000lu;
+  k=(unsigned int)(tf/1000lu);
+  tf-=k*1000lu;
+  h=(unsigned int)tf;
+
+  sprintf(Catbuffer,"IF%02u%03u%03u%03u",g,m,k,h);
+  Serial.print(Catbuffer);
+  sprintf(Catbuffer,"00000+000000");
+  Serial.print(Catbuffer);
+  sprintf(Catbuffer,"0000");
+  Serial.print(Catbuffer);
+  Serial.print(mode + 1);
+  sprintf(Catbuffer,"0000000;");
+  Serial.print(Catbuffer);
+  Serial.println();
+  */
+}
+
+
+void Command_ST() {       //Modify when STEP is implemented
+   sprintf(hi,"ST01;");
+   Serial.print(hi);
+}
+
+void Command_GetMD()
+{
+  sprintf(hi,"MD%c;",modeTS480());
+  Serial.print(hi);
+}
+
+void Command_SetMD()
+{
+
+  sprintf(hi,"MD2;");    // at this time only USB is allowed
+  Serial.print(hi);
+  
+}
+
+
+void Command_RX()
+{
+  switch_RXTX(false);
+  Serial.print("RX0;");
+}
+
+void Command_TX0()
+{
+  switch_RXTX(false);
+}
+
+void Command_TX1()
+{
+  switch_RXTX(true);
+}
+
+void Command_TX2()
+{
+  switch_RXTX(true);
+}
+
+
+void Command_VX(char mode)
+{
+  char Catbuffer[16];
+/*  
+  sprintf(Catbuffer, "VX%c;",mode);
+  Serial.print(Catbuffer);
+*/  
+}
+
+
+
+
+
+char modeTS480() {
+
+  switch(mode) {
+    case 0 : return '2';
+    case 1 : return '2';
+    case 2 : return '2';
+    case 3 : return '3';
+    case 4 : return '2';
+    case 5 : return '2';
+    case 6 : return '2';
+    case 7 : return '2';
+    case 8 : return '2';
+    case 9 : return '2';
+    default: return '2';
+
+  }
+}
+void Command_AS() {
+
+  sprintf(hi,"AS000%011ld%c;",freq,modeTS480());
+  Serial.print(hi);
+  return;
+}
+void Command_XI() {
+
+  sprintf(hi,"XI%011ld%c0;",freq,modeTS480());
+  Serial.print(hi);
+  return;
+}
+
+
+
+
+void Command_BChange(int c) { //Change band up or down
+
+  //Do not return anything
+}
+
+
+
+
+
+/*---------------------------------------------------------------------------------------------
+ *  CAT Main command parser and dispatcher
+ *---------------------------------------------------------------------------------------------*/
+
+void analyseCATcmd()
+{
+  if     ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';')) {Command_GETFreqA();}
+  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[13] == ';')) Command_SETFreqA();
+  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[2] == ';')) {Command_GETFreqB();}
+  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[13] == ';')) Command_SETFreqB(); 
+  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'C'))                        {Serial.print("AC000;");}
+  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'G'))                        {Serial.print("AG0000;");}
+  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'N'))                        {Serial.print("AN0;");}
+  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'F'))                        {Serial.print("MF0;");}
+  else if((CATcmd[0] == 'N') && (CATcmd[1] == 'R'))                        {Serial.print("NR0;");}
+  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'R'))                        {Serial.print("PR0;");}
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'U'))                        {Serial.print("SU00000000000;");}
+  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'G'))                        {Serial.print("MG000;");}
+  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'L'))                        {Serial.print("ML000;");}
+  else if((CATcmd[0] == 'N') && (CATcmd[1] == 'L'))                        {Serial.print("NL000;");}
+  else if((CATcmd[0] == 'O') && (CATcmd[1] == 'P'))                        {Serial.print("OP000;");}
+  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'B'))                        {Serial.print("PB000;");}
+  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'C'))                        {Serial.print("PC005;");}
+  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'L'))                        {Serial.print("PL000000;");}
+  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'A'))                        {Serial.print("PA00;");}
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'N'))                        {Serial.print("TN00;");}
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'O'))                        {Serial.print("TO0;");}
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'S'))                        {Serial.print("TS0;");}
+  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'R'))                        {Serial.print("MR00000000000000000000000000000000000000000000000;");}
+  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'S'))                        Command_AS();
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'T'))                        Command_ST();      //Step when implemented
+  else if((CATcmd[0] == 'X') && (CATcmd[1] == 'I'))                        Command_XI();      //Step when implemented
+  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'C'))                        {Serial.print("BC0;");}
+  else if((CATcmd[0] == 'N') && (CATcmd[1] == 'B'))                        {Serial.print("NB0;");}
+  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'S'))                        {Serial.print("BS0;");}
+  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        Command_BChange(-1);
+  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        Command_BChange(+1);
+  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'Y'))                        {Serial.print("BY0;");}
+  else if((CATcmd[0] == 'X') && (CATcmd[1] == 'T'))                        {Serial.print("XT0;");}
+  else if((CATcmd[0] == 'X') && (CATcmd[1] == 'O'))                        {Serial.print("XO000000000000;");}
+  else if((CATcmd[0] == 'C') && (CATcmd[1] == 'A'))                        {Serial.print("CA0;");}
+  else if((CATcmd[0] == 'C') && (CATcmd[1] == 'H'))                        {}
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'V'))                        {}
+  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'W'))                        {}
+  else if((CATcmd[0] == 'Q') && (CATcmd[1] == 'I'))                        {}
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'C'))                        {}
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'R'))                        {}
+  else if((CATcmd[0] == 'U') && (CATcmd[1] == 'P'))                        {}
+  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'R'))                        {}
+  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'V'))                        {}
+  else if((CATcmd[0] == 'D') && (CATcmd[1] == 'N'))                        {}
+  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'D'))                        {Serial.print("VD0100;");}  //Review regarding VOX
+  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'X'))                        {Serial.print("VX1;");}  //Review regarding VOX
+  else if((CATcmd[0] == 'C') && (CATcmd[1] == 'N'))                        {Serial.print("CN00;");}  
+  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'G'))                        {Serial.print("VC009;");}  
+  else if((CATcmd[0] == 'Q') && (CATcmd[1] == 'R'))                        {Serial.print("QR00;");}  
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'H'))                        {Serial.print("SH00;");}  
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'S'))                        {Serial.print("SS0000000000000;");}  
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'L'))                        {Serial.print("RL00;");}  
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'L'))                        {Serial.print("SL00;");}  
+  else if((CATcmd[0] == 'C') && (CATcmd[1] == 'T'))                        {Serial.print("CT0;");}  
+  else if((CATcmd[0] == 'D') && (CATcmd[1] == 'L'))                        {Serial.print("DL000;");}  
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'D'))                        {Serial.print("SD0000;");}  
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'M'))                        {Serial.print("SM00000;");}  
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;");}  
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'G'))                        {Serial.print("RG000;");}  
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'A'))                        {Serial.print("RA0000;");}  
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'M'))                        {Serial.print("RM00000;");}  
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'S'))                        {Serial.print("RS0;");}  
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'T'))                        {Serial.print("RT0;");}      //To be reviewed when RIT is implemented
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'X'))                        {Serial.print("RX0;");}      //To be reviewed when RIT is implemented
+  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'C'))                        {Serial.print("SC00;");}      //To be reviewed when RIT is implemented
+  else if((CATcmd[0] == 'I') && (CATcmd[1] == 'S'))                        {Serial.print("IS00000;");}  
+  else if((CATcmd[0] == 'K') && (CATcmd[1] == 'S'))                        {Serial.print("KS000;");}  
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'Y'))                        {Serial.print("TY000;");}  
+  else if((CATcmd[0] == 'K') && (CATcmd[1] == 'Y'))                        {Serial.print("KY1;");}  
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'U'))                        {Serial.print("RU1;");}  
+  else if((CATcmd[0] == 'U') && (CATcmd[1] == 'L'))                        {Serial.print("UL0;");}  
+  else if((CATcmd[0] == 'L') && (CATcmd[1] == 'K'))                        {Serial.print("LK00;");}  
+  else if((CATcmd[0] == 'L') && (CATcmd[1] == 'M'))                        {Serial.print("LM00000;");}  
+  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'C'))                        {Serial.print("MC000;");}   
+  else if((CATcmd[0] == 'E') && (CATcmd[1] == 'X'))                        {Serial.print("EX000000000;");}  
+  else if((CATcmd[0] == 'I') && (CATcmd[1] == 'F') && (CATcmd[2] == ';'))  {Command_IF();}
+  else if((CATcmd[0] == 'I') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  {Serial.print("ID020;");}
+  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'S'))                        {Serial.print("PS1;");}
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'D'))                        {Serial.print("RD1;");}
+  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'I'))                        {Serial.print("AI0;");}
+  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  Command_GetMD();
+  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[3] == ';'))  Command_SetMD();
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'X') && (CATcmd[2] == ';'))  Command_RX();
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == ';'))  Command_TX0();
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '0'))  Command_TX0();
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '1'))  Command_TX1();
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '2'))  Command_TX2();    
+  else if((CATcmd[0] == 'X') && (CATcmd[1] == 'T'))                       {Serial.print("XT1;");}
+  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'L'))                       {Serial.print("FL0;");}  // 
+  else if((CATcmd[0] == 'G') && (CATcmd[1] == 'T'))                       {Serial.print("GT000;");}  // 
+  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'R'))                       {Serial.print("FR0;");}  // Modify when VFO A/B is implemented and split is used
+  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'T'))                       {Serial.print("FT0;");}  // Modify when VFO A/B is implemented and split is used
+  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'S'))                       {Serial.print("FS0;");}  // Modify when VFO A/B is implemented
+  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'W'))                       {Serial.print("FW0000;");}  // Modify when VFO A/B is implemented
+  else                                                                    Serial.print("?;");
+  
+}
+volatile uint8_t cat_ptr = 0;
+
+void serialEvent(){
+  
+
+  if(!Serial.available()){
+    return;
+  }
+    
+  rxend_event = millis() + 10;  
+  char data = Serial.read();
+
+  if (data=="\n" || data=="\r" || data==0x0a) {
+       return;  
+  }
+    
+  CATcmd[cat_ptr++] = data;
+    
+    
+  if(data == ';'){
+     
+      CATcmd[cat_ptr] = '\0'; // terminate the array
+      cat_ptr = 0;            // reset for next CAT command
+      analyseCATcmd();
+      delay(10);
+  } else {
+      if(cat_ptr > (CATCMD_SIZE - 1)){
+         Serial.print("E;"); 
+         cat_ptr = 0;  // overrun       
+      }
+  }
+
+   
+}
+
+#endif //CAT
 /*--------------------------------------------------------------------------------------------*
  * Initialize DDS SI5351 object
  *--------------------------------------------------------------------------------------------*/
@@ -755,6 +1110,10 @@ void setup()
    Serial.print(hi);
 #endif //DEBUG
 
+#ifdef CAT
+   Serial.begin(BAUD);
+#endif //CAT   
+
    definePinOut();
    
    INIT();
@@ -851,6 +1210,10 @@ void loop()
 {  
 
   checkMode();
+
+#ifdef CAT 
+  serialEvent();
+#endif
 
 /*----------------------------------------------------------------------------------*
  * main transmission loop                                                           *
