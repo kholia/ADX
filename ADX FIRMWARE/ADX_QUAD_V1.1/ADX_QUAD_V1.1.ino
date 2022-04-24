@@ -111,12 +111,16 @@ char hi[200];
    #define FT8        12           //FT8 LED
 #endif //LEDS
 
-#define TXON   0B00000001
-#define FSK    0B00000010
-#define UP     0B00000100
-#define DOWN   0B00001000
-#define TXSW   0B00010000
-#define PL     0B00100000
+//*-------- Global State Variables (Binary)
+
+#define TXON   0B00000001    //State of the TX
+#define FSK    0B00000010    //Audio input detected
+#define UP     0B00000100    //UP button (analog) pressed
+#define DOWN   0B00001000    //DOWN button (analog) pressed
+#define TXSW   0B00010000    //TXSW button (analog) pressed
+#define PL     0B00100000    //Long pulse detected on any analog button
+#define DUMMY  0B01000000
+#define DUMMY2 0B10000000
 
 /*------------------------------------*
  * General purpose global define      *
@@ -147,7 +151,6 @@ char hi[200];
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
 
 uint8_t  SSW=0;               //System SSW variable (to be used with getSSW/setSSW)
-char     safe[20];
 uint16_t mode=0;              //Default to mode=0 (FT8)
 uint16_t Band_slot=0;         //Default to Bands[0]=40
 
