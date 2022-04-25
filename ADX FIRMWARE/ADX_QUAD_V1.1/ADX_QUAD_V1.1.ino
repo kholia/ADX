@@ -82,41 +82,38 @@
 //*---- Consistency rules
 
 #if (defined(USDX))   //Rule for conflicting board commands & interface
-#undef LEDS
-#undef EE
-#undef PUSH
+   #undef LEDS
+   #undef EE
+   #undef PUSH
+   #undef ECHO    
 #endif
 
 #if  (defined(DEBUG) || defined(CAT))
-char hi[200];
-#define BAUD 38400
-#define _SERIAL 1
+   char hi[200];
+   #define _SERIAL 1
 #endif //DEBUG or CAT
 
 
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
-
-#undef  DEBUG
+    #undef  DEBUG
 #endif // CAT && DEBUG
 
 #ifdef CAT
 
-#define BAUD             115200                 //Baudrate used for serial communications
-#define CATCMD_SIZE          32
-
-char CATcmd[CATCMD_SIZE];
-volatile uint8_t cat_active = 0;
-volatile uint32_t rxend_event = 0;
+   #define BAUD               9600                 //Baudrate used for serial communications
+   #define CATCMD_SIZE          32
+   char CATcmd[CATCMD_SIZE];
+   volatile uint8_t cat_active = 0;
+   volatile uint32_t rxend_event = 0;
 
 #endif
-
 
 /*----------------------------*
  * Pin Assignment             *
  *----------------------------*/
-   #define AIN0        6           //(PD6)
-   #define AIN1        7           //(PD7)
-   #define TX         13           //(PB5) TX LED
+#define AIN0        6           //(PD6)
+#define AIN1        7           //(PD7)
+#define TX         13           //(PB5) TX LED
 
 #ifdef PUSH
    #define UP          2           //UP Switch
@@ -125,7 +122,8 @@ volatile uint32_t rxend_event = 0;
 #endif //PUSH
 
 #ifdef USDX
-#define BUTTONS       17         //PC3/A3 (pin 26)
+   #define BUTTONS       17           //PC3/A3 (pin 26)
+   #define SIG_OUT       11           //PB2/   (pin 16)
 #endif //USDX
 
 #ifndef USDX
@@ -160,20 +158,26 @@ volatile uint32_t rxend_event = 0;
 #define CNT_MAX     65000       //Max count of timer1
 #define FRQ_MAX     30000       //Max divisor for frequency allowed
 
-#define TX_CLOCK    SI5351_CLK0 //TX Clock
-#define RX_CLOCK    SI5351_CLK1 //RX Clock
-#define CAL_CLOCK   SI5351_CLK2 //Callibration clock
-
+#ifndef USDX
+    #define TX_CLOCK    SI5351_CLK0 //TX Clock
+    #define RX_CLOCK    SI5351_CLK1 //RX Clock
+    #define CAL_CLOCK   SI5351_CLK2 //Callibration clock
+#else
+    #define TX_CLOCK    SI5351_CLK2 //TX Clock
+    #define RX_CLOCK    SI5351_CLK2 //RX Clock
+    #define CAL_CLOCK   SI5351_CLK0 //Callibration clock (not used)
+#endif //USDX
+    
 #define BDLY        250
 #define DELAY_WAIT  BDLY*4
 #define DELAY_CAL   DELAY_WAIT/10
 
 #ifdef EE
-#define EEPROM_CAL  10
-#define EEPROM_MODE 40
-#define EEPROM_BAND 50
-#define EEPROM_TEMP 30
-#define EEPROM_SAVE 100
+   #define EEPROM_CAL  10
+   #define EEPROM_MODE 40
+   #define EEPROM_BAND 50
+   #define EEPROM_TEMP 30
+   #define EEPROM_SAVE 100
 #endif //EEPROM
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
@@ -242,16 +246,17 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 
 // CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX, source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
 // https://www.kenwood.com/i/products/info/amateur/ts_480/pdf/ts_480_pc.pdf
+// Code excerpts from QCX-SSB by Guido (PE1NNZ)
+// Mods by Pedro E. Colla(LU7DZ) 2022
 
-void switch_RXTX(bool t);
-
-void Command_GETFreqA()
+void switch_RXTX(bool t);     //advance definition for compilation purposes
+void Command_GETFreqA()          //Get Frequency VFO (A)
 {
   sprintf(hi,"FA%011ld;",freq);
   Serial.print(hi);
 }
 
-void Command_SETFreqA()
+void Command_SETFreqA()          //Set Frequency VFO (A)
 {
   char Catbuffer[16];
   strncpy(Catbuffer,CATcmd+2,11);
@@ -261,17 +266,17 @@ void Command_SETFreqA()
   Command_GETFreqA();
 }
 
-void Command_GETFreqB()
+void Command_GETFreqB()          //Get Frequency VFO (B) -- fallback to VFO (A) until implementation of VFOA/B pair
 {
  Command_GETFreqA();    //While A/B VFO isn't implemented changes the unique VFO
 }
 
-void Command_SETFreqB()
+void Command_SETFreqB()          //Set Frequency VFO (B) -- fallback to VFO (B) until implementation for VFOA/B pair
 {
   Command_SETFreqA();    //While A/B VFO isnt't implemented changes the unique VFO
 }
 
-void Command_IF()
+void Command_IF()               //General purpose status information command (IF), needs to be modified if RIT is implemented
 {
 
   char txrx = (getWord(SSW,TXON)==true ? '1' : '0');
@@ -297,49 +302,23 @@ void Command_IF()
   sprintf(hi,"0000000;");   //Constants
   Serial.print(hi);
   
-  /*
-  char Catbuffer[32];
-  unsigned int g,m,k,h;
-  uint32_t tf;
-  
-  tf=freq;
-  g=(unsigned int)(tf/1000000000lu);
-  tf-=g*1000000000lu;
-  m=(unsigned int)(tf/1000000lu);
-  tf-=m*1000000lu;
-  k=(unsigned int)(tf/1000lu);
-  tf-=k*1000lu;
-  h=(unsigned int)tf;
-
-  sprintf(Catbuffer,"IF%02u%03u%03u%03u",g,m,k,h);
-  Serial.print(Catbuffer);
-  sprintf(Catbuffer,"00000+000000");
-  Serial.print(Catbuffer);
-  sprintf(Catbuffer,"0000");
-  Serial.print(Catbuffer);
-  Serial.print(mode + 1);
-  sprintf(Catbuffer,"0000000;");
-  Serial.print(Catbuffer);
-  Serial.println();
-  */
 }
 
-
-void Command_ST() {       //Modify when STEP is implemented
+void Command_ST() {       //STEP command Modify when STEP is implemented
    sprintf(hi,"ST01;");
    Serial.print(hi);
 }
 
-void Command_GetMD()
+void Command_GetMD()      //Get MODE command, only USB (2) and CW (3) are supported, 4 digital modes (mode 0,1,2,3 are mapped as USB)
 {
   sprintf(hi,"MD%c;",modeTS480());
   Serial.print(hi);
 }
 
-void Command_SetMD()
+void Command_SetMD()      //Set MODE command, only USB (2) and CW (3) are supported
 {
 
-  sprintf(hi,"MD2;");    // at this time only USB is allowed
+  sprintf(hi,"MD2;");    // at this time only USB is allowed, needs to be modified when CW is added
   Serial.print(hi);
   
 }
@@ -351,34 +330,17 @@ void Command_RX()
   Serial.print("RX0;");
 }
 
-void Command_TX0()
-{
-  switch_RXTX(false);
-}
-
-void Command_TX1()
+void Command_TX()
 {
   switch_RXTX(true);
+  Serial.print("TX0;");
 }
 
-void Command_TX2()
+
+void Command_VX()
 {
-  switch_RXTX(true);
+  sprintf(hi,"VX%c;",(getWord(SSW,FSK)==true ? '1' : '0'));
 }
-
-
-void Command_VX(char mode)
-{
-  char Catbuffer[16];
-/*  
-  sprintf(Catbuffer, "VX%c;",mode);
-  Serial.print(Catbuffer);
-*/  
-}
-
-
-
-
 
 char modeTS480() {
 
@@ -511,11 +473,9 @@ void analyseCATcmd()
   else if((CATcmd[0] == 'A') && (CATcmd[1] == 'I'))                        {Serial.print("AI0;");}
   else if((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  Command_GetMD();
   else if((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[3] == ';'))  Command_SetMD();
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'X') && (CATcmd[2] == ';'))  Command_RX();
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == ';'))  Command_TX0();
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '0'))  Command_TX0();
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '1'))  Command_TX1();
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '2'))  Command_TX2();    
+  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'X'))                        {Command_RX();}
+  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X'))                        {Command_TX();}
+  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'X'))                        {Command_VX();} 
   else if((CATcmd[0] == 'X') && (CATcmd[1] == 'T'))                       {Serial.print("XT1;");}
   else if((CATcmd[0] == 'F') && (CATcmd[1] == 'L'))                       {Serial.print("FL0;");}  // 
   else if((CATcmd[0] == 'G') && (CATcmd[1] == 'T'))                       {Serial.print("GT000;");}  // 
@@ -541,16 +501,20 @@ void serialEvent(){
   if (data=="\n" || data=="\r" || data==0x0a) {
        return;  
   }
+
+#ifdef ECHO
+  Serial.print(data);
+#endif
     
   CATcmd[cat_ptr++] = data;
     
-    
   if(data == ';'){
-     
+      
       CATcmd[cat_ptr] = '\0'; // terminate the array
       cat_ptr = 0;            // reset for next CAT command
       analyseCATcmd();
       delay(10);
+  
   } else {
       if(cat_ptr > (CATCMD_SIZE - 1)){
          Serial.print("E;"); 
@@ -603,6 +567,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
 #ifndef USDX  
      digitalWrite(RX,LOW);
+     digitalWrite(SIG_OUT,HIGH);
 #endif //USDX
   
      si5351.output_enable(RX_CLOCK, 0);   //RX off
@@ -618,6 +583,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     digitalWrite(TX,0); 
 #ifndef USDX  
     digitalWrite(RX,HIGH);
+    digitalWrite(SIG_OUT,LOW);
 #endif //USDX
 
     si5351.output_enable(TX_CLOCK, 0);   //TX off
