@@ -70,14 +70,25 @@
 //      setSSW(&SW,VAR,true);
 //      getSSW(SW,VAR)
 //
-#define VERSION     "1.0b"
-#define USDX        1     //Use a modified uSDX board as base (D6/D7 --> D5/D8)
-#define LEDS        1     //Use on-board LEDS
-#define EE          1     //User EEPROM for persistence
-#define PUSH        1     //Use UP-DOWN-TXSW Push buttons
+#define VERSION     "1.1b"
 
-#define DEBUG       1     //Debug trace over Serial
-#define CAT         1
+/*-----------------------------------------------------------*
+ * Board definition                                          *
+ *-----------------------------------------------------------*/
+//#define ADX         1     //Define usage of the WA2CBA's ADX board
+#define USDX        1     //Use a modified uSDX board as base (D6/D7 --> D5/D8)
+
+#if (defined(ADX) && defined(uSDX))
+    #undef USDX
+#endif //Board definition    
+
+
+#if (defined(ADX))
+    #define LEDS        1     //Use on-board LEDS
+    #define EE          1     //User EEPROM for persistence
+    #define PUSH        1     //Use UP-DOWN-TXSW Push buttons
+#endif 
+
 
 //*---- Consistency rules
 
@@ -86,11 +97,14 @@
    #undef EE
    #undef PUSH
    #undef ECHO    
+   #define DEBUG       1     //Debug trace over Serial
+   #define CAT         1
 #endif
 
 #if  (defined(DEBUG) || defined(CAT))
    char hi[200];
    #define _SERIAL 1
+   #define BAUD 9600
 #endif //DEBUG or CAT
 
 
@@ -99,13 +113,10 @@
 #endif // CAT && DEBUG
 
 #ifdef CAT
-
-   #define BAUD               9600                 //Baudrate used for serial communications
    #define CATCMD_SIZE          32
    char CATcmd[CATCMD_SIZE];
    volatile uint8_t cat_active = 0;
    volatile uint32_t rxend_event = 0;
-
 #endif
 
 /*----------------------------*
@@ -123,7 +134,7 @@
 
 #ifdef USDX
    #define BUTTONS       17           //PC3/A3 (pin 26)
-   #define SIG_OUT       11           //PB2/   (pin 16)
+   #define KEY_OUT       10           //PB2    (pin 16)
 #endif //USDX
 
 #ifndef USDX
@@ -567,7 +578,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
 #ifndef USDX  
      digitalWrite(RX,LOW);
-     digitalWrite(SIG_OUT,HIGH);
+     digitalWrite(KEY_OUT,HIGH);
 #endif //USDX
   
      si5351.output_enable(RX_CLOCK, 0);   //RX off
@@ -583,7 +594,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     digitalWrite(TX,0); 
 #ifndef USDX  
     digitalWrite(RX,HIGH);
-    digitalWrite(SIG_OUT,LOW);
+    digitalWrite(KEY_OUT,LOW);
 #endif //USDX
 
     si5351.output_enable(TX_CLOCK, 0);   //TX off
