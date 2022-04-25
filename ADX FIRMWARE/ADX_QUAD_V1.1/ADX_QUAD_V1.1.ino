@@ -95,17 +95,17 @@
    //#define CAT         1
 #endif
 
-#if  (defined(DEBUG) || defined(CAT))
-   char hi[200];
-   uint32_t tx=0;
-   #define _SERIAL 1
-   #define BAUD 115200
+#if (defined(DEBUG) || defined(CAT))
+    char hi[200];
+    uint32_t tx=0;
+    #define _SERIAL 1
+    #define BAUD_DEBUG 115200
 #endif //DEBUG or CAT
 
 
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
     #undef  DEBUG
-    #define BAUD 9600
+    #define BAUD_CAT 9600
 #endif // CAT && DEBUG
 
 #ifdef CAT
@@ -131,6 +131,7 @@
 #ifdef USDX
    #define BUTTONS       17        //PC3/A3 (pin 26)
    #define KEY_OUT       10        //PB2    (pin 16)
+   #define SIG_OUT       11        //PB3    
    #define LCD_RS        18        //PC4    (pin 27)
 #endif //USDX
 
@@ -145,8 +146,9 @@
    #define FT8           12           //FT8 LED
 #endif //LEDS
 
-//*-------- Global State Variables (Binary)
-
+/*-------------------------------------------*
+ *  Global State Variables (Binary)          *
+ *-------------------------------------------*/
 #define TXON   0B00000001    //State of the TX
 #define VOX    0B00000010    //Audio input detected
 #define UP     0B00000100    //UP button (analog) pressed
@@ -183,7 +185,6 @@ uint16_t mode=0;              //Default to mode=0 (FT8)
 uint16_t Band_slot=0;         //Default to Bands[0]=40
 unsigned long freq; 
 unsigned long Cal_freq = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
-
 unsigned long f[4]      = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
 unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           { 7074000, 7047500, 7078000, 7038600},   //40m [1]
@@ -205,23 +206,23 @@ unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
  that Band select mode is active. Now change band bank by pressing SW1(<---) or SW2(--->). When desired band bank is selected press TX button briefly to exit band select mode. 
  Now the new selected band bank will flash 3 times and then stored mode LED will be lit. 
  TX won't activate when changing bands so don't worry on pressing TX button when changing bands in band mode.
-
-
  Assign your prefered bands to B1,B2,B3 and B4
  Supported Bands are: 80m, 40m, 30m, 20m,17m, 15m
 */
 
 uint16_t Bands[4]={40,30,20,17}; //Band1,Band2,Band3,Band4
 
-//--------------------------[System Word Handler]---------------------------------------------------
-// getSSW Return status according with the setting of the argument bit onto the SW
-//--------------------------------------------------------------------------------------------------
+/*-------------------------------------------*
+ * getWord                                   *
+ * get boolean bitwise pseudo-variable       *
+ *-------------------------------------------*/
 bool getWord (uint8_t SysWord, uint8_t v) {
   return SysWord & v;
 }
-//--------------------------------------------------------------------------------------------------
-// setSSW Sets a given bit of the system status Word (SSW)
-//--------------------------------------------------------------------------------------------------
+/*-------------------------------------------*
+ * setSSW                                    *
+ * set boolean bitwise pseudo-variable       *
+ *-------------------------------------------*/
 void setWord(uint8_t* SysWord,uint8_t v, bool val) {
   *SysWord = ~v & *SysWord;
   if (val == true) {
@@ -572,6 +573,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
  *-----------------------------------*/
 #ifdef USDX  
      digitalWrite(KEY_OUT,HIGH);
+     digitalWrite(SIG_OUT,HIGH);
      si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);// SET For Max Power
      si5351.set_freq(freq*100ULL, SI5351_CLK0);
      si5351.output_enable(SI5351_CLK0, 1);   //TX on
@@ -600,6 +602,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
 #ifdef USDX
     digitalWrite(KEY_OUT,LOW);
+    digitalWrite(SIG_OUT,LOW);
     si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA);
     si5351.set_freq(freq*100ULL, SI5351_CLK0);
     si5351.output_enable(SI5351_CLK0, 1);   //RX on
@@ -1048,20 +1051,15 @@ void INIT(){
  *--------------------------------------------------------------------------*/
 void definePinOut() {
 
-#ifdef DEBUG
-   Serial.print("definePinOut()\n");
-#endif 
-
 #ifdef PUSH
    pinMode(UP,   INPUT);
    pinMode(DOWN, INPUT);
    pinMode(TXSW, INPUT);
 #endif //PUSH
 
-#ifndef USDX   
+#ifdef ADX   
    pinMode(RX,   OUTPUT);
-#endif //USDX define board
-
+#endif //ADX define board
 
 #ifdef LEDX
    pinMode(WSPR, OUTPUT);
@@ -1072,14 +1070,15 @@ void definePinOut() {
 
 #ifdef USDX
    pinMode(KEY_OUT,OUTPUT);
+   pinMode(SIG_OUT,OUTPUT);
    digitalWrite(KEY_OUT,LOW);
+   digitalWrite(SIG_OUT,LOW);
    pinMode(LCD_RS,INPUT_PULLUP);
 #endif
    
    pinMode(TX,   OUTPUT);
    pinMode(6,    INPUT);  //PD6=AN0 must be grounded
    pinMode(7,    INPUT);  //PD7=AN1=HiZ
-
 }
 
 //*************************************[ SETUP FUNCTION ]************************************** 
@@ -1087,13 +1086,13 @@ void setup()
 {
 
 #ifdef DEBUG
-   Serial.begin(BAUD);
+   Serial.begin(BAUD_DEBUG);
    sprintf(hi,"ADX Firmware Version(%s)\n",VERSION);
    Serial.print(hi);
 #endif //DEBUG
 
 #ifdef CAT
-   Serial.begin(BAUD);
+   Serial.begin(BAUD_CAT);
 #endif //CAT   
 
    definePinOut();
@@ -1247,8 +1246,14 @@ uint16_t n = VOX_MAXTRY;
           if (getWord(SSW,VOX) == false){
              switch_RXTX(HIGH);
           }
+#ifdef ADX          
+          si5351.set_freq((freq * 100 + codefreq), SI5351_CLK0); 
+#endif //ADX
+
+#ifdef USDX          
           digitalWrite(KEY_OUT,HIGH);
-          si5351.set_freq((freq * 100 + codefreq), SI5351_CLK0);        
+          si5351.set_freq(((freq+codefreq) * 100), SI5351_CLK0);        
+#endif //USDX          
           setWord(&SSW,VOX,true);
        }
     } else {
