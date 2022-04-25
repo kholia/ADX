@@ -26,7 +26,7 @@
 //*     - add timeout & watchdog support
 //* Forked version of the original ADX firmware located at http://www.github.com/lu7did/ADX
 //*-----------------------------------------------------------------------------------------------------------------*
-// License
+// License  
 // -------
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -64,14 +64,8 @@
 #include <EEPROM.h>
 #include <stdint.h>
 //********************************[ DEFINES ]***************************************************
-
-
-// Usage
-//      setSSW(&SW,VAR,true);
-//      getSSW(SW,VAR)
-//
 #define VERSION     "1.1b"
-
+#define BOOL2CHAR(x)  (x==true ? "True" : "False")
 /*-----------------------------------------------------------*
  * Board definition                                          *
  *-----------------------------------------------------------*/
@@ -89,27 +83,29 @@
     #define PUSH        1     //Use UP-DOWN-TXSW Push buttons
 #endif 
 
-
-//*---- Consistency rules
-
+/*****************************************************************
+ * CONSISTENCY RULES                                             *
+ *****************************************************************/
 #if (defined(USDX))   //Rule for conflicting board commands & interface
    #undef LEDS
    #undef EE
    #undef PUSH
    #undef ECHO    
-   #define DEBUG       1     //Debug trace over Serial
-   #define CAT         1
+   //#define DEBUG       1     //Debug trace over Serial
+   //#define CAT         1
 #endif
 
 #if  (defined(DEBUG) || defined(CAT))
    char hi[200];
+   uint32_t tx=0;
    #define _SERIAL 1
-   #define BAUD 9600
+   #define BAUD 115200
 #endif //DEBUG or CAT
 
 
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
     #undef  DEBUG
+    #define BAUD 9600
 #endif // CAT && DEBUG
 
 #ifdef CAT
@@ -127,58 +123,47 @@
 #define TX         13           //(PB5) TX LED
 
 #ifdef PUSH
-   #define UP          2           //UP Switch
-   #define DOWN        3           //DOWN Switch
-   #define TXSW        4           //TX Switch
+   #define UP             2           //UP Switch
+   #define DOWN           3           //DOWN Switch
+   #define TXSW           4           //TX Switch
 #endif //PUSH
 
 #ifdef USDX
-   #define BUTTONS       17           //PC3/A3 (pin 26)
-   #define KEY_OUT       10           //PB2    (pin 16)
+   #define BUTTONS       17        //PC3/A3 (pin 26)
+   #define KEY_OUT       10        //PB2    (pin 16)
+   #define LCD_RS        18        //PC4    (pin 27)
 #endif //USDX
 
-#ifndef USDX
-   #define RX          8           //RX Switch
-#endif //USDX  -- Pin Assignment remap --
+#ifdef ADX
+   #define RX             8           //RX Switch
+#endif //ADX  -- Pin Assignment remap --
 
 #ifdef LEDS
-   #define WSPR        9           //WSPR LED 
-   #define JS8        10           //JS8 LED
-   #define FT4        11           //FT4 LED
-   #define FT8        12           //FT8 LED
+   #define WSPR           9           //WSPR LED 
+   #define JS8           10           //JS8 LED
+   #define FT4           11           //FT4 LED
+   #define FT8           12           //FT8 LED
 #endif //LEDS
 
 //*-------- Global State Variables (Binary)
 
 #define TXON   0B00000001    //State of the TX
-#define FSK    0B00000010    //Audio input detected
+#define VOX    0B00000010    //Audio input detected
 #define UP     0B00000100    //UP button (analog) pressed
 #define DOWN   0B00001000    //DOWN button (analog) pressed
 #define TXSW   0B00010000    //TXSW button (analog) pressed
 #define PL     0B00100000    //Long pulse detected on any analog button
-#define DUMMY  0B01000000
-#define DUMMY2 0B10000000
+#define DUMMY  0B01000000    //(not used)
+#define DUMMY2 0B10000000    //(not used)
 
 /*------------------------------------*
  * General purpose global define      *
  * -----------------------------------*/
 #define SI5351_REF  25000000UL  //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
 #define CPU_CLOCK   16000000UL  //Processor clock
-
 #define VOX_MAXTRY  10          //Max number of attempts to detect an audio incoming signal
 #define CNT_MAX     65000       //Max count of timer1
 #define FRQ_MAX     30000       //Max divisor for frequency allowed
-
-#ifndef USDX
-    #define TX_CLOCK    SI5351_CLK0 //TX Clock
-    #define RX_CLOCK    SI5351_CLK1 //RX Clock
-    #define CAL_CLOCK   SI5351_CLK2 //Callibration clock
-#else
-    #define TX_CLOCK    SI5351_CLK2 //TX Clock
-    #define RX_CLOCK    SI5351_CLK2 //RX Clock
-    #define CAL_CLOCK   SI5351_CLK0 //Callibration clock (not used)
-#endif //USDX
-    
 #define BDLY        250
 #define DELAY_WAIT  BDLY*4
 #define DELAY_CAL   DELAY_WAIT/10
@@ -196,7 +181,6 @@
 uint8_t  SSW=0;               //System SSW variable (to be used with getSSW/setSSW)
 uint16_t mode=0;              //Default to mode=0 (FT8)
 uint16_t Band_slot=0;         //Default to Bands[0]=40
-
 unsigned long freq; 
 unsigned long Cal_freq = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
@@ -209,7 +193,7 @@ unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           {21074000,21140000,21078000,21094600}};  //21m [5]                           
 
 #ifdef LEDS
-uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
+   uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
 #endif //LEDS  -- Board LEDS
  
 
@@ -228,30 +212,26 @@ uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
 */
 
 uint16_t Bands[4]={40,30,20,17}; //Band1,Band2,Band3,Band4
-#define BOOL2CHAR(x)  (x==true ? "True" : "False")
+
 //--------------------------[System Word Handler]---------------------------------------------------
 // getSSW Return status according with the setting of the argument bit onto the SW
 //--------------------------------------------------------------------------------------------------
 bool getWord (uint8_t SysWord, uint8_t v) {
-
   return SysWord & v;
-
 }
 //--------------------------------------------------------------------------------------------------
 // setSSW Sets a given bit of the system status Word (SSW)
 //--------------------------------------------------------------------------------------------------
 void setWord(uint8_t* SysWord,uint8_t v, bool val) {
-
   *SysWord = ~v & *SysWord;
   if (val == true) {
     *SysWord = *SysWord | v;
   }
-
 }
-
 /*-----------------------------------------------------------------------------------------------------*
  *                                     CAT SubSystem                                                   *
  * cloned from uSDX (QCX-SSB) firmware                                                                 *                                    
+ * adaptations and extensions by P.E.Colla (LU7DZ)                                                     *
  * ----------------------------------------------------------------------------------------------------*/
 #ifdef CAT
 
@@ -261,6 +241,7 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 // Mods by Pedro E. Colla(LU7DZ) 2022
 
 void switch_RXTX(bool t);     //advance definition for compilation purposes
+//*--- GETFreqA
 void Command_GETFreqA()          //Get Frequency VFO (A)
 {
   sprintf(hi,"FA%011ld;",freq);
@@ -350,8 +331,10 @@ void Command_TX()
 
 void Command_VX()
 {
-  sprintf(hi,"VX%c;",(getWord(SSW,FSK)==true ? '1' : '0'));
+  sprintf(hi,"VX%c;",(getWord(SSW,VOX)==true ? '1' : '0'));
 }
+
+//*---- Translate mode into the TS-480 coding for mode
 
 char modeTS480() {
 
@@ -390,15 +373,9 @@ void Command_BChange(int c) { //Change band up or down
 
   //Do not return anything
 }
-
-
-
-
-
 /*---------------------------------------------------------------------------------------------
  *  CAT Main command parser and dispatcher
  *---------------------------------------------------------------------------------------------*/
-
 void analyseCATcmd()
 {
   if     ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';')) {Command_GETFreqA();}
@@ -497,8 +474,11 @@ void analyseCATcmd()
   else                                                                    Serial.print("?;");
   
 }
+/*-----------------------------------------------------------------*
+ * serialEvent
+ * Process serialEvent
+ *-----------------------------------------------------------------*/
 volatile uint8_t cat_ptr = 0;
-
 void serialEvent(){
   
 
@@ -531,9 +511,7 @@ void serialEvent(){
          Serial.print("E;"); 
          cat_ptr = 0;  // overrun       
       }
-  }
-
-   
+  } 
 }
 
 #endif //CAT
@@ -545,7 +523,7 @@ Si5351 si5351;
 void setup_si5351() {
 //------------------------------- SET SI5351 VFO -----------------------------------  
 // The crystal load value needs to match in order to have an accurate calibration
-
+//---------------------------------------------------------------------------------
 #ifdef DEBUG
   Serial.print("setup_si5351()\n");
 #endif //DEBUG
@@ -555,13 +533,26 @@ void setup_si5351() {
 #ifdef EE
   EEPROM.get(EEPROM_CAL,cal_factor);
 #endif //EEPROM
-  
+
+#define XT_CAL_F   33000 
+long cal = XT_CAL_F;
+
+#ifdef ADX
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
-  si5351.drive_strength(TX_CLOCK, SI5351_DRIVE_8MA);// SET For Max Power
-  si5351.drive_strength(RX_CLOCK, SI5351_DRIVE_2MA); // Set for reduced power for RX 
-  si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for reduced power for operation
+  si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);// SET For Max Power
+  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA); // Set for reduced power for RX 
+#endif //ADX
+
+#ifdef USDX
+  si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
+  si5351.set_correction(cal, SI5351_PLL_INPUT_XO);
+  si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA);
+  si5351.output_enable(SI5351_CLK0, 1);                  //1 - Enable / 0 - Disable CLK
+  si5351.output_enable(SI5351_CLK1, 0);
+  si5351.output_enable(SI5351_CLK2, 0);
+#endif //USDX
   
 }
 /*---------------------------------------------------------------------------------------------*
@@ -576,31 +567,48 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
   
   if (t) {    //Set to TX
 
-#ifndef USDX  
-     digitalWrite(RX,LOW);
+/*-----------------------------------*
+ *               TX                  *
+ *-----------------------------------*/
+#ifdef USDX  
      digitalWrite(KEY_OUT,HIGH);
+     si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);// SET For Max Power
+     si5351.set_freq(freq*100ULL, SI5351_CLK0);
+     si5351.output_enable(SI5351_CLK0, 1);   //TX on
 #endif //USDX
-  
-     si5351.output_enable(RX_CLOCK, 0);   //RX off
-     digitalWrite(TX,1);
-     si5351.set_freq(freq*100ULL, TX_CLOCK);
-     si5351.output_enable(TX_CLOCK, 1);   //TX on
+
+#ifdef ADX
+      digitalWrite(RX,LOW);
+      si5351.output_enable(SI5351_CLK1, 0);   //RX off
+      si5351.output_enable(SI5351_CLK0, 1);   // TX on
+#endif
+    
+     digitalWrite(TX,HIGH);
      setWord(&SSW,TXON,HIGH);
      return;
   }
 
-// Set to RX
-    
-    digitalWrite(TX,0); 
-#ifndef USDX  
+/*------------------------------------*
+ *                RX                  *
+ *------------------------------------*/
+#ifdef ADX  
     digitalWrite(RX,HIGH);
-    digitalWrite(KEY_OUT,LOW);
-#endif //USDX
+    si5351.output_enable(SI5351_CLK0, 0);   //TX off
+    si5351.set_freq(freq*100ULL, SI5351_CLK1);
+    si5351.output_enable(SI5351_CLK1, 1);   //RX on
+#endif //ADX
 
-    si5351.output_enable(TX_CLOCK, 0);   //TX off
-    si5351.set_freq(freq*100ULL, RX_CLOCK);  //Change frequency of RX clock  
-    si5351.output_enable(RX_CLOCK, 1);   //RX on
+#ifdef USDX
+    digitalWrite(KEY_OUT,LOW);
+    si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA);
+    si5351.set_freq(freq*100ULL, SI5351_CLK0);
+    si5351.output_enable(SI5351_CLK0, 1);   //RX on
+
+#endif
+
+    digitalWrite(TX,0); 
     setWord(&SSW,TXON,LOW);
+    setWord(&SSW,VOX,LOW);
 
 /*---------------------------------------------------------*
  * set to master frequency                                 *
@@ -609,7 +617,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 }
 
 /*-----------------------------------------------------------------------------------*
- * LED management functions
+ * LED management functions                                                          *
  *-----------------------------------------------------------------------------------*/
 void resetLED() {               //Turn-off all LEDs
 
@@ -656,7 +664,7 @@ void callibrateLED(){           //Set callibration mode
 #endif //LEDS  
 }
 /*----------------------------------------------------------*
- * Mode assign
+ * Mode assign                                              *
  *----------------------------------------------------------*/
 void Mode_assign(){
 
@@ -678,7 +686,7 @@ void Mode_assign(){
 
 }
 /*----------------------------------------------------------*
- * Frequency assign (band dependant)
+ * Frequency assign (band dependant)                        *
  *----------------------------------------------------------*/
 void Freq_assign(){
 
@@ -709,7 +717,7 @@ void Freq_assign(){
 }
 
 /*----------------------------------------------------------*
- * Band assignment based on selected slot
+ * Band assignment based on selected slot                   *
  *----------------------------------------------------------*/
 
 void Band_assign(){
@@ -733,7 +741,7 @@ void Band_assign(){
   
 }
 /*----------------------------------------------------------*
- * Manually turn TX while pressed
+ * Manually turn TX while pressed                           *
  *----------------------------------------------------------*/
 bool getTXSW();
 void ManualTX(){
@@ -754,7 +762,7 @@ void ManualTX(){
 
 }
 /*----------------------------------------------------------*
- * get value for a digital pin and return after debouncing
+ * get value for a digital pin and return after debouncing  *
  *----------------------------------------------------------*/
 bool getSwitch(uint8_t pin) {
 
@@ -815,14 +823,11 @@ bool getUPSSW() {
 #endif //PUSH 
 
 #ifdef BUTTONS
-    //getAnalogButton();
-   
     if (getWord(SSW,UP)==true) {
        setWord(&SSW,UP,false); 
        return false;      
     } 
-    return true;
-    
+    return true;    
 #endif //BUTTONS
 }
 /*----------------------------------------------------------*
@@ -835,7 +840,6 @@ bool getDOWNSSW() {
 #endif //PUSH
 
 #ifdef BUTTONS
-     //getAnalogButton();
      if (getWord(SSW,DOWN)==true) {
         setWord(&SSW,DOWN,false);   
         return false;   
@@ -854,7 +858,6 @@ bool getTXSW() {
 
 #ifdef BUTTONS
 
-    //getAnalogButton();
     if (getWord(SSW,TXSW)==true) {
        setWord(&SSW,TXSW,false);
        return false;   
@@ -905,7 +908,6 @@ void Band_Select(){
 #endif
 
       }                                               
-
       if (getTXSW() == LOW) {
          //digitalWrite(TX,0);
 
@@ -968,9 +970,9 @@ void Calibration(){
     
   // Set Calibration CLK output
   
-        si5351.set_freq(Cal_freq * 100, CAL_CLOCK);
-        si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for lower power for calibration
-        si5351.set_clock_pwr(CAL_CLOCK, 1); // Enable the clock for calibration
+        si5351.set_freq(Cal_freq * 100, SI5351_CLK0);
+        si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA); // Set for lower power for calibration
+        si5351.set_clock_pwr(SI5351_CLK0, 1); // Enable the clock for calibration
      } 
    
 
@@ -985,9 +987,9 @@ void Calibration(){
 
   // Set Calbration Clock output
            
-        si5351.set_freq(Cal_freq * 100, CAL_CLOCK);
-        si5351.drive_strength(CAL_CLOCK, SI5351_DRIVE_2MA); // Set for lower power for Calibration
-        si5351.set_clock_pwr(CAL_CLOCK, 1); // Enable clock2 
+        si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK0);
+        si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA); // Set for lower power for Calibration
+        si5351.set_clock_pwr(SI5351_CLK0, 1); // Enable clock2 
      } 
 
   }
@@ -1000,8 +1002,6 @@ void Calibration(){
 /*----------------------------------------------------------*
  * Initialization function from EEPROM
  *----------------------------------------------------------*/
-
-//*********************************[ INITIALIZATION FUNCTION ]******************************************
 void INIT(){
 
  uint16_t temp;
@@ -1053,7 +1053,6 @@ void definePinOut() {
 #endif 
 
 #ifdef PUSH
-
    pinMode(UP,   INPUT);
    pinMode(DOWN, INPUT);
    pinMode(TXSW, INPUT);
@@ -1071,6 +1070,12 @@ void definePinOut() {
    pinMode(FT8,  OUTPUT);
 #endif //LEDS
 
+#ifdef USDX
+   pinMode(KEY_OUT,OUTPUT);
+   digitalWrite(KEY_OUT,LOW);
+   pinMode(LCD_RS,INPUT_PULLUP);
+#endif
+   
    pinMode(TX,   OUTPUT);
    pinMode(6,    INPUT);  //PD6=AN0 must be grounded
    pinMode(7,    INPUT);  //PD7=AN1=HiZ
@@ -1119,7 +1124,6 @@ void setup()
 //  *digitalPinToPCMSK(BUTTONS) |= (1<<digitalPinToPCMSKbit(BUTTONS));
 //  *digitalPinToPCICR(BUTTONS) |= (1<<digitalPinToPCICRbit(BUTTONS));
   pinMode(BUTTONS, INPUT_PULLUP);
-
 #ifdef DEBUG
   Serial.print("setup(): BUTTON enabled\n");
 #endif  
@@ -1148,7 +1152,6 @@ void checkMode() {
 
 #else
   if ((getUPSSW() == LOW)&&(getDOWNSSW() == LOW)&&(getWord(SSW,TXON)==false)) {
-
      Band_Select();
   }
 #endif //BUTTONS  
@@ -1202,7 +1205,7 @@ void loop()
 
 uint16_t n = VOX_MAXTRY;
 
- setWord(&SSW,FSK,false);
+ setWord(&SSW,VOX,false);
  while (n>0){                                 //Iterate up to 10 times looking for signal to transmit
  
     TCNT1 = 0;                                  //While this iteration is performed if the TX is off 
@@ -1230,28 +1233,40 @@ uint16_t n = VOX_MAXTRY;
  * input frequency                                     *
  *-----------------------------------------------------*/
     if (TCNT1 < CNT_MAX){
-       if ((d2-d1) == 0) break;
+       //if ((d2-d1) == 0) break;
        unsigned long codefreq = CPU_CLOCK/(d2-d1);
+#ifdef DEBUG
+       tx++;
+       if (tx>1200) {          
+          tx=0;
+          sprintf(hi,"freq(%ld) f(%ld)\n",codefreq,freq);
+          Serial.print(hi);
+       }
+#endif       
        if ((codefreq < FRQ_MAX) && (codefreq > 0)){
-          if (getWord(SSW,FSK) == false){
+          if (getWord(SSW,VOX) == false){
              switch_RXTX(HIGH);
           }
-          si5351.set_freq((freq * 100 + codefreq), TX_CLOCK);  
-          setWord(&SSW,FSK,true);
+          digitalWrite(KEY_OUT,HIGH);
+          si5351.set_freq((freq * 100 + codefreq), SI5351_CLK0);        
+          setWord(&SSW,VOX,true);
        }
     } else {
        n--;
     }
+#ifdef CAT 
+    serialEvent();
+#endif
+    
  }
 
 /*---------------------------------------------------------------------------------*
  * when out of the loop no further TX activity is performed, therefore the TX is   *
  * turned off and the board is set into RX mode                                    *
  *---------------------------------------------------------------------------------*/
- if (getWord(SSW,TXON)==true) {
-    switch_RXTX(LOW);
-    setWord(&SSW,FSK,false);
- }   
+ switch_RXTX(LOW);
+ setWord(&SSW,VOX,false);
+ setWord(&SSW,TXON,false);
      
 }
 //*********************[ END OF MAIN LOOP FUNCTION ]*************************
