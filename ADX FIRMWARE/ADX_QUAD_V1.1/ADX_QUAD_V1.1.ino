@@ -15,15 +15,15 @@
 //  SI5351 Library by Jason Mildrum (NT7S) - https://github.com/etherkit/Si5351Arduino
 //*-----------------------------------------------------------------------------------------------------------------*
 //* Modified by Dr. P.E.Colla (LU7DZ)                                                                               
-//*     - re-style of the code to facilitate customization for multiple boards
-//*     - implement multiboard support (#define USDX 1)
+//*     X re-style of the code to facilitate customization for multiple boards
+//*     X implement multiboard support (#define USDX 1)
 //*         - remap of pushbuttons
 //*         - (optional) rotary enconder
 //*         - (optional) LCD display (same as uSDX)
-//*     - changes to compatibilize with Pixino board (http://www.github.com/lu7did/Pixino
+//*     X changes to compatibilize with Pixino board (http://www.github.com/lu7did/Pixino
 //*     - add CW support (includes keyer support)
-//*     - add CAT support
-//*     - add timeout & watchdog support
+//*     X add CAT support
+//*     X add timeout & watchdog support
 //* Forked version of the original ADX firmware located at http://www.github.com/lu7did/ADX
 //*-----------------------------------------------------------------------------------------------------------------*
 // License  
@@ -63,6 +63,7 @@
 #include "Wire.h"
 #include <EEPROM.h>
 #include <stdint.h>
+#include <avr/wdt.h> 
 //********************************[ DEFINES ]***************************************************
 #define VERSION     "1.1b"
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
@@ -72,6 +73,9 @@
 //#define ADX         1     //Define usage of the WA2CBA's ADX board
 #define USDX        1     //Use a modified uSDX board as base (D6/D7 --> D5/D8)
 
+/*****************************************************************
+ * CONSISTENCY RULES                                             *
+ *****************************************************************/
 #if (defined(ADX) && defined(uSDX))
     #undef USDX
 #endif //Board definition    
@@ -83,9 +87,6 @@
     #define PUSH        1     //Use UP-DOWN-TXSW Push buttons
 #endif 
 
-/*****************************************************************
- * CONSISTENCY RULES                                             *
- *****************************************************************/
 #if (defined(USDX))   //Rule for conflicting board commands & interface
    #undef LEDS
    #undef EE
@@ -93,6 +94,7 @@
    #undef ECHO    
    //#define DEBUG       1     //Debug trace over Serial
    //#define CAT         1
+   #define WDT           1     //Transmission watchdog (avoid the PTT to be keyed longer than expected)
 #endif
 
 #if (defined(DEBUG) || defined(CAT))
@@ -1214,6 +1216,11 @@ void setup()
   switch_RXTX(LOW);
   Mode_assign(); 
 
+#ifdef WDT
+  wdt_disable();
+  wdt_enable(WDTO_1S);
+#endif //WDT
+
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
 /*---------------------------------------------------------------------------*
@@ -1295,6 +1302,10 @@ void loop()
   serialEvent();
 #endif //CAT
 
+#ifdef WDT
+  wdt_reset();
+#endif //WDT
+
 /*----------------------------------------------------------------------------------*
  * main transmission loop                                                           *
  * Timer1 (16 bits) with no pre-scaler (16 MHz) is checked to detect zero crossings *
@@ -1365,6 +1376,9 @@ uint16_t n = VOX_MAXTRY;
     serialEvent();
 #endif
     
+#ifdef WDT
+    wdt_reset();
+#endif //WDT
  }
 
 /*---------------------------------------------------------------------------------*
@@ -1374,7 +1388,11 @@ uint16_t n = VOX_MAXTRY;
  switch_RXTX(LOW);
  setWord(&SSW,VOX,false);
  setWord(&SSW,TXON,false);
-     
+
+#ifdef WDT
+ wdt_reset();
+#endif //WDT     
+
 }
 //*********************[ END OF MAIN LOOP FUNCTION ]*************************
 //********************************[ END OF FIRMWARE ]*************************************
