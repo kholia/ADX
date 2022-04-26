@@ -1230,7 +1230,7 @@ void setup()
 
 #ifdef WDT
   wdt_disable();
-  wdt_enable(WDTO_1S);
+  wdt_enable(WDTO_8S);
 #endif //WDT
 
 }
