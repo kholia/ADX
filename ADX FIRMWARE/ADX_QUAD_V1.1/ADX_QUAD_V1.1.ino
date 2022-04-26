@@ -10,14 +10,15 @@
 //          SI5351 Library by Jason Mildrum (NT7S) - https://github.com/etherkit/Si5351Arduino
 // Arduino "Wire.h" I2C library(built-into arduino ide)
 // Arduino "EEPROM.h" EEPROM Library(built-into arduino ide)
+// AVR "wdt.h" Watchdog Library
 //*************************************[ LICENCE and CREDITS ]*********************************************
 //  FSK TX Signal Generation code by: Burkhard Kainka(DK7JD) - http://elektronik-labor.de/HF/SDRtxFSK2.html
 //  SI5351 Library by Jason Mildrum (NT7S) - https://github.com/etherkit/Si5351Arduino
 //*-----------------------------------------------------------------------------------------------------------------*
 //* Modified by Dr. P.E.Colla (LU7DZ)                                                                               
 //*     X re-style of the code to facilitate customization for multiple boards
-//*     X implement multiboard support (#define USDX 1)
-//*         - remap of pushbuttons
+//*     / implement multiboard support (#define USDX 1)
+//*         X remap of pushbuttons
 //*         - (optional) rotary enconder
 //*         - (optional) LCD display (same as uSDX)
 //*     X changes to compatibilize with Pixino board (http://www.github.com/lu7did/Pixino
@@ -67,6 +68,7 @@
 //********************************[ DEFINES ]***************************************************
 #define VERSION     "1.1b"
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
+#define EMPTY       0
 /*-----------------------------------------------------------*
  * Board definition                                          *
  *-----------------------------------------------------------*/
@@ -186,22 +188,26 @@
 #endif //EEPROM
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
-
+#define  MAXMODE          5
+#define  MAXBAND          9
 uint8_t  SSW=0;               //System SSW variable (to be used with getSSW/setSSW)
 uint16_t mode=0;              //Default to mode=0 (FT8)
 uint16_t Band_slot=0;         //Default to Bands[0]=40
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
-unsigned long f[4]      = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
-unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
-                          { 7074000, 7047500, 7078000, 7038600},   //40m [1]
-                          {10136000,10140000,10130000,10138700},   //30m [2]
-                          {14074000,14080000,14078000,14095600},   //20m [3]
-                          {18100000,18104000,18104000,18104600},   //17m [4]
-                          {21074000,21140000,21078000,21094600}};  //21m [5]                           
+unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
+unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
+                                      { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [1]
+                                      {10136000,10140000,10130000,10138700,10116000},   //30m [2]
+                                      {14074000,14080000,14078000,14095600,14060000},   //20m [3]
+                                      {18100000,18104000,18104000,18104600,18069000},   //17m [4]
+                                      {21074000,21140000,21078000,21094600,21060000},   //15m [5]                           
+                                      {24915000,24915000,24922000,24924600,24906000},   //12m [6] FT4 equal to FT8                           
+                                      {28074000,28074000,28078000,28124600,28060000},   //10m [7]                           
+                                      {50310000,50310000,50318000,50293000,50090000}};  //6m  [8]                           
 unsigned long freq      = f[Band_slot]; 
 
 #ifdef LEDS
-   uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
+   uint8_t  LED[4] ={FT8,FT4,JS8,WSPR,EMPTY};
 #endif //LEDS  -- Board LEDS
  
 
@@ -658,8 +664,11 @@ void setLED(uint8_t LEDpin) {      //Turn-on LED {pin}
 void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 
 #ifdef LEDS   
-   uint8_t n=3;
+   uint8_t n=(MAXMODE-1);
    uint8_t pin=LED[LEDpin];
+
+   if (pin == EMPTY) return;
+
    while (n>0) {
        digitalWrite(pin,HIGH);
        delay(BDLY);
@@ -729,9 +738,12 @@ void Freq_assign(){
       case 20 : b=3;break;
       case 17 : b=4;break;
       case 15 : b=5;break;
+      case 12 : b=6;break;
+      case 10 : b=7;break;
+      case 6  : b=8;break;
       default : b=1;break; 
     }
-    for (int i=0;i<4;i++) {
+    for (int i=0;i<MAXMODE;i++) {
       f[i]=slot[b][i];
     }
 
