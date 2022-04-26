@@ -155,7 +155,7 @@
 #define DOWN   0B00001000    //DOWN button (analog) pressed
 #define TXSW   0B00010000    //TXSW button (analog) pressed
 #define PL     0B00100000    //Long pulse detected on any analog button
-#define DUMMY  0B01000000    //(not used)
+#define SAVEEE 0B01000000    //Mark of EEPROM updated
 #define DUMMY2 0B10000000    //(not used)
 
 /*------------------------------------*
@@ -172,10 +172,15 @@
 
 #ifdef EE
    #define EEPROM_CAL  10
+   #define EEPROM_TEMP 30
    #define EEPROM_MODE 40
    #define EEPROM_BAND 50
-   #define EEPROM_TEMP 30
-   #define EEPROM_SAVE 100
+   #define EEPROM_FREQ 60
+
+   uint32_t tout=0;
+
+   #define EEPROM_SAVE 100     //Signature of EEPROM being updated at least once
+   #define EEPROM_TOUT 500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
@@ -183,8 +188,7 @@
 uint8_t  SSW=0;               //System SSW variable (to be used with getSSW/setSSW)
 uint16_t mode=0;              //Default to mode=0 (FT8)
 uint16_t Band_slot=0;         //Default to Bands[0]=40
-unsigned long freq; 
-unsigned long Cal_freq = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
+unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 unsigned long f[4]      = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
 unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           { 7074000, 7047500, 7078000, 7038600},   //40m [1]
@@ -192,6 +196,7 @@ unsigned long slot[6][4]={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
                           {14074000,14080000,14078000,14095600},   //20m [3]
                           {18100000,18104000,18104000,18104600},   //17m [4]
                           {21074000,21140000,21078000,21094600}};  //21m [5]                           
+unsigned long freq      = f[Band_slot]; 
 
 #ifdef LEDS
    uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
@@ -532,7 +537,12 @@ void setup_si5351() {
   uint32_t cal_factor=0;
   
 #ifdef EE
+/*----------------------------------------------------------------------*
+ * if not ADX changes might not have been committed to EEPROM yet       *
+ *----------------------------------------------------------------------*/
+#ifdef ADX
   EEPROM.get(EEPROM_CAL,cal_factor);
+#endif //ADX
 #endif //EEPROM
 
 #define XT_CAL_F   33000 
@@ -671,9 +681,17 @@ void callibrateLED(){           //Set callibration mode
  *----------------------------------------------------------*/
 void Mode_assign(){
 
+#ifdef ADX
+/*----------------------------------------------------------*
+ * This is a potential bug when called from INIT() as the   *
+ * EEPROM.get() will destroy the mode value perhaps not yet *
+ * set into the EEPROM as the elapsed time might not have   *
+ * passed yet                                               *
+ *----------------------------------------------------------*/
 #ifdef EE 
    EEPROM.get(EEPROM_MODE,mode);
 #endif //EEPROM
+#endif //ADX
    
    freq=f[mode];
    setLED(mode);
@@ -687,6 +705,12 @@ void Mode_assign(){
  * Update master frequency here               *
  *--------------------------------------------*/
 
+#ifdef EE
+
+   tout=millis();
+   setWord(&SSW,SAVEEE,true);
+
+#endif //EE
 }
 /*----------------------------------------------------------*
  * Frequency assign (band dependant)                        *
@@ -708,6 +732,7 @@ void Freq_assign(){
     for (int i=0;i<4;i++) {
       f[i]=slot[b][i];
     }
+
     
 #ifdef DEBUG
     sprintf(hi,"Freq_assign():Band(%d) b[%d] mode[%d] Band_slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld\n",Band,b,mode,Band_slot,f[0],f[1],f[2],f[3]);
@@ -717,6 +742,13 @@ void Freq_assign(){
 /*---------------------------------------*          
  * Update master frequency here          *
  *---------------------------------------*/
+
+    freq=f[Band_slot];
+
+#ifdef EE
+    tout=millis();
+    setWord(&SSW,SAVEEE,true);
+#endif //EE
 }
 
 /*----------------------------------------------------------*
@@ -727,12 +759,22 @@ void Band_assign(){
 
  resetLED();
 
+#ifdef ADX
+/*----------------------------------------------------------*
+ * This is a potential bug when called from INIT() as the   *
+ * EEPROM.get() will destroy the mode value perhaps not yet *
+ * set into the EEPROM as the elapsed time might not have   *
+ * passed yet                                               *
+ *----------------------------------------------------------*/
 #ifdef EE
  EEPROM.get(EEPROM_BAND,Band_slot);
 #endif //EEPROM
- 
- blinkLED(slot[mode]);
+#endif //ADX
+
+#ifdef LED 
+ blinkLED(LED[mode]);
  delay(DELAY_WAIT); 
+#endif //LED
 
  Freq_assign();
  Mode_assign();
@@ -915,7 +957,16 @@ void Band_Select(){
          //digitalWrite(TX,0);
 
 #ifdef EE
+
+#ifdef ADX
          EEPROM.put(EEPROM_BAND,Band_slot);
+#endif //ADX
+
+#ifdef USDX
+         tout=millis();
+         setWord(&SSW,SAVEEE,true);
+#endif //USDX
+
 #endif //EEPROM
          
          Band_assign();
@@ -1002,36 +1053,62 @@ void Calibration(){
 #endif
 
 }
+#ifdef EE
+/*------------------------------------------------------------------------------*
+ * updateEEPROM                                                                 *
+ * selectively sets values into EEPROM                                          *
+ *------------------------------------------------------------------------------*/
+void updateEEPROM() {
+
+uint16_t save=EEPROM_SAVE;
+
+   EEPROM.update(EEPROM_TEMP,save);
+   EEPROM.update(EEPROM_CAL,cal_factor);
+   EEPROM.update(EEPROM_MODE,mode);
+   EEPROM.update(EEPROM_BAND,Band_slot);
+   EEPROM.update(EEPROM_FREQ,freq);
+
+#ifdef DEBUG
+    sprintf(hi,"updateEEPROM() <set> cal_factor(%d) mode(%d) Band_slot(%d) Freq(%ld)\n",cal_factor,mode,Band_slot,Freq);
+    Serial.print(hi);
+#endif //DEBUG 
+
+    setWord(&SSW,SAVEEE,false);
+
+}
+#endif //EE
+
 /*----------------------------------------------------------*
- * Initialization function from EEPROM
+ * Initialization function from EEPROM                      *
  *----------------------------------------------------------*/
 void INIT(){
 
+#ifdef EE
+
  uint16_t temp;
- uint32_t cal_factor;
-
- #ifdef EE
-
+ uint16_t save=EEPROM_SAVE;
+ uint16_t cal_factor=0;
+ 
  EEPROM.get(EEPROM_TEMP,temp);
 
- if (temp != EEPROM_SAVE){
-
-    EEPROM.put(EEPROM_CAL,100000);
-    EEPROM.put(EEPROM_MODE,4);
-    EEPROM.put(EEPROM_TEMP,EEPROM_SAVE);
-    EEPROM.put(EEPROM_BAND,1);
-
-
+ if (temp != save){
+    updateEEPROM();
+    
  } else {
 
    /*-----------------------------------------------*
     * get configuration initialization from EEPROM  *            *
     ------------------------------------------------*/
-
-   EEPROM.get(EEPROM_TEMP,temp);
+   
    EEPROM.get(EEPROM_CAL,cal_factor);
    EEPROM.get(EEPROM_MODE,mode);
    EEPROM.get(EEPROM_BAND,Band_slot);
+   EEPROM.get(EEPROM_FREQ,Freq);
+
+#ifdef DEBUG
+    sprintf(hi,"EEPROM INIT() <get> cal_factor(%d) mode(%d) Band_slot(%d) Freq(%ld)\n",cal_factor,mode,Band_slot,Freq);
+    Serial.print(hi);
+#endif //DEBUG 
 
  }  
 
@@ -1040,10 +1117,10 @@ void INIT(){
  Band_assign();
  Freq_assign();
  Mode_assign();
- switch_RXTX(false);
+
+ switch_RXTX(false);   //Turn-off transmitter
 
 }
-
 /*--------------------------------------------------------------------------*
  * definePinOut
  * isolate pin definition on a board conditional procedure out of the main
@@ -1077,8 +1154,8 @@ void definePinOut() {
 #endif
    
    pinMode(TX,   OUTPUT);
-   pinMode(6,    INPUT);  //PD6=AN0 must be grounded
-   pinMode(7,    INPUT);  //PD7=AN1=HiZ
+   pinMode(AIN0, INPUT);  //PD6=AN0 must be grounded
+   pinMode(AIN1, INPUT);  //PD7=AN1=HiZ
 }
 
 //*************************************[ SETUP FUNCTION ]************************************** 
@@ -1089,6 +1166,7 @@ void setup()
    Serial.begin(BAUD_DEBUG);
    sprintf(hi,"ADX Firmware Version(%s)\n",VERSION);
    Serial.print(hi);
+   Serial.println("DEBUG Mode activated");
 #endif //DEBUG
 
 #ifdef CAT
@@ -1104,36 +1182,39 @@ void setup()
       Calibration();
     }
  
-/*--------------------------------------------------------
- * initialize the timer1 as an analog comparator
+/*--------------------------------------------------------*
+ * initialize the timer1 as an analog comparator          *
+ * this is the main feature of the VOX/Modulation scheme  *
  *--------------------------------------------------------*/
   TCCR1A = 0x00;
   TCCR1B = 0x01; // Timer1 Timer 16 MHz
   TCCR1B = 0x81; // Timer1 Input Capture Noise Canceller
   ACSR |= (1<<ACIC);  // Analog Comparator Capture Input
+//--------------------------------------------------------*
   
-  pinMode(7, INPUT); //PD7 = AN1 = HiZ, PD6 = AN0 = 0
+  pinMode(AIN1, INPUT); //PD7 = AN1 = HiZ, PD6 = AN0 = 0
 
 #ifdef DEBUG
   Serial.print("setup(): Timer1 set\n");
 #endif 
   
 #ifdef BUTTONS
-   // Enable BUTTON Pin Change interrupt
+/*--------------------------------------------------------------------*
+ *  Enable BUTTONS Pin Change interrupt                               *
+ *--------------------------------------------------------------------*/
 //  *digitalPinToPCMSK(BUTTONS) |= (1<<digitalPinToPCMSKbit(BUTTONS));
 //  *digitalPinToPCICR(BUTTONS) |= (1<<digitalPinToPCICRbit(BUTTONS));
   pinMode(BUTTONS, INPUT_PULLUP);
+
 #ifdef DEBUG
   Serial.print("setup(): BUTTON enabled\n");
 #endif  
-
 #endif //BUTTONS
 
   switch_RXTX(LOW);
   Mode_assign(); 
 
 }
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
 /*---------------------------------------------------------------------------*
  *  checkMode
@@ -1142,17 +1223,25 @@ void setup()
 void checkMode() {
 
 #ifdef BUTTONS
-
+//*-----------------------------------------------------------------------*
+//* This is a kludge as in USDX UP & DOWN are different analog values of
+//* the same button, therefore they can not be pressed simultaneously
+//* yet the original ADX functionality requires both to be pressed 
+//* simultaneously to enter into the band selection mode.
+//* It is replaced by a "push long" detection of either UP or DOWN
+//*-----------------------------------------------------------------------*
   getAnalogButton();
   if (getWord(SSW,PL)==true && getWord(SSW,TXON)==false) {
      setWord(&SSW,PL,false);
      Band_Select();
   }
 
-#else
+#else   //This is the standard and original behaviour of the ADX with physical UP/DOWN buttons
+
   if ((getUPSSW() == LOW)&&(getDOWNSSW() == LOW)&&(getWord(SSW,TXON)==false)) {
      Band_Select();
   }
+
 #endif //BUTTONS  
 
   if ((getUPSSW() == LOW)&&(getDOWNSSW() == HIGH)&&(getWord(SSW,TXON)==false)) {
@@ -1169,8 +1258,16 @@ void checkMode() {
   if ((getUPSSW() == HIGH) && (getDOWNSSW() == LOW)&&(getWord(SSW,TXON)==false)) {
      mode=(mode+1)%4;
 
-#ifdef EEPROM
-     EEPROM.put(EEPROM_MODE, mode); 
+#ifdef EE
+#ifdef ADX
+     EEPROM.put(EEPROM_MODE, mode);
+#endif
+
+#ifdef USDX
+     setWord(&SSW,SAVEEE,true);
+     tout=millis();
+#endif //USDX Avoid the tear and wear of the EEPROM because of successive changes
+ 
 #endif //EEPROM
      
      Mode_assign();
@@ -1190,9 +1287,13 @@ void loop()
 
   checkMode();
 
+#ifdef EE
+  if((millis()-tout)>EEPROM_TOUT) updateEEPROM();
+#endif //EEPROM
+
 #ifdef CAT 
   serialEvent();
-#endif
+#endif //CAT
 
 /*----------------------------------------------------------------------------------*
  * main transmission loop                                                           *
@@ -1201,7 +1302,6 @@ void loop()
  * if activity is detected the TX is turned on                                      *
  * TX mode remains till no further activity is detected (operate like a VOX command)*
  *----------------------------------------------------------------------------------*/
-
 uint16_t n = VOX_MAXTRY;
 
  setWord(&SSW,VOX,false);
@@ -1246,6 +1346,7 @@ uint16_t n = VOX_MAXTRY;
           if (getWord(SSW,VOX) == false){
              switch_RXTX(HIGH);
           }
+
 #ifdef ADX          
           si5351.set_freq((freq * 100 + codefreq), SI5351_CLK0); 
 #endif //ADX
@@ -1254,6 +1355,7 @@ uint16_t n = VOX_MAXTRY;
           digitalWrite(KEY_OUT,HIGH);
           si5351.set_freq(((freq+codefreq) * 100), SI5351_CLK0);        
 #endif //USDX          
+
           setWord(&SSW,VOX,true);
        }
     } else {
@@ -1275,5 +1377,4 @@ uint16_t n = VOX_MAXTRY;
      
 }
 //*********************[ END OF MAIN LOOP FUNCTION ]*************************
-
-//********************************[ END OF INITIALIZATION FUNCTION ]*************************************
+//********************************[ END OF FIRMWARE ]*************************************
