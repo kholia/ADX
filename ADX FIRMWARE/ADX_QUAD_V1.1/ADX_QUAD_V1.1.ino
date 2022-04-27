@@ -21,6 +21,7 @@
 //*         X remap of pushbuttons
 //*         - (optional) rotary enconder
 //*         - (optional) LCD display (same as uSDX)
+//*         X Add all frequency definitions for HF bands
 //*     X changes to compatibilize with Pixino board (http://www.github.com/lu7did/Pixino
 //*     - add CW support (includes keyer support)
 //*     X add CAT support
@@ -189,21 +190,22 @@
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
 #define  MAXMODE          5
-#define  MAXBAND          9
+#define  MAXBAND         10
 uint8_t  SSW=0;               //System SSW variable (to be used with getSSW/setSSW)
 uint16_t mode=0;              //Default to mode=0 (FT8)
 uint16_t Band_slot=0;         //Default to Bands[0]=40
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
-                                      { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [1]
-                                      {10136000,10140000,10130000,10138700,10116000},   //30m [2]
-                                      {14074000,14080000,14078000,14095600,14060000},   //20m [3]
-                                      {18100000,18104000,18104000,18104600,18069000},   //17m [4]
-                                      {21074000,21140000,21078000,21094600,21060000},   //15m [5]                           
-                                      {24915000,24915000,24922000,24924600,24906000},   //12m [6] FT4 equal to FT8                           
-                                      {28074000,28074000,28078000,28124600,28060000},   //10m [7]                           
-                                      {50310000,50310000,50318000,50293000,50090000}};  //6m  [8]                           
+unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //80m [0]
+                                      { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
+                                      { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
+                                      {10136000,10140000,10130000,10138700,10116000},   //30m [3]
+                                      {14074000,14080000,14078000,14095600,14060000},   //20m [4]
+                                      {18100000,18104000,18104000,18104600,18069000},   //17m [5]
+                                      {21074000,21140000,21078000,21094600,21060000},   //15m [6]                           
+                                      {24915000,24915000,24922000,24924600,24906000},   //12m [7] FT4 equal to FT8                           
+                                      {28074000,28074000,28078000,28124600,28060000},   //10m [8]                           
+                                      {50310000,50310000,50318000,50293000,50090000}};  //6m  [9]                           
 unsigned long freq      = f[Band_slot]; 
 
 #ifdef LEDS
@@ -732,16 +734,17 @@ void Freq_assign(){
     uint16_t Band=Bands[Band_slot];
     
     switch(Band) {
-      case 80 : b=0;break;
-      case 40 : b=1;break;
-      case 30 : b=2;break;
-      case 20 : b=3;break;
-      case 17 : b=4;break;
-      case 15 : b=5;break;
-      case 12 : b=6;break;
-      case 10 : b=7;break;
-      case 6  : b=8;break;
-      default : b=1;break; 
+      case 160: b=0;break;
+      case 80 : b=1;break;
+      case 40 : b=2;break;
+      case 30 : b=3;break;
+      case 20 : b=4;break;
+      case 17 : b=5;break;
+      case 15 : b=6;break;
+      case 12 : b=7;break;
+      case 10 : b=8;break;
+      case 6  : b=9;break;
+      default : b=2;break; 
     }
     for (int i=0;i<MAXMODE;i++) {
       f[i]=slot[b][i];
