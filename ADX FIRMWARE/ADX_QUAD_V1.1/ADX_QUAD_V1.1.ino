@@ -1092,7 +1092,6 @@ uint16_t save=EEPROM_SAVE;
    EEPROM.update(EEPROM_CAL,cal_factor);
    EEPROM.update(EEPROM_MODE,mode);
    EEPROM.update(EEPROM_BAND,Band_slot);
-   EEPROM.update(EEPROM_FREQ,freq);
 
 #ifdef DEBUG
     sprintf(hi,"updateEEPROM() <set> cal_factor(%d) mode(%d) Band_slot(%d) Freq(%ld)\n",cal_factor,mode,Band_slot,Freq);
@@ -1129,7 +1128,6 @@ void INIT(){
    EEPROM.get(EEPROM_CAL,cal_factor);
    EEPROM.get(EEPROM_MODE,mode);
    EEPROM.get(EEPROM_BAND,Band_slot);
-   EEPROM.get(EEPROM_FREQ,Freq);
 
 #ifdef DEBUG
     sprintf(hi,"EEPROM INIT() <get> cal_factor(%d) mode(%d) Band_slot(%d) Freq(%ld)\n",cal_factor,mode,Band_slot,Freq);
