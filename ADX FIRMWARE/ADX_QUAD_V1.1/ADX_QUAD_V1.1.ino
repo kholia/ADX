@@ -188,6 +188,10 @@
    #define EEPROM_TOUT 500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
 
+#ifdef USDX                 //Calibration voltages for analog measurement of  switches as in uSDX
+   uint16_t vlimit[3]                   = {600,750,1023};
+#endif //USDX
+
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
 uint8_t  SSW=0;               //System SSW variable (to be used with getSSW/setSSW)
 uint16_t mode=0;              //Default to mode=0 (FT8)
@@ -868,15 +872,18 @@ uint16_t v = analogRead(BUTTONS);
           setWord(&SSW,PL,true); break;
         }
       }
-    if (v<600) {return;}
-    if (v>600 && v<=750) {setWord(&SSW,UP,true); return;}
-    if (v>750 && v<=950) {setWord(&SSW,DOWN,true);return;}
+
+    if (v<vlimit[0]){ return;}                                        //Button not pressed or noise
+    if (v>vlimit[0] && v<=vlimit[1]){setWord(&SSW,UP,true);return;}   //Left button pressed
+    if (v>vlimit[1] && v<=vlimit[2]){setWord(&SSW,DOWN,true);return;} //Right button pressed
+
+//*--- at this point it must be the Rotary encoder pushbutton pressed (v=Vref)      
+    
     setWord(&SSW,TXSW,true);
     setWord(&SSW,PL,false);
     return;
 }
 #endif //BUTTONS
-
 /*----------------------------------------------------------*
  * read UP switch
  *----------------------------------------------------------*/
