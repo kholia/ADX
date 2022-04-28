@@ -152,14 +152,14 @@
 /*-------------------------------------------*
  *  Global State Variables (Binary)          *
  *-------------------------------------------*/
-#define TXON   0B00000001    //State of the TX
-#define VOX    0B00000010    //Audio input detected
-#define UP     0B00000100    //UP button (analog) pressed
-#define DOWN   0B00001000    //DOWN button (analog) pressed
-#define TXSW   0B00010000    //TXSW button (analog) pressed
-#define PL     0B00100000    //Long pulse detected on any analog button
-#define SAVEEE 0B01000000    //Mark of EEPROM updated
-#define DUMMY2 0B10000000    //(not used)
+#define TXON        0B00000001    //State of the TX
+#define VOX         0B00000010    //Audio input detected
+#define UP          0B00000100    //UP button (analog) pressed
+#define DOWN        0B00001000    //DOWN button (analog) pressed
+#define TXSW        0B00010000    //TXSW button (analog) pressed
+#define PL          0B00100000    //Long pulse detected on any analog button
+#define SAVEEE      0B01000000    //Mark of EEPROM updated
+#define DUMMY2      0B10000000    //(not used)
 
 /*------------------------------------*
  * General purpose global define      *
@@ -503,7 +503,7 @@ void serialEvent(){
   rxend_event = millis() + 10;  
   char data = Serial.read();
 
-  if (data=="\n" || data=="\r" || data==0x0a) {
+  if (data=="\n" || data=="\r" || data==0x0a) {  //This is just a kludge to be able to test the CAT from the IDE Terminal
        return;  
   }
 
@@ -556,6 +556,12 @@ void setup_si5351() {
 #define XT_CAL_F   33000 
 long cal = XT_CAL_F;
 
+/*--------------------------------------------------------*
+ * This accounts for the different pin assignment between *
+ * ADX board and uSDX-like board, in the uSDX no separate *
+ * clock for the receiver is needed, the clock just varies*
+ * in strenght.                                           *
+ *--------------------------------------------------------*/
 #ifdef ADX
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
@@ -583,12 +589,12 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
   sprintf(hi,"switch_RXTX(%s)\n",BOOL2CHAR(t));
   Serial.print(hi);
 #endif
-  
-  if (t) {    //Set to TX
 
 /*-----------------------------------*
  *               TX                  *
  *-----------------------------------*/
+  if (t) {    //Set to TX
+
 #ifdef USDX  
      digitalWrite(KEY_OUT,HIGH);
      digitalWrite(SIG_OUT,HIGH);
@@ -624,7 +630,6 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA);
     si5351.set_freq(freq*100ULL, SI5351_CLK0);
     si5351.output_enable(SI5351_CLK0, 1);   //RX on
-
 #endif
 
     digitalWrite(TX,0); 
@@ -632,7 +637,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     setWord(&SSW,VOX,LOW);
 
 /*---------------------------------------------------------*
- * set to master frequency                                 *
+ * set to master frequency (future)                                 *
  *---------------------------------------------------------*/
   
 }
@@ -757,7 +762,6 @@ void Freq_assign(){
 /*---------------------------------------*          
  * Update master frequency here          *
  *---------------------------------------*/
-
     freq=f[Band_slot];
 
 #ifdef EE
