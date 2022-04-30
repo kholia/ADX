@@ -61,21 +61,23 @@
 // 7 - If you read as accurate as possible 1000000 Hz then calibration is done. 
 // 8 - Power off ADX.
 //*******************************[ LIBRARIES ]*************************************************
-#include <si5351.h>
-#include "Wire.h"
-#include <EEPROM.h>
-#include <stdint.h>
-#include <avr/wdt.h> 
-//********************************[ DEFINES ]***************************************************
-#define VERSION     "1.1b"
-#define BOOL2CHAR(x)  (x==true ? "True" : "False")
-#define EMPTY       0
 /*-----------------------------------------------------------*
  * Board definition                                          *
  *-----------------------------------------------------------*/
 //#define ADX         1     //Define usage of the WA2CBA's ADX board
 #define USDX        1     //Use a modified uSDX board as base (D6/D7 --> D5/D8)
 
+/*-----------------------------------------------------------*
+ * System Includes
+ *-----------------------------------------------------------*/
+#include <stdint.h>
+#include <avr/wdt.h> 
+#include <si5351.h>
+#include "Wire.h"
+#include <EEPROM.h>
+//********************************[ DEFINES ]***************************************************
+#define VERSION     "1.1b"
+#define BOOL2CHAR(x)  (x==true ? "True" : "False")
 /*****************************************************************
  * CONSISTENCY RULES                                             *
  *****************************************************************/
@@ -91,11 +93,11 @@
 #endif 
 
 #if (defined(USDX))   //Rule for conflicting board commands & interface
-   #undef LEDS
-   #undef EE
-   #undef PUSH
-   #undef ECHO    
-   //#define DEBUG       1     //Debug trace over Serial
+   #undef  LEDS
+   #define EE
+   #undef  PUSH
+   #undef  ECHO    
+   #define DEBUG       1     //Debug trace over Serial
    //#define CAT         1
    #define WDT           1     //Transmission watchdog (avoid the PTT to be keyed longer than expected)
 #endif
@@ -180,36 +182,38 @@
    #define EEPROM_TEMP 30
    #define EEPROM_MODE 40
    #define EEPROM_BAND 50
-   #define EEPROM_FREQ 60
 
    uint32_t tout=0;
 
+   //#define EEPROM_CLR    1     //Initialize EEPROM
    #define EEPROM_SAVE 100     //Signature of EEPROM being updated at least once
    #define EEPROM_TOUT 500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
-#define  MAXMODE          5
+#define  MAXMODE          4
 #define  MAXBAND         10
 uint8_t  SSW=0;               //System SSW variable (to be used with getSSW/setSSW)
 uint16_t mode=0;              //Default to mode=0 (FT8)
 uint16_t Band_slot=0;         //Default to Bands[0]=40
+uint16_t cal_factor=0;
+
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
-unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //80m [0]
-                                      { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
-                                      { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
-                                      {10136000,10140000,10130000,10138700,10116000},   //30m [3]
-                                      {14074000,14080000,14078000,14095600,14060000},   //20m [4]
-                                      {18100000,18104000,18104000,18104600,18069000},   //17m [5]
-                                      {21074000,21140000,21078000,21094600,21060000},   //15m [6]                           
-                                      {24915000,24915000,24922000,24924600,24906000},   //12m [7] FT4 equal to FT8                           
-                                      {28074000,28074000,28078000,28124600,28060000},   //10m [8]                           
-                                      {50310000,50310000,50318000,50293000,50090000}};  //6m  [9]                           
+unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
+unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600},   //80m [0]
+                                      { 3573000, 3575000, 3578000, 3568600},   //80m [1]
+                                      { 7074000, 7047500, 7078000, 7038600},   //40m [2]
+                                      {10136000,10140000,10130000,10138700},   //30m [3]
+                                      {14074000,14080000,14078000,14095600},   //20m [4]
+                                      {18100000,18104000,18104000,18104600},   //17m [5]
+                                      {21074000,21140000,21078000,21094600},   //15m [6]                           
+                                      {24915000,24915000,24922000,24924600},   //12m [7] FT4 equal to FT8                           
+                                      {28074000,28074000,28078000,28124600},   //10m [8]                           
+                                      {50310000,50310000,50318000,50293000}};  //6m  [9]                           
 unsigned long freq      = f[Band_slot]; 
 
 #ifdef LEDS
-   uint8_t  LED[4] ={FT8,FT4,JS8,WSPR,EMPTY};
+   uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
 #endif //LEDS  -- Board LEDS
  
 
@@ -544,8 +548,7 @@ void setup_si5351() {
   Serial.print("setup_si5351()\n");
 #endif //DEBUG
   
-  uint32_t cal_factor=0;
-  
+ 
 #ifdef EE
 /*----------------------------------------------------------------------*
  * if not ADX changes might not have been committed to EEPROM yet       *
@@ -576,14 +579,17 @@ long cal = XT_CAL_F;
 #endif //USDX
   
 }
+
 /*---------------------------------------------------------------------------------------------*
  * Switch between RX and TX
  *---------------------------------------------------------------------------------------------*/
 void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
 #ifdef DEBUG
-  sprintf(hi,"switch_RXTX(%s)\n",BOOL2CHAR(t));
-  Serial.print(hi);
+  if (t != getWord(SSW,TXON)) {
+      sprintf(hi,"switch_RXTX(%s) Previous(%s)\n",BOOL2CHAR(t),BOOL2CHAR(getWord(SSW,TXON)));
+      Serial.print(hi);
+  } 
 #endif
   
   if (t) {    //Set to TX
@@ -677,6 +683,9 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
        digitalWrite(pin,LOW);
        delay(BDLY);
        n--;
+#ifdef WDT       
+       wdt_reset();
+#endif //WDT       
    }
 #endif //LEDS   
 }
@@ -748,6 +757,9 @@ void Freq_assign(){
     }
     for (int i=0;i<MAXMODE;i++) {
       f[i]=slot[b][i];
+#ifdef WDT      
+      wdt_reset();
+#endif //WDT      
     }
 
     
@@ -815,6 +827,10 @@ void ManualTX(){
     switch_RXTX(HIGH);
     while(getTXSW()==LOW) {
 
+#ifdef WDT      
+      wdt_reset();
+#endif //WDT
+      
 #ifdef BUTTONS
       getAnalogButton();
 #endif
@@ -862,6 +878,10 @@ uint16_t v = analogRead(BUTTONS);
     v=analogRead(BUTTONS);
     int32_t t0 = millis();
     for(; digitalRead(BUTTONS);){ // until released or long-press
+
+#ifdef WDT        
+        wdt_reset();
+#endif //WDT        
         if((millis() - t0) > 300){
           setWord(&SSW,PL,true); break;
         }
@@ -935,8 +955,6 @@ bool getTXSW() {
  *----------------------------------------------------------*/
 void Band_Select(){
 
-//   digitalWrite(TX,1);
-
 #ifdef EE   
    EEPROM.get(EEPROM_BAND,Band_slot);
 #endif //EEPROM
@@ -945,7 +963,10 @@ void Band_Select(){
    blinkLED(Band_slot);
    
    while (true) {
-
+#ifdef WDT
+      wdt_reset();
+#endif //WDT      
+      
 #ifdef BUTTONS
       getAnalogButton();
 #endif
@@ -1003,7 +1024,7 @@ void Calibration(){
 
 #ifdef USDX
   #ifdef DEBUG
-    Serial.print("Calibration() end\n");
+    Serial.print("Calibration() not supported\n");
   #endif
   return;
 #endif
@@ -1017,11 +1038,19 @@ void Calibration(){
 #endif  
   resetLED();
   uint8_t  n=4;
-  uint32_t cal_factor=0;
    
   while (n>0) {
+
+#ifdef WDT
+     wdt_reset();
+#endif //WDT
+         
      callibrateLED();
      n--;
+
+#ifdef WDT
+  wdt_reset();
+#endif //WDT
   }
 
 #ifdef EE  
@@ -1030,6 +1059,10 @@ void Calibration(){
   
   while (true) {
 
+#ifdef WDT
+     wdt_reset();
+#endif //WDT
+     
      if (getUPSSW() == LOW) {
         cal_factor = cal_factor - 100;
 
@@ -1079,14 +1112,13 @@ void updateEEPROM() {
 
 uint16_t save=EEPROM_SAVE;
 
-   EEPROM.update(EEPROM_TEMP,save);
-   EEPROM.update(EEPROM_CAL,cal_factor);
-   EEPROM.update(EEPROM_MODE,mode);
-   EEPROM.update(EEPROM_BAND,Band_slot);
-   EEPROM.update(EEPROM_FREQ,freq);
+   EEPROM.put(EEPROM_TEMP,save);
+   EEPROM.put(EEPROM_CAL,cal_factor);
+   EEPROM.put(EEPROM_MODE,mode);
+   EEPROM.put(EEPROM_BAND,Band_slot);
 
 #ifdef DEBUG
-    sprintf(hi,"updateEEPROM() <set> cal_factor(%d) mode(%d) Band_slot(%d) Freq(%ld)\n",cal_factor,mode,Band_slot,Freq);
+    sprintf(hi,"updateEEPROM() <update> save(%d) cal_factor(%d) mode(%d) Band_slot(%d) Freq(%ld)\n",save,cal_factor,mode,Band_slot,freq);
     Serial.print(hi);
 #endif //DEBUG 
 
@@ -1104,11 +1136,20 @@ void INIT(){
 
  uint16_t temp;
  uint16_t save=EEPROM_SAVE;
- uint16_t cal_factor=0;
+
  
  EEPROM.get(EEPROM_TEMP,temp);
-
+ 
+ #ifdef EEPROM_CLR
+   temp=-1;
+ #endif //EEPROM_CLR  
+ 
  if (temp != save){
+
+#ifdef DEBUG
+    sprintf(hi,"INIT() temp(%d) save(%d) cal_factor(%d) mode(%d) band_slot(%d) updating EEPROM\n",temp,save,cal_factor,mode,Band_slot);
+    Serial.print(hi);
+#endif //DEBUG
     updateEEPROM();
     
  } else {
@@ -1120,10 +1161,9 @@ void INIT(){
    EEPROM.get(EEPROM_CAL,cal_factor);
    EEPROM.get(EEPROM_MODE,mode);
    EEPROM.get(EEPROM_BAND,Band_slot);
-   EEPROM.get(EEPROM_FREQ,Freq);
 
 #ifdef DEBUG
-    sprintf(hi,"EEPROM INIT() <get> cal_factor(%d) mode(%d) Band_slot(%d) Freq(%ld)\n",cal_factor,mode,Band_slot,Freq);
+    sprintf(hi,"EEPROM INIT() <get> temp(%d) cal_factor(%d) mode(%d) Band_slot(%d)\n",temp,cal_factor,mode,Band_slot);
     Serial.print(hi);
 #endif //DEBUG 
 
@@ -1178,6 +1218,8 @@ void definePinOut() {
 //*************************************[ SETUP FUNCTION ]************************************** 
 void setup()
 {
+
+
 
 #ifdef DEBUG
    Serial.begin(BAUD_DEBUG);
@@ -1235,6 +1277,7 @@ void setup()
   wdt_disable();
   wdt_enable(WDTO_8S);
 #endif //WDT
+
 
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
@@ -1310,7 +1353,7 @@ void loop()
   checkMode();
 
 #ifdef EE
-  if((millis()-tout)>EEPROM_TOUT) updateEEPROM();
+  if((millis()-tout)>EEPROM_TOUT && getWord(SSW,SAVEEE)==true ) updateEEPROM();
 #endif //EEPROM
 
 #ifdef CAT 
@@ -1409,5 +1452,6 @@ uint16_t n = VOX_MAXTRY;
 #endif //WDT     
 
 }
+
 //*********************[ END OF MAIN LOOP FUNCTION ]*************************
 //********************************[ END OF FIRMWARE ]*************************************
