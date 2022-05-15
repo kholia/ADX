@@ -82,7 +82,7 @@
 /*****************************************************************
  * CONSISTENCY RULES                                             *
  *****************************************************************/
-#define EE          1     //User EEPROM for persistence
+//#define EE          1     //User EEPROM for persistence Temporary disabled
 
 #if (defined(ADX) && defined(uSDX))
     #undef USDX
@@ -92,6 +92,7 @@
 #if (defined(ADX))
     #define LEDS        1     //Use on-board LEDS
     #define PUSH        1     //Use UP-DOWN-TXSW Push buttons
+    #define DEBUG       1
 #endif 
 
 #if (defined(USDX))   //Rule for conflicting board commands & interface
@@ -109,6 +110,8 @@
     uint32_t tx=0;
     #define _SERIAL 1
     #define BAUD_DEBUG 115200
+    uint32_t kcount=0;
+    uint32_t ncount=0;
 #endif //DEBUG or CAT
 
 
@@ -1348,10 +1351,24 @@ if ((getTXSW() == LOW) && (getWord(SSW,TXON)==false)) {
  }
  
 }
+void keepAlive() {
+   kcount++;
+   if (kcount>20000) {
+      kcount=0;
+      ncount++;
+      sprintf(hi,"keepAlive(): ncount=%d\n",ncount);
+      Serial.print(hi);
+   }
+   
+}
 //***************************[ Main LOOP Function ]**************************
 void loop()
 {  
 
+#ifdef DEBUG
+  keepAlive();
+#endif //DEBUG
+  
   checkMode();
 
 #ifdef EE
