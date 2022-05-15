@@ -21,10 +21,11 @@
 //*         X remap of pushbuttons
 //*         - (optional) rotary enconder
 //*         - (optional) LCD display (same as uSDX)
-//*         X Add all frequency definitions for HF bands
+//*     X Add all frequency definitions for HF bands
+//*     X Optimize EEPROM read/write cycles
 //*     X changes to compatibilize with Pixino board (http://www.github.com/lu7did/Pixino
 //*     - add CW support (includes keyer support)
-//*     X add CAT support
+//*     X add CAT support (TS-440)
 //*     X add timeout & watchdog support
 //* Forked version of the original ADX firmware located at http://www.github.com/lu7did/ADX
 //*-----------------------------------------------------------------------------------------------------------------*
@@ -66,7 +67,6 @@
  *-----------------------------------------------------------*/
 #define ADX         1     //Define usage of the WA2CBA's ADX board
 //#define USDX        1     //Use a modified uSDX board as base (D6/D7 --> D5/D8)
-#define EMPTY       5
 
 /*-----------------------------------------------------------*
  * System Includes
@@ -89,9 +89,12 @@
 #endif //Board definition    
 
 
-#if (defined(ADX))
+#if (defined(ADX))      //Original ADX board as per WB2CBA carries LEDs and PushButtons
     #define LEDS        1     //Use on-board LEDS
     #define PUSH        1     //Use UP-DOWN-TXSW Push buttons
+    #undef  CAT
+    #undef  ECHO
+    #undef  WDT
     #define DEBUG       1
 #endif 
 
@@ -100,7 +103,7 @@
    #undef  PUSH
    #undef  ECHO    
 
-   //#define DEBUG       1     //Debug trace over Serial
+   #define DEBUG         1     //Debug trace over Serial
    //#define CAT         1
    #define WDT           1     //Transmission watchdog (avoid the PTT to be keyed longer than expected)
 #endif
@@ -110,8 +113,6 @@
     uint32_t tx=0;
     #define _SERIAL 1
     #define BAUD_DEBUG 115200
-    uint32_t kcount=0;
-    uint32_t ncount=0;
 #endif //DEBUG or CAT
 
 
@@ -130,9 +131,9 @@
 /*----------------------------*
  * Pin Assignment             *
  *----------------------------*/
-#define AIN0        6           //(PD6)
-#define AIN1        7           //(PD7)
-#define TX         13           //(PB5) TX LED
+#define AIN0              6           //(PD6)
+#define AIN1              7           //(PD7)
+#define TX               13           //(PB5) TX LED
 
 #ifdef PUSH
    #define UP             2           //UP Switch
@@ -641,7 +642,6 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA);
     si5351.set_freq(freq*100ULL, SI5351_CLK0);
     si5351.output_enable(SI5351_CLK0, 1);   //RX on
-
 #endif
 
     digitalWrite(TX,0); 
@@ -924,7 +924,6 @@ uint16_t v = analogRead(BUTTONS);
     return;
 }
 #endif //BUTTONS
-
 /*----------------------------------------------------------*
  * read UP switch
  *----------------------------------------------------------*/
@@ -1045,7 +1044,6 @@ void Band_Select(){
       return; 
       } 
 }
-
 }
 /*----------------------------------------------------------*
  * Calibration function
@@ -1138,7 +1136,7 @@ uint16_t save=EEPROM_SAVE;
    EEPROM.put(EEPROM_BAND,Band_slot);
 
 #ifdef DEBUG
-    sprintf(hi,"updateEEPROM() <update> save(%d) cal_factor(%d) mode(%d) Band_slot(%d) Freq(%ld)\n",save,cal_factor,mode,Band_slot,freq);
+    sprintf(hi,"updateEEPROM() <update> save(%d) cal_factor(%d) mode(%d) Band_slot(%d)\n",save,cal_factor,mode,Band_slot);
     Serial.print(hi);
 #endif //DEBUG 
 
@@ -1181,6 +1179,11 @@ void INIT(){
    EEPROM.get(EEPROM_CAL,cal_factor);
    EEPROM.get(EEPROM_MODE,mode);
    EEPROM.get(EEPROM_BAND,Band_slot);
+
+#ifdef DEBUG
+   sprintf(hi,"INIT() EEPROM Retrieve cal_factor(%d) mode(%d) band_slot(%d)\n",cal_factor,mode,Band_slot);
+   Serial.print(hi);
+#endif //DEBUG
  }  
 
 #endif // EE
@@ -1392,21 +1395,31 @@ void keepAlive() {
    
 }
 //***************************[ Main LOOP Function ]**************************
+//
+//
+//***************************************************************************
 void loop()
 {  
 
+//*--- Debug hook
   keepAlive();
+
+//*--- changes in mode  
   checkMode();
 
+
 #ifdef EE
+//*--- if EEPROM enabled check if timeout to write has been elapsed
   if((millis()-tout)>EEPROM_TOUT && getWord(SSW,SAVEEE)==true ) updateEEPROM();
 #endif //EEPROM
 
 #ifdef CAT 
+//*--- if CAT enabled check for serial events
   serialEvent();
 #endif //CAT
 
 #ifdef WDT
+//*--- if WDT enabled reset the watchdog
   wdt_reset();
 #endif //WDT
 
@@ -1421,7 +1434,11 @@ uint16_t n = VOX_MAXTRY;
 
  setWord(&SSW,VOX,false);
  while (n>0){                                 //Iterate up to 10 times looking for signal to transmit
- 
+
+#ifdef WDT
+    wdt_reset();
+#endif //WDT
+    
     TCNT1 = 0;                                  //While this iteration is performed if the TX is off 
     while (ACSR &(1<<ACO)){                     //the receiver is operating with autonomy
        if (TCNT1>CNT_MAX) break;
@@ -1472,11 +1489,17 @@ uint16_t n = VOX_MAXTRY;
 #endif //USDX          
 
           setWord(&SSW,VOX,true);
+
+#ifdef WDT
+          wdt_reset();
+#endif //WDT
+          
        }
     } else {
        n--;
     }
 #ifdef CAT 
+//*--- if CAT enabled check for serial events (again)
     serialEvent();
 #endif
     
