@@ -106,7 +106,7 @@
 #endif
 
 #if (defined(DEBUG) || defined(CAT))
-    char hi[200];
+    char hi[120];
     uint32_t tx=0;
     #define _SERIAL 1
     #define BAUD_DEBUG 115200
@@ -163,9 +163,9 @@
  *-------------------------------------------*/
 #define TXON   0B00000001    //State of the TX
 #define VOX    0B00000010    //Audio input detected
-#define UP     0B00000100    //UP button (analog) pressed
-#define DOWN   0B00001000    //DOWN button (analog) pressed
-#define TXSW   0B00010000    //TXSW button (analog) pressed
+#define UPPUSH 0B00000100    //UP button (analog) pressed
+#define DNPUSH 0B00001000    //DOWN button (analog) pressed
+#define TXPUSH 0B00010000    //TXSW button (analog) pressed
 #define PL     0B00100000    //Long pulse detected on any analog button
 #define SAVEEE 0B01000000    //Mark of EEPROM updated
 #define DUMMY2 0B10000000    //(not used)
@@ -178,8 +178,8 @@
 #define VOX_MAXTRY  10          //Max number of attempts to detect an audio incoming signal
 #define CNT_MAX     65000       //Max count of timer1
 #define FRQ_MAX     30000       //Max divisor for frequency allowed
-#define BDLY        250
-#define DELAY_WAIT  BDLY*4
+#define BDLY        200
+#define DELAY_WAIT  BDLY*2
 #define DELAY_CAL   DELAY_WAIT/10
 
 #ifdef EE
@@ -197,6 +197,7 @@
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
 #define  MAXMODE          4
+#define  MAXBLINK         4
 #define  MAXBAND         10
 uint8_t  SSW=0;               //System SSW variable (to be used with getSSW/setSSW)
 uint16_t mode=0;              //Default to mode=0 (FT8)
@@ -613,11 +614,14 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 #ifdef ADX
       digitalWrite(RX,LOW);
       si5351.output_enable(SI5351_CLK1, 0);   //RX off
+      si5351.set_freq(freq*100ULL, SI5351_CLK0);
       si5351.output_enable(SI5351_CLK0, 1);   // TX on
 #endif
     
      digitalWrite(TX,HIGH);
      setWord(&SSW,TXON,HIGH);
+
+     
      return;
   }
 
@@ -653,6 +657,9 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 /*-----------------------------------------------------------------------------------*
  * LED management functions                                                          *
  *-----------------------------------------------------------------------------------*/
+/*----- 
+ * Turn off all LEDs
+ */
 void resetLED() {               //Turn-off all LEDs
 
 #ifdef LEDS  
@@ -660,34 +667,56 @@ void resetLED() {               //Turn-off all LEDs
    digitalWrite(JS8, LOW); 
    digitalWrite(FT4, LOW); 
    digitalWrite(FT8, LOW); 
+
+#ifdef DEBUG
+   Serial.println("resetLED() Ok");
+#endif //DEBUG   
+
 #endif //LEDS
+
  
 }
 
+/*-----
+ * Set a particular LED ON
+ */
 void setLED(uint8_t LEDpin) {      //Turn-on LED {pin}
-   resetLED();
    
 #ifdef LEDS 
-   uint8_t pin=LED[LEDpin];  
-   digitalWrite(pin,HIGH);
+
+   resetLED();
+   digitalWrite(LEDpin,HIGH);
+
+#ifdef DEBUG
+   sprintf(hi,"setLED(): LEDpin(%d) Ok\n",LEDpin);
+   Serial.print(hi);
+#endif //DEBUG
+
 #endif //LEDS
 
 }
 
+/*-------
+ * Blink a given LED
+ */
 void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 
+#ifdef DEBUG
+   sprintf(hi,"blinkLED() LED(%d)\n",LEDpin);
+   Serial.print(hi);
+#endif //DEBUG
+   
 #ifdef LEDS   
-   uint8_t n=(MAXMODE-1);
-   uint8_t pin=LED[LEDpin];
-
-   if (pin == EMPTY) return;
+   
+   uint8_t n=(MAXBLINK-1);
 
    while (n>0) {
-       digitalWrite(pin,HIGH);
+       digitalWrite(LEDpin,HIGH);
        delay(BDLY);
-       digitalWrite(pin,LOW);
+       digitalWrite(LEDpin,LOW);
        delay(BDLY);
        n--;
+
 #ifdef WDT       
        wdt_reset();
 #endif //WDT       
@@ -695,6 +724,9 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 #endif //LEDS   
 }
 
+/*-----
+ * LED on callibration mode
+ */
 void callibrateLED(){           //Set callibration mode
 
 #ifdef LEDS
@@ -703,6 +735,7 @@ void callibrateLED(){           //Set callibration mode
    delay(DELAY_CAL);        
 #endif //LEDS  
 }
+/*==========================================================================================*/
 /*----------------------------------------------------------*
  * Mode assign                                              *
  *----------------------------------------------------------*/
@@ -715,29 +748,28 @@ void Mode_assign(){
  * set into the EEPROM as the elapsed time might not have   *
  * passed yet                                               *
  *----------------------------------------------------------*/
-#ifdef EE 
-   EEPROM.get(EEPROM_MODE,mode);
-#endif //EEPROM
-#endif //ADX
-   
-   freq=f[mode];
-   setLED(mode);
+//#ifdef EE 
+//   EEPROM.get(EEPROM_MODE,mode);
+//#endif //EEPROM
 
-#ifdef DEBUG
-     sprintf(hi,"Mode_assign() mode(%d) freq(%ld)\n",mode,f[mode]);
-     Serial.print(hi);
-#endif     
+#endif //ADX
+      
+   freq=f[mode];
+   setLED(LED[mode]);
 
 /*--------------------------------------------*   
  * Update master frequency here               *
  *--------------------------------------------*/
 
 #ifdef EE
-
    tout=millis();
    setWord(&SSW,SAVEEE,true);
-
 #endif //EE
+
+#ifdef DEBUG
+     sprintf(hi,"Mode_assign() Ok mode(%d) freq(%ld)\n",mode,f[mode]);
+     Serial.print(hi);
+#endif     
 }
 /*----------------------------------------------------------*
  * Frequency assign (band dependant)                        *
@@ -758,31 +790,32 @@ void Freq_assign(){
       case 12 : b=7;break;
       case 10 : b=8;break;
       case 6  : b=9;break;
-      default : b=2;break; 
+      default : b=2;break;     //40m is the default
     }
     for (int i=0;i<MAXMODE;i++) {
       f[i]=slot[b][i];
+
 #ifdef WDT      
-      wdt_reset();
+      wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
 #endif //WDT      
+
     }
 
-    
-#ifdef DEBUG
-    sprintf(hi,"Freq_assign():Band(%d) b[%d] mode[%d] Band_slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld\n",Band,b,mode,Band_slot,f[0],f[1],f[2],f[3]);
-    Serial.print(hi);
-#endif
 
 /*---------------------------------------*          
  * Update master frequency here          *
  *---------------------------------------*/
-
     freq=f[Band_slot];
 
 #ifdef EE
     tout=millis();
     setWord(&SSW,SAVEEE,true);
 #endif //EE
+
+#ifdef DEBUG
+    sprintf(hi,"Freq_assign(): Ok Band(%d) b[%d] mode[%d] Band_slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld\n",Band,b,mode,Band_slot,f[0],f[1],f[2],f[3]);
+    Serial.print(hi);
+#endif
 }
 
 /*----------------------------------------------------------*
@@ -800,21 +833,22 @@ void Band_assign(){
  * set into the EEPROM as the elapsed time might not have   *
  * passed yet                                               *
  *----------------------------------------------------------*/
-#ifdef EE
- EEPROM.get(EEPROM_BAND,Band_slot);
-#endif //EEPROM
+//#ifdef EE
+// EEPROM.get(EEPROM_BAND,Band_slot);
+//#endif //EEPROM
+
 #endif //ADX
 
-#ifdef LED 
- blinkLED(LED[mode]);
+#ifdef LEDS 
+ blinkLED(LED[3-Band_slot]);
  delay(DELAY_WAIT); 
-#endif //LED
+#endif //LEDS
 
  Freq_assign();
  Mode_assign();
  
 #ifdef DEBUG
- sprintf(hi,"Band_assign() mode(%d) Band_slot(%d)\n",mode,Band_slot);
+ sprintf(hi,"Band_assign() Ok mode(%d) Band_slot(%d)\n",mode,Band_slot);
  Serial.print(hi);
 #endif //DEBUG
   
@@ -828,7 +862,7 @@ void ManualTX(){
 #ifdef BUTTONS
       getAnalogButton();
 #endif
-
+    
     switch_RXTX(HIGH);
     while(getTXSW()==LOW) {
 
@@ -839,7 +873,7 @@ void ManualTX(){
 #ifdef BUTTONS
       getAnalogButton();
 #endif
-            
+          
     }
     switch_RXTX(LOW);
 
@@ -850,32 +884,23 @@ void ManualTX(){
 bool getSwitch(uint8_t pin) {
 
     bool state=digitalRead(pin);
+ 
     if (state==HIGH) {
        delay(100);
        state=digitalRead(pin);
-       if (state==HIGH) {
-
-#ifdef DEBUG
-          sprintf(hi,"getSwitch() pin(%d) HIGH\n",pin);
-          Serial.print(hi);
-#endif //DEBUG
-                  
+       if (state==HIGH) {               
           return HIGH;
        }
-    }   
-
-#ifdef DEBUG
-          sprintf(hi,"getSwitch() pin(%d) LOW\n",pin);
-          Serial.print(hi);
-#endif //DEBUG
-
-     return LOW;
+    }
+           
+    return LOW;
   
 }
+#ifdef BUTTONS
 /*----------------------------------------------------------*
  * get value from analog port segmented by values
+ * only for experimental uSDX board
  *----------------------------------------------------------*/
-#ifdef BUTTONS
 void getAnalogButton() {
 
 uint16_t v = analogRead(BUTTONS);
@@ -892,9 +917,9 @@ uint16_t v = analogRead(BUTTONS);
         }
       }
     if (v<600) {return;}
-    if (v>600 && v<=750) {setWord(&SSW,UP,true); return;}
-    if (v>750 && v<=950) {setWord(&SSW,DOWN,true);return;}
-    setWord(&SSW,TXSW,true);
+    if (v>600 && v<=750) {setWord(&SSW,UPPUSH,true); return;}
+    if (v>750 && v<=950) {setWord(&SSW,DNPUSH,true);return;}
+    setWord(&SSW,TXSPUSH,true);
     setWord(&SSW,PL,false);
     return;
 }
@@ -910,12 +935,13 @@ bool getUPSSW() {
 #endif //PUSH 
 
 #ifdef BUTTONS
-    if (getWord(SSW,UP)==true) {
-       setWord(&SSW,UP,false); 
+    if (getWord(SSW,UPPUSH)==true) {
+       setWord(&SSW,UPPUSH,false); 
        return false;      
     } 
-    return true;    
 #endif //BUTTONS
+    return true;    
+
 }
 /*----------------------------------------------------------*
  * read DOWN Switch
@@ -927,45 +953,52 @@ bool getDOWNSSW() {
 #endif //PUSH
 
 #ifdef BUTTONS
-     if (getWord(SSW,DOWN)==true) {
-        setWord(&SSW,DOWN,false);   
+     if (getWord(SSW,UPPUSH)==true) {
+        setWord(&SSW,UPPUSH,false);   
         return false;   
     }
-    return true;
 #endif //BUTTONS
+
+    return true;
+    
 
 }
 /*----------------------------------------------------------*
  * read TXSW switch
  *----------------------------------------------------------*/
 bool getTXSW() {
+  
 #ifdef PUSH
     return getSwitch(TXSW);
 #endif //PUSH
 
 #ifdef BUTTONS
-
-    if (getWord(SSW,TXSW)==true) {
-       setWord(&SSW,TXSW,false);
+    if (getWord(SSW,TXPUSH)==true) {
+       setWord(&SSW,TXPUSH,false);
        return false;   
     }
-
     return true;
-
 #endif //BUTTONS
-
+    return true;
 }
 /*----------------------------------------------------------*
  * Select band to operate
  *----------------------------------------------------------*/
 void Band_Select(){
 
-#ifdef EE   
-   EEPROM.get(EEPROM_BAND,Band_slot);
-#endif //EEPROM
+//#ifdef EE   
+//   EEPROM.get(EEPROM_BAND,Band_slot);
+//#endif //EEPROM
    
    resetLED();
-   blinkLED(Band_slot);
+
+#ifdef DEBUG
+   sprintf(hi,"Band_Select() Band_slot(%d) LED(%d)\n",Band_slot,LED[3-Band_slot]);
+   Serial.print(hi);
+#endif //DEBUG
+   
+   blinkLED(LED[3-Band_slot]);
+   setLED(LED[3-Band_slot]);
    
    while (true) {
 #ifdef WDT
@@ -976,9 +1009,9 @@ void Band_Select(){
       getAnalogButton();
 #endif
           
-      setLED(Band_slot);
       if ((getUPSSW() == LOW) && (getDOWNSSW() == HIGH)) {
           Band_slot=(Band_slot-1)%4;
+          setLED(LED[3-Band_slot]);
 
 #ifdef DEBUG
           sprintf(hi,"Band_Select() Band_slot(%d)\n",Band_slot);
@@ -989,35 +1022,27 @@ void Band_Select(){
    
       if ((getUPSSW() == HIGH) && (getDOWNSSW() == LOW)) {
          Band_slot=(Band_slot+1)%4;
+         setLED(LED[3-Band_slot]);
 
-#ifdef DEBUG
+#ifdef DEBUG2
          sprintf(hi,"Band_Select() Band_slot(%d)\n",Band_slot);
          Serial.print(hi);
 #endif
 
       }                                               
       if (getTXSW() == LOW) {
-         //digitalWrite(TX,0);
-
+         digitalWrite(TX,0);
 #ifdef EE
+      tout=millis();
+      setWord(&SSW,SAVEEE,true);
+#endif //EE
 
-#ifdef ADX
-         EEPROM.put(EEPROM_BAND,Band_slot);
-#endif //ADX
-
-#ifdef USDX
-         tout=millis();
-         setWord(&SSW,SAVEEE,true);
-#endif //USDX
-
-#endif //EEPROM
-         
-         Band_assign();
+      Band_assign();
 /*------------------------------------------*
  * Update master frequency                  *
  *------------------------------------------*/
          
-         return; 
+      return; 
       } 
 }
 
@@ -1028,19 +1053,9 @@ void Band_Select(){
 void Calibration(){
 
 #ifdef USDX
-  #ifdef DEBUG
-    Serial.print("Calibration() not supported\n");
-  #endif
   return;
-#endif
-  
-#ifdef DEBUG
-  Serial.print("Calibration() start\n");
 #endif
 
-#ifdef USDX
-  return;
-#endif  
   resetLED();
   uint8_t  n=4;
    
@@ -1166,22 +1181,18 @@ void INIT(){
    EEPROM.get(EEPROM_CAL,cal_factor);
    EEPROM.get(EEPROM_MODE,mode);
    EEPROM.get(EEPROM_BAND,Band_slot);
-
-#ifdef DEBUG
-    sprintf(hi,"EEPROM INIT() <get> temp(%d) cal_factor(%d) mode(%d) Band_slot(%d)\n",temp,cal_factor,mode,Band_slot);
-    Serial.print(hi);
-#endif //DEBUG 
-
  }  
 
-#endif // EEPROM
+#endif // EE
   
  Band_assign();
  Freq_assign();
  Mode_assign();
+ switch_RXTX(LOW);   //Turn-off transmitter, establish RX LO
 
- switch_RXTX(false);   //Turn-off transmitter
-
+#ifdef DEBUG 
+ Serial.println("INIT(): Ok");
+#endif //DEBUG 
 }
 /*--------------------------------------------------------------------------*
  * definePinOut
@@ -1200,7 +1211,7 @@ void definePinOut() {
    pinMode(RX,   OUTPUT);
 #endif //ADX define board
 
-#ifdef LEDX
+#ifdef LEDS
    pinMode(WSPR, OUTPUT);
    pinMode(JS8,  OUTPUT);
    pinMode(FT4,  OUTPUT);
@@ -1218,19 +1229,20 @@ void definePinOut() {
    pinMode(TX,   OUTPUT);
    pinMode(AIN0, INPUT);  //PD6=AN0 must be grounded
    pinMode(AIN1, INPUT);  //PD7=AN1=HiZ
+
+#ifdef DEBUG
+   Serial.println("definePinOut():Ok");
+#endif //DEBUG      
 }
 
 //*************************************[ SETUP FUNCTION ]************************************** 
 void setup()
 {
 
-
-
 #ifdef DEBUG
    Serial.begin(BAUD_DEBUG);
-   sprintf(hi,"ADX Firmware Version(%s)\n",VERSION);
+   sprintf(hi,"ADX Firmware V(%s)\n",VERSION);
    Serial.print(hi);
-   Serial.println("DEBUG Mode activated");
 #endif //DEBUG
 
 #ifdef CAT
@@ -1238,9 +1250,9 @@ void setup()
 #endif //CAT   
 
    definePinOut();
-   
+   setup_si5351();   
    INIT();
-   setup_si5351();
+
   
    if ( getDOWNSSW() == LOW ) {
       Calibration();
@@ -1273,6 +1285,7 @@ void setup()
 #ifdef DEBUG
   Serial.print("setup(): BUTTON enabled\n");
 #endif  
+
 #endif //BUTTONS
 
   switch_RXTX(LOW);
@@ -1282,8 +1295,6 @@ void setup()
   wdt_disable();
   wdt_enable(WDTO_8S);
 #endif //WDT
-
-
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
 /*---------------------------------------------------------------------------*
@@ -1292,6 +1303,7 @@ void setup()
  *---------------------------------------------------------------------------*/
 void checkMode() {
 
+  
 #ifdef BUTTONS
 //*-----------------------------------------------------------------------*
 //* This is a kludge as in USDX UP & DOWN are different analog values of
@@ -1309,66 +1321,81 @@ void checkMode() {
 #else   //This is the standard and original behaviour of the ADX with physical UP/DOWN buttons
 
   if ((getUPSSW() == LOW)&&(getDOWNSSW() == LOW)&&(getWord(SSW,TXON)==false)) {
+
+#ifdef DEBUG
+      Serial.println("checkMode() Up+Down");
+#endif //DEBUG         
+
      Band_Select();
   }
 
 #endif //BUTTONS  
 
   if ((getUPSSW() == LOW)&&(getDOWNSSW() == HIGH)&&(getWord(SSW,TXON)==false)) {
-     mode=(mode-1)%4;
+      mode=(mode-1)%4;
+
+#ifdef DEBUG
+      sprintf(hi,"checkMode(): mode+(%d)\n",mode);
+      Serial.print(hi);
+#endif //DEBUG         
 
 #ifdef EE
-     EEPROM.put(EEPROM_MODE, mode); 
-#endif //EEPROM
-     
-     Mode_assign();
+      EEPROM.put(EEPROM_MODE, mode); 
+#endif //EEPROM     
+
+      Mode_assign();
+  
   } 
    
 
   if ((getUPSSW() == HIGH) && (getDOWNSSW() == LOW)&&(getWord(SSW,TXON)==false)) {
-     mode=(mode+1)%4;
+      mode=(mode+1)%4;
+
+#ifdef DEBUG
+      sprintf(hi,"checkMode(): mode-(%d)\n",mode);
+      Serial.print(hi);
+#endif //DEBUG         
 
 #ifdef EE
-#ifdef ADX
-     EEPROM.put(EEPROM_MODE, mode);
-#endif
-
-#ifdef USDX
-     setWord(&SSW,SAVEEE,true);
-     tout=millis();
-#endif //USDX Avoid the tear and wear of the EEPROM because of successive changes
- 
-#endif //EEPROM
+      tout=millis();
+      setWord(&SSW,SAVEEE,true);
+#endif //EE Avoid the tear and wear of the EEPROM because of successive changes
      
-     Mode_assign();
+      Mode_assign();
   } 
 
 
 if ((getTXSW() == LOW) && (getWord(SSW,TXON)==false)) {
 
+#ifdef DEBUG
+     sprintf(hi,"checkMode(): TX+\n");
+     Serial.print(hi);
+#endif //DEBUG         
+
    Mode_assign();
    ManualTX();
+
  }
  
 }
+/*---------------------------------------------------------------------------------*
+ * keepAlive()
+ * Reference function for debugging purposes, called once per loop()
+ *---------------------------------------------------------------------------------*/
 void keepAlive() {
-   kcount++;
-   if (kcount>20000) {
-      kcount=0;
-      ncount++;
-      sprintf(hi,"keepAlive(): ncount=%d\n",ncount);
-      Serial.print(hi);
-   }
+
+#ifdef DEBUG
+
+   /* Code here */
+
+#endif //DEBUG
    
 }
 //***************************[ Main LOOP Function ]**************************
 void loop()
 {  
 
-#ifdef DEBUG
   keepAlive();
-#endif //DEBUG
-  
   checkMode();
 
 #ifdef EE
