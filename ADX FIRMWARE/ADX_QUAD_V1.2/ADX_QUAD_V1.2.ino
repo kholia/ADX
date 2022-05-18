@@ -82,7 +82,7 @@
 /*****************************************************************
  * CONSISTENCY RULES                                             *
  *****************************************************************/
-//#define EE          1     //User EEPROM for persistence Temporary disabled
+
 
 #if (defined(ADX) && defined(uSDX))
     #undef USDX
@@ -94,8 +94,10 @@
     #define PUSH        1     //Use UP-DOWN-TXSW Push buttons
     #undef  CAT
     #undef  ECHO
-    #undef  WDT
-    #define DEBUG       1
+    #define WDT
+    //#define DEBUG       1
+    #define EE          1     //User EEPROM for persistence Temporary disabled
+    #define CAT         1
 #endif 
 
 #if (defined(USDX))   //Rule for conflicting board commands & interface
@@ -106,6 +108,7 @@
    #define DEBUG         1     //Debug trace over Serial
    //#define CAT         1
    #define WDT           1     //Transmission watchdog (avoid the PTT to be keyed longer than expected)
+   #define EE            1
 #endif
 
 #if (defined(DEBUG) || defined(CAT))
@@ -118,11 +121,11 @@
 
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
     #undef  DEBUG
-    #define BAUD_CAT 9600
 #endif // CAT && DEBUG
 
 #ifdef CAT
    #define CATCMD_SIZE          32
+   #define BAUD_CAT 9600
    char CATcmd[CATCMD_SIZE];
    volatile uint8_t cat_active = 0;
    volatile uint32_t rxend_event = 0;
@@ -191,7 +194,7 @@
 
    uint32_t tout=0;
 
-   //#define EEPROM_CLR    1     //Initialize EEPROM
+   //#define EEPROM_CLR    1     //Initialize EEPROM (only to be used to initialize contents)
    #define EEPROM_SAVE 100     //Signature of EEPROM being updated at least once
    #define EEPROM_TOUT 500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
@@ -554,17 +557,7 @@ void setup_si5351() {
 #ifdef DEBUG
   Serial.print("setup_si5351()\n");
 #endif //DEBUG
-  
  
-#ifdef EE
-/*----------------------------------------------------------------------*
- * if not ADX changes might not have been committed to EEPROM yet       *
- *----------------------------------------------------------------------*/
-#ifdef ADX
-  EEPROM.get(EEPROM_CAL,cal_factor);
-#endif //ADX
-#endif //EEPROM
-
 #define XT_CAL_F   33000 
 long cal = XT_CAL_F;
 
@@ -574,6 +567,9 @@ long cal = XT_CAL_F;
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);// SET For Max Power
   si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA); // Set for reduced power for RX 
+  si5351.output_enable(SI5351_CLK0, 0);                  //1 - Enable / 0 - Disable CLK
+  si5351.output_enable(SI5351_CLK1, 1);
+  si5351.output_enable(SI5351_CLK2, 0);
 #endif //ADX
 
 #ifdef USDX
@@ -740,19 +736,6 @@ void callibrateLED(){           //Set callibration mode
  * Mode assign                                              *
  *----------------------------------------------------------*/
 void Mode_assign(){
-
-#ifdef ADX
-/*----------------------------------------------------------*
- * This is a potential bug when called from INIT() as the   *
- * EEPROM.get() will destroy the mode value perhaps not yet *
- * set into the EEPROM as the elapsed time might not have   *
- * passed yet                                               *
- *----------------------------------------------------------*/
-//#ifdef EE 
-//   EEPROM.get(EEPROM_MODE,mode);
-//#endif //EEPROM
-
-#endif //ADX
       
    freq=f[mode];
    setLED(LED[mode]);
@@ -825,19 +808,6 @@ void Freq_assign(){
 void Band_assign(){
 
  resetLED();
-
-#ifdef ADX
-/*----------------------------------------------------------*
- * This is a potential bug when called from INIT() as the   *
- * EEPROM.get() will destroy the mode value perhaps not yet *
- * set into the EEPROM as the elapsed time might not have   *
- * passed yet                                               *
- *----------------------------------------------------------*/
-//#ifdef EE
-// EEPROM.get(EEPROM_BAND,Band_slot);
-//#endif //EEPROM
-
-#endif //ADX
 
 #ifdef LEDS 
  blinkLED(LED[3-Band_slot]);
@@ -984,11 +954,7 @@ bool getTXSW() {
  * Select band to operate
  *----------------------------------------------------------*/
 void Band_Select(){
-
-//#ifdef EE   
-//   EEPROM.get(EEPROM_BAND,Band_slot);
-//#endif //EEPROM
-   
+  
    resetLED();
 
 #ifdef DEBUG
@@ -1177,6 +1143,15 @@ void INIT(){
     ------------------------------------------------*/
    
    EEPROM.get(EEPROM_CAL,cal_factor);
+
+/*---- Kludge Fix   
+ *     to overcome wrong initial values, should not difficult calibration
+ */
+   if (cal_factor < -31000) {
+      cal_factor=0;
+   }
+/* end of kludge */
+   
    EEPROM.get(EEPROM_MODE,mode);
    EEPROM.get(EEPROM_BAND,Band_slot);
 
@@ -1410,7 +1385,9 @@ void loop()
 
 #ifdef EE
 //*--- if EEPROM enabled check if timeout to write has been elapsed
-  if((millis()-tout)>EEPROM_TOUT && getWord(SSW,SAVEEE)==true ) updateEEPROM();
+  if((millis()-tout)>EEPROM_TOUT && getWord(SSW,SAVEEE)==true ) {
+     updateEEPROM();
+  }
 #endif //EEPROM
 
 #ifdef CAT 
@@ -1466,6 +1443,7 @@ uint16_t n = VOX_MAXTRY;
     if (TCNT1 < CNT_MAX){
        //if ((d2-d1) == 0) break;
        unsigned long codefreq = CPU_CLOCK/(d2-d1);
+       
 #ifdef DEBUG
        tx++;
        if (tx>1200) {          
@@ -1480,7 +1458,7 @@ uint16_t n = VOX_MAXTRY;
           }
 
 #ifdef ADX          
-          si5351.set_freq((freq * 100 + codefreq), SI5351_CLK0); 
+          si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
 #endif //ADX
 
 #ifdef USDX          
