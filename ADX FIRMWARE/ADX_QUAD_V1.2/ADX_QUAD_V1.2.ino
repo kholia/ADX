@@ -94,10 +94,10 @@
     #define PUSH        1     //Use UP-DOWN-TXSW Push buttons
     #undef  CAT
     #undef  ECHO
-    #define WDT
-    //#define DEBUG       1
-    #define EE          1     //User EEPROM for persistence Temporary disabled
-    #define CAT         1
+    //#define WDT         1     //Hardware watchdog enabled
+    //#define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
+    //#define EE          1     //User EEPROM for persistence
+    //#define CAT         1     //Emulates a TS-440 transceiver CAT protocol
 #endif 
 
 #if (defined(USDX))   //Rule for conflicting board commands & interface
@@ -567,9 +567,9 @@ long cal = XT_CAL_F;
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);// SET For Max Power
   si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA); // Set for reduced power for RX 
-  si5351.output_enable(SI5351_CLK0, 0);                  //1 - Enable / 0 - Disable CLK
-  si5351.output_enable(SI5351_CLK1, 1);
-  si5351.output_enable(SI5351_CLK2, 0);
+  //si5351.output_enable(SI5351_CLK0, 0);                  //1 - Enable / 0 - Disable CLK
+  //si5351.output_enable(SI5351_CLK1, 1);
+  //si5351.output_enable(SI5351_CLK2, 0);
 #endif //ADX
 
 #ifdef USDX
