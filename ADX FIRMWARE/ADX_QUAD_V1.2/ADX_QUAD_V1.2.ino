@@ -94,9 +94,9 @@
     #define PUSH        1     //Use UP-DOWN-TXSW Push buttons
     #undef  CAT
     #undef  ECHO
-    //#define WDT         1     //Hardware watchdog enabled
+    #define WDT         1     //Hardware watchdog enabled
     //#define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
-    //#define EE          1     //User EEPROM for persistence
+    #define EE          1     //User EEPROM for persistence
     //#define CAT         1     //Emulates a TS-440 transceiver CAT protocol
 #endif 
 
@@ -194,7 +194,7 @@
 
    uint32_t tout=0;
 
-   //#define EEPROM_CLR    1     //Initialize EEPROM (only to be used to initialize contents)
+   //#define EEPROM_CLR    1   //Initialize EEPROM (only to be used to initialize contents)
    #define EEPROM_SAVE 100     //Signature of EEPROM being updated at least once
    #define EEPROM_TOUT 500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
@@ -566,8 +566,8 @@ long cal = XT_CAL_F;
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);// SET For Max Power
-  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA); // Set for reduced power for RX 
-  //si5351.output_enable(SI5351_CLK0, 0);                  //1 - Enable / 0 - Disable CLK
+  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);// Set for reduced power for RX 
+  //si5351.output_enable(SI5351_CLK0, 0);              //1 - Enable / 0 - Disable CLK
   //si5351.output_enable(SI5351_CLK1, 1);
   //si5351.output_enable(SI5351_CLK2, 0);
 #endif //ADX
@@ -989,7 +989,7 @@ void Band_Select(){
          Band_slot=(Band_slot+1)%4;
          setLED(LED[3-Band_slot]);
 
-#ifdef DEBUG2
+#ifdef DEBUG
          sprintf(hi,"Band_Select() Band_slot(%d)\n",Band_slot);
          Serial.print(hi);
 #endif
