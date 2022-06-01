@@ -19,7 +19,6 @@
 //*     X re-style of the code to facilitate customization for multiple boards
 //*     X Add all frequency definitions for HF bands
 //*     X Optimize EEPROM read/write cycles
-//*     X changes to compatibilize with Pixino board (http://www.github.com/lu7did/Pixino
 //*     / add CW support (includes keyer support)
 //*     X add CAT support (TS-440)
 //*     X add timeout & watchdog support
@@ -72,12 +71,12 @@
 /*****************************************************************
  * CONFIGURATION Properties                                      *
  *****************************************************************/
-//#define ECHO        1
 #define WDT         1     //Hardware watchdog enabled
 #define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
 #define EE          1     //User EEPROM for persistence
-//#define CAT         1     //Emulates a TS-440 transceiver CAT protocol
 #define CW          1
+//#define ECHO        1
+//#define CAT         1     //Emulates a TS-440 transceiver CAT protocol
 /*****************************************************************
  * Consistency rules                                             *
  *****************************************************************/
@@ -109,13 +108,17 @@
 #define UP             2           //UP Switch
 #define DOWN           3           //DOWN Switch
 #define TXSW           4           //TX Switch
+
 #define AIN0           6           //(PD6)
 #define AIN1           7           //(PD7)
+
 #define RX             8           //RX Switch
+
 #define WSPR           9           //WSPR LED 
 #define JS8           10           //JS8 LED
 #define FT4           11           //FT4 LED
 #define FT8           12           //FT8 LED
+
 #define TX            13           //(PB5) TX LED
 /*-------------------------------------------*
  *  Global State Variables (Binary)          *
@@ -181,7 +184,6 @@ unsigned long freq      = f[Band_slot];
 uint8_t       LED[4]    = {FT8,FT4,JS8,WSPR};
 
 
-#ifdef CW
 
 #define INT0 0
 #define INT1 1
@@ -193,16 +195,21 @@ uint8_t       LED[4]    = {FT8,FT4,JS8,WSPR};
 uint8_t       button[3]={0,0};
 unsigned long downTimer[3]={0,0,0};
 
+#ifdef CW
+
 #define CWSHIFT         600
+#define CWSTEP          100
 #define MAXSHIFT      20000
 
 unsigned long qrp[MAXBAND]          = { 1810000, 3560000, 7030000,10106000,14060000,18096000,21060000,24906000,28060000,50060000};
-unsigned long shift                 = CWSHIFT;
+unsigned long cwshift               = CWSHIFT;
 unsigned long maxshift              = MAXSHIFT;
-
+unsigned long cwstep                = CWSTEP;
 #endif //CW
 
 //**********************************[CW mode implementation]***************************************
+
+
 //**********************************[ BAND SELECT ]************************************************
 
 /*
@@ -1293,7 +1300,13 @@ bool txButton     = getTXSW();
 bool upButtonPL   = getSwitchPL(UP);
 bool downButtonPL = getSwitchPL(DOWN);
 
+/*------------------------------------------------------*
+ * Manage change to and from CW mode by detecting a     *
+ * long push press of the UP button (to enter CW) and a *
+ * long push press of the DOWN button (to exit CW)      *
+ *------------------------------------------------------*/
 #ifdef CW
+
   if (upButtonPL == LOW && getWord(SSW,CWMODE)==false) {
      setWord(&SSW,CWMODE,true);
 
@@ -1310,6 +1323,16 @@ bool downButtonPL = getSwitchPL(DOWN);
      Serial.println("checkMode(): CW-");
 #endif //DEBUG     
   }
+
+
+/*-----------------------------------------------------------*  
+ * While in CW mode UP means frequency up by CWSTEP and DOWN *
+ * means frequency down by CWSTEP Hz. The tunning range is   *
+ * +/- MAXSHIFT                                              *
+ *-----------------------------------------------------------*/
+
+
+ 
 #endif //CW  
 
 
