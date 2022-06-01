@@ -191,6 +191,7 @@ uint8_t       LED[4]    = {FT8,FT4,JS8,WSPR};
 
 #define SHORTPUSH   0B00000001    //simple push flag
 #define LONGPUSH    0B00000010    //long push flag
+#define INPROGRESS  0B00000100    //in progress mark
 
 uint8_t       button[3]={0,0};
 unsigned long downTimer[3]={0,0,0};
@@ -809,6 +810,7 @@ bool getSwitch(uint8_t pin) {
           if (getWord(button[INT0],SHORTPUSH)==true) {
              setWord(&button[INT0],SHORTPUSH,false);
              setWord(&SSW,UPPUSH,false);
+             Serial.println("getSwitch(UP):");
              return LOW;
           }
        }
@@ -821,6 +823,7 @@ bool getSwitch(uint8_t pin) {
           if (getWord(button[INT1],SHORTPUSH)==true) {
              setWord(&button[INT1],SHORTPUSH,false);
              setWord(&SSW,DNPUSH,false);
+             Serial.println("getSwitch(DOWN):");
              return LOW;
           }
        }
@@ -829,8 +832,9 @@ bool getSwitch(uint8_t pin) {
 
     if (pin == TXSW) {
        if (getWord(SSW,TXPUSH)==true) {
-          setWord(&SSW,TXPUSH,false);
+          //setWord(&SSW,TXPUSH,false);
           setWord(&button[INT2],SHORTPUSH,false);
+          Serial.println("getSwitch(TX):");
           return LOW;
        }
        return HIGH;     
@@ -1113,10 +1117,9 @@ void definePinOut() {
 }
 
 
-#ifdef CW
 
 /*---
- * ISR_Button()
+ * ISR Handler
  * Handle push button interrupt
  */
 
@@ -1128,105 +1131,97 @@ ISR (PCINT2_vect) {
 
   
   if (PIND & B00000100) {   //Pin D2 HIGH 
+     if (getWord(button[INT0],INPROGRESS) == false) {
+        downTimer[INT0]=millis();
+        return;
+     }
      long int timerDown=millis()-downTimer[INT0];
      if (timerDown <  20) { return; }
-     if (timerDown < 500) {         
+     if (timerDown < 500) {
+        Serial.println("ISR(D2) HIGH SP");         
         setWord(&button[INT0],SHORTPUSH,true);
         setWord(&button[INT0],LONGPUSH,false);
         setWord(&SSW,UPPUSH,true);
-        return;
      } else {
+        Serial.println("ISR(D2) HIGH LP");         
         setWord(&button[INT0],SHORTPUSH,false);
         setWord(&button[INT0],LONGPUSH,true);
         setWord(&SSW,UPPUSH,true);
-        return;     
      }   
   } else {
      downTimer[INT0]=millis();
      setWord(&button[INT0],SHORTPUSH,false);
-     setWord(&button[INT0],LONGPUSH,false);   
+     setWord(&button[INT0],LONGPUSH,false); 
+     setWord(&button[INT0],INPROGRESS,true);  
+     Serial.println("ISR(D2) LOW");         
   }
   
   if (PIND & B00001000) {   //Pin D3 HIGH 
+     if (getWord(button[INT1],INPROGRESS) == false) {
+        downTimer[INT1]=millis();
+        return;
+     }
      long int timerDown=millis()-downTimer[INT1];
      if (timerDown <  20) { return; }
      if (timerDown < 500) {         
+        Serial.println("ISR(D3) HIGH SP");         
         setWord(&button[INT1],SHORTPUSH,true);
         setWord(&button[INT1],LONGPUSH,false);
         setWord(&SSW,DNPUSH,true);
-        return;
      } else {
+        Serial.println("ISR(D3) HIGH LP");         
         setWord(&button[INT1],SHORTPUSH,false);
         setWord(&button[INT1],LONGPUSH,true);
         setWord(&SSW,DNPUSH,true);
-        return;     
      }   
   } else {
      downTimer[INT1]=millis();
      setWord(&button[INT1],SHORTPUSH,false);
      setWord(&button[INT1],LONGPUSH,false);   
+     setWord(&button[INT1],INPROGRESS,true);  
+     Serial.println("ISR(D3) LOW");         
+
   }
 
-  if (PIND & B00010000) {   //Pin D3 HIGH 
+  if (PIND & B00010000) {   //Pin D4 HIGH 
+     if (getWord(button[INT2],INPROGRESS) == false) {
+        downTimer[INT2]=millis();
+        setWord(&SSW,TXPUSH,false);
+        return;
+     }
      long int timerDown=millis()-downTimer[INT2];
      if (timerDown <  20) { 
-        return; 
      } else {
+        sprintf(hi,"ISR(D4) timerDown=%ld\n",timerDown);
+        Serial.print(hi);
         setWord(&button[INT2],SHORTPUSH,true);
         setWord(&button[INT2],LONGPUSH,false);
         setWord(&SSW,TXPUSH,true);
-        return;
+        Serial.println("ISR(D4) HIGH SP");         
+
      }
   } else {
-     downTimer[INT2]=millis();
-     setWord(&button[INT2],SHORTPUSH,false);
-     setWord(&button[INT2],LONGPUSH,false);   
+     if (getWord(button[INT2],INPROGRESS)==false) {
+        downTimer[INT2]=millis();
+        setWord(&button[INT2],SHORTPUSH,false);
+        setWord(&button[INT2],LONGPUSH,false);
+        setWord(&button[INT2],INPROGRESS,true);  
+        Serial.println("ISR(D4) LOW");
+     } else {
+        long int timerDown=millis()-downTimer[INT2];
+        if (timerDown < 20) {
+           return;            
+        } else {
+          setWord(&button[INT2],SHORTPUSH,true);
+          setWord(&button[INT2],LONGPUSH,false);
+          setWord(&button[INT2],INPROGRESS,true);
+          setWord(&SSW,TXPUSH,true);
+        }
+     }
+   
   }
   
 }
-/*
-bool ISR_Button(int buttonPin) {
-
-    
-  int buttonState = digitalRead(buttonPin);
-  if (buttonState == LOW) {
-     downTimer[buttonPin-2]=millis();
-     setWord(&button[buttonPin-2],SP,false);
-     setWord(&button[buttonPin-2],PL,false);
-  } else {
-     long int timerDown=millis()-downTimer[buttonPin-2];
-     if (timerDown <  20) { return; }
-     if (timerDown < 500) {         
-        setWord(&button[buttonPin-2],SP,true);
-#ifdef DEBUG
-        sprintf(hi,"ISR_Button(%d):SP button[%d]=%d\n",buttonPin,buttonPin-2,button[buttonPin-2]);
-        Serial.print(hi);
-#endif //DEBUG
-        return true;
-     } else {
-
-        setWord(&button[buttonPin-2],PL,true);
-#ifdef DEBUG        
-        sprintf(hi,"ISR_Button(%d):SP button[%d]=%d\n",buttonPin,buttonPin-2,button[buttonPin-2]);
-#endif //DEBUG 
-        return true;       
-     }
-  }
-  return false;
-}
-void ISR_D2() {
-
-  setWord(&SSW,UPPUSH,ISR_Button(UP));
- 
-}
-void ISR_D3() {
-
-  setWord(&SSW,DNPUSH,ISR_Button(DOWN));
-}
-
-*/
-
-#endif //CW
 
 
 //*************************************[ SETUP FUNCTION ]************************************** 
@@ -1245,16 +1240,10 @@ void setup()
 
    definePinOut();
 
-#ifdef CW
-
-   //attachInterrupt(INT0,ISR_D2,CHANGE);
-   //attachInterrupt(INT1,ISR_D3,CHANGE);
 
    PCICR  |= B00000100; // Enable interrupts at PD port
    PCMSK2 |= B00011100; // Signal interrupts for D2,D3 and D4 pins (UP/DOWN/TX)
    Serial.println("Push Interrupts ok");
-
-#endif //CW
 
    setup_si5351();   
    INIT();
