@@ -70,7 +70,7 @@
 #define VERSION     "1.2a"
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 /*****************************************************************
- * CONSISTENCY RULES                                             *
+ * CONFIGURATION Properties                                      *
  *****************************************************************/
 //#define ECHO        1
 #define WDT         1     //Hardware watchdog enabled
@@ -78,6 +78,9 @@
 #define EE          1     //User EEPROM for persistence
 //#define CAT         1     //Emulates a TS-440 transceiver CAT protocol
 #define CW          1
+/*****************************************************************
+ * Consistency rules                                             *
+ *****************************************************************/
 
 #if (defined(DEBUG) || defined(CAT))
     char hi[120];
@@ -93,27 +96,27 @@
 
 #ifdef CAT
    #define CATCMD_SIZE          32
-   #define BAUD_CAT 9600
+   #define BAUD_CAT           9600
+   
    char CATcmd[CATCMD_SIZE];
-   volatile uint8_t cat_active = 0;
+   volatile uint8_t  cat_active = 0;
    volatile uint32_t rxend_event = 0;
 #endif
 
 /*----------------------------*
  * Pin Assignment             *
  *----------------------------*/
-#define AIN0           6           //(PD6)
-#define AIN1           7           //(PD7)
-#define TX            13           //(PB5) TX LED
 #define UP             2           //UP Switch
 #define DOWN           3           //DOWN Switch
 #define TXSW           4           //TX Switch
+#define AIN0           6           //(PD6)
+#define AIN1           7           //(PD7)
 #define RX             8           //RX Switch
 #define WSPR           9           //WSPR LED 
 #define JS8           10           //JS8 LED
 #define FT4           11           //FT4 LED
 #define FT8           12           //FT8 LED
-
+#define TX            13           //(PB5) TX LED
 /*-------------------------------------------*
  *  Global State Variables (Binary)          *
  *-------------------------------------------*/
@@ -122,7 +125,7 @@
 #define UPPUSH 0B00000100    //UP button (analog) pressed
 #define DNPUSH 0B00001000    //DOWN button (analog) pressed
 #define TXPUSH 0B00010000    //TXSW button (analog) pressed
-#define PL     0B00100000    //Long pulse detected on any analog button
+#define dummy1 0B00100000    //Not used
 #define SAVEEE 0B01000000    //Mark of EEPROM updated
 #define CWMODE 0B10000000    //CW Active
 
@@ -173,24 +176,30 @@ unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600},   /
                                       {28074000,28074000,28078000,28124600},   //10m [8]                           
                                       {50310000,50310000,50318000,50293000}};  //6m  [9]          
 
-#ifdef CW
-#define CWSHIFT         600
-unsigned long qrp[MAXBAND]          = { 1810000, 3560000, 7030000,10106000,14060000,18096000,21060000,24906000,28060000,50060000};
-unsigned long shift                 = CWSHIFT;
-#endif //CW
-                                                       
+                                                      
 unsigned long freq      = f[Band_slot]; 
-uint8_t  LED[4] ={FT8,FT4,JS8,WSPR};
+uint8_t       LED[4]    = {FT8,FT4,JS8,WSPR};
+
+
+#ifdef CW
 
 #define INT0 0
 #define INT1 1
+#define INT2 2
 
-#ifdef CW
-#define SP   0B00000001    //simple push flag
-#define PL   0B00000010    //long push flag
+#define SHORTPUSH   0B00000001    //simple push flag
+#define LONGPUSH    0B00000010    //long push flag
 
-uint8_t       button[2]={0,0};
-unsigned long downTimer[2]={0,0};
+uint8_t       button[3]={0,0};
+unsigned long downTimer[3]={0,0,0};
+
+#define CWSHIFT         600
+#define MAXSHIFT      20000
+
+unsigned long qrp[MAXBAND]          = { 1810000, 3560000, 7030000,10106000,14060000,18096000,21060000,24906000,28060000,50060000};
+unsigned long shift                 = CWSHIFT;
+unsigned long maxshift              = MAXSHIFT;
+
 #endif //CW
 
 //**********************************[CW mode implementation]***************************************
@@ -744,32 +753,37 @@ void Band_assign(){
  *----------------------------------------------------------*/
 bool getTXSW();
 void ManualTX(){
-    
+    bool buttonTX=getTXSW();
     switch_RXTX(HIGH);
-    while(getTXSW()==LOW) {
+    while(buttonTX==LOW) {
 
 #ifdef WDT      
       wdt_reset();
 #endif //WDT
+      buttonTX=getTXSW();
                 
     }
     switch_RXTX(LOW);
 }
 
+/*---------------------------------------------------------------------*
+ * getSwitchPL
+ * Detect and clear the Long push condition on both UP/DOWN buttons 
+ *---------------------------------------------------------------------*/
 bool getSwitchPL(uint8_t pin) {
 
-  if (pin == 2) {
-     if (getWord(SSW,UPPUSH) == true && getWord(button[0],PL) == true) {
-        setWord(&button[0],PL,false);
+  if (pin == UP) {
+     if (getWord(SSW,UPPUSH) == true && getWord(button[INT0],LONGPUSH) == true) {
+        setWord(&button[INT0],LONGPUSH,false);
         setWord(&SSW,UPPUSH,false);
         return LOW;
      }
      return HIGH;
   }
 
-  if (pin == 3) {
-     if (getWord(SSW,DNPUSH) == true && getWord(button[1],PL) == true) {
-        setWord(&button[1],PL,false);
+  if (pin == DOWN) {
+     if (getWord(SSW,DNPUSH) == true && getWord(button[INT1],LONGPUSH) == true) {
+        setWord(&button[1],LONGPUSH,false);
         setWord(&SSW,DNPUSH,false);
         return LOW;
      }
@@ -782,11 +796,11 @@ bool getSwitchPL(uint8_t pin) {
  *----------------------------------------------------------*/
 bool getSwitch(uint8_t pin) {
 
-    if (pin ==2) {
+    if (pin == UP) {
 
        if (getWord(SSW,UPPUSH)==true) {
-          if (getWord(button[0],SP)==true) {
-             setWord(&button[0],SP,false);
+          if (getWord(button[INT0],SHORTPUSH)==true) {
+             setWord(&button[INT0],SHORTPUSH,false);
              setWord(&SSW,UPPUSH,false);
              return LOW;
           }
@@ -794,17 +808,29 @@ bool getSwitch(uint8_t pin) {
        return HIGH;
     }
 
-    if (pin ==3) {
+    if (pin == DOWN) {
 
        if (getWord(SSW,DNPUSH)==true) {
-          if (getWord(button[1],SP)==true) {
-             setWord(&button[1],SP,false);
+          if (getWord(button[INT1],SHORTPUSH)==true) {
+             setWord(&button[INT1],SHORTPUSH,false);
              setWord(&SSW,DNPUSH,false);
              return LOW;
           }
        }
        return HIGH;
     }
+
+    if (pin == TXSW) {
+       if (getWord(SSW,TXPUSH)==true) {
+          setWord(&SSW,TXPUSH,false);
+          setWord(&button[INT2],SHORTPUSH,false);
+          return LOW;
+       }
+       return HIGH;     
+    }
+
+    return HIGH;
+/*    
     bool state=digitalRead(pin);
  
     if (state==HIGH) {
@@ -815,7 +841,9 @@ bool getSwitch(uint8_t pin) {
        }
     }
            
-    return LOW;        
+    return LOW;
+*/
+            
 }
 /*----------------------------------------------------------*
  * read UP switch
@@ -1084,11 +1112,74 @@ void definePinOut() {
  * ISR_Button()
  * Handle push button interrupt
  */
-bool ISR_Button(int buttonPin) {
+
+ISR (PCINT2_vect) {
 
 #ifdef DEBUG
   Serial.println("ISR_Button()");
 #endif 
+
+  
+  if (PIND & B00000100) {   //Pin D2 HIGH 
+     long int timerDown=millis()-downTimer[INT0];
+     if (timerDown <  20) { return; }
+     if (timerDown < 500) {         
+        setWord(&button[INT0],SHORTPUSH,true);
+        setWord(&button[INT0],LONGPUSH,false);
+        setWord(&SSW,UPPUSH,true);
+        return;
+     } else {
+        setWord(&button[INT0],SHORTPUSH,false);
+        setWord(&button[INT0],LONGPUSH,true);
+        setWord(&SSW,UPPUSH,true);
+        return;     
+     }   
+  } else {
+     downTimer[INT0]=millis();
+     setWord(&button[INT0],SHORTPUSH,false);
+     setWord(&button[INT0],LONGPUSH,false);   
+  }
+  
+  if (PIND & B00001000) {   //Pin D3 HIGH 
+     long int timerDown=millis()-downTimer[INT1];
+     if (timerDown <  20) { return; }
+     if (timerDown < 500) {         
+        setWord(&button[INT1],SHORTPUSH,true);
+        setWord(&button[INT1],LONGPUSH,false);
+        setWord(&SSW,DNPUSH,true);
+        return;
+     } else {
+        setWord(&button[INT1],SHORTPUSH,false);
+        setWord(&button[INT1],LONGPUSH,true);
+        setWord(&SSW,DNPUSH,true);
+        return;     
+     }   
+  } else {
+     downTimer[INT1]=millis();
+     setWord(&button[INT1],SHORTPUSH,false);
+     setWord(&button[INT1],LONGPUSH,false);   
+  }
+
+  if (PIND & B00010000) {   //Pin D3 HIGH 
+     long int timerDown=millis()-downTimer[INT2];
+     if (timerDown <  20) { 
+        return; 
+     } else {
+        setWord(&button[INT2],SHORTPUSH,true);
+        setWord(&button[INT2],LONGPUSH,false);
+        setWord(&SSW,TXPUSH,true);
+        return;
+     }
+  } else {
+     downTimer[INT2]=millis();
+     setWord(&button[INT2],SHORTPUSH,false);
+     setWord(&button[INT2],LONGPUSH,false);   
+  }
+  
+}
+/*
+bool ISR_Button(int buttonPin) {
+
     
   int buttonState = digitalRead(buttonPin);
   if (buttonState == LOW) {
@@ -1125,7 +1216,12 @@ void ISR_D3() {
 
   setWord(&SSW,DNPUSH,ISR_Button(DOWN));
 }
+
+*/
+
 #endif //CW
+
+
 //*************************************[ SETUP FUNCTION ]************************************** 
 void setup()
 {
@@ -1143,9 +1239,14 @@ void setup()
    definePinOut();
 
 #ifdef CW
-   attachInterrupt(INT0,ISR_D2,CHANGE);
-   attachInterrupt(INT1,ISR_D3,CHANGE);
+
+   //attachInterrupt(INT0,ISR_D2,CHANGE);
+   //attachInterrupt(INT1,ISR_D3,CHANGE);
+
+   PCICR  |= B00000100; // Enable interrupts at PD port
+   PCMSK2 |= B00011100; // Signal interrupts for D2,D3 and D4 pins (UP/DOWN/TX)
    Serial.println("Push Interrupts ok");
+
 #endif //CW
 
    setup_si5351();   
