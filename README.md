@@ -20,6 +20,7 @@ My goal with this project is to design a simple HF Transceiver optimized for ope
 ## Mods by LU7DZ (version 1.2t)
 
 -	Code re-organization/Modularization.
+-       CAT support (using Arduino Nano USB-Serial driver), emulates a TS440 CAT protocol.
 -	Band expansion (still 4 bands supported), but all HF-6m bands can be selected
 -	EEPROM write cycle to reduce wear and tear.
 -	Watchdog reset
