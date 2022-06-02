@@ -133,6 +133,12 @@
 #define CWMODE 0B10000000    //CW Active
 
 /*------------------------------------*
+ * Operating switch                   *
+ * -----------------------------------*/
+#define BOUNCE_TIME     20
+#define SHORT_TIME     500
+
+/*------------------------------------*
  * General purpose global define      *
  * -----------------------------------*/
 #define SI5351_REF  25000000UL  //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
@@ -871,12 +877,19 @@ bool getDOWNSSW() {
     return getSwitch(DOWN); 
 
 }
-/*----------------------------------------------------------*
- * read TXSW switch
- *----------------------------------------------------------*/
+/*--------------------------------------------------------------*
+ * getTXSW() -- read TXSW switch
+ * This switch still required debouncing but might operate
+ * over long pulsing periods because of the manual TX function
+ * and CW operation. It doesn't require to distinguish between 
+ * short and long pulse though.
+ *---------------------------------------------------------------*/
 bool getTXSW() {
-  
-    return getSwitch(TXSW);
+
+    if ( getWord(button[INT2],INPROGRESS)==true && (millis()-downTimer[INT2]>BOUNCE_TIME) ) {
+       return LOW;
+    }
+    return HIGH;
 }
 /*----------------------------------------------------------*
  * Select band to operate
@@ -1125,35 +1138,41 @@ void definePinOut() {
 
 ISR (PCINT2_vect) {
 
-#ifdef DEBUG
-  Serial.println("ISR_Button()");
-#endif 
-
   
-  if (PIND & B00000100) {   //Pin D2 HIGH 
+  if (PIND & B00000100) {   //Pin UP HIGH 
      if (getWord(button[INT0],INPROGRESS) == false) {
         downTimer[INT0]=millis();
         return;
      }
      long int timerDown=millis()-downTimer[INT0];
-     if (timerDown <  20) { return; }
-     if (timerDown < 500) {
-        Serial.println("ISR(D2) HIGH SP");         
+     if (timerDown <  BOUNCE_TIME) { return; }
+     if (timerDown < SHORT_TIME) {
+
+
         setWord(&button[INT0],SHORTPUSH,true);
         setWord(&button[INT0],LONGPUSH,false);
         setWord(&SSW,UPPUSH,true);
+
+        #ifdef DEBUG      
+           Serial.println("(UP)=SP");         
+        #endif //DEBUG        
+
      } else {
-        Serial.println("ISR(D2) HIGH LP");         
         setWord(&button[INT0],SHORTPUSH,false);
         setWord(&button[INT0],LONGPUSH,true);
         setWord(&SSW,UPPUSH,true);
+        
+        #ifdef DEBUG      
+           Serial.println("UP=LP");         
+        #endif //DEBUG
+                
      }   
   } else {
      downTimer[INT0]=millis();
      setWord(&button[INT0],SHORTPUSH,false);
      setWord(&button[INT0],LONGPUSH,false); 
      setWord(&button[INT0],INPROGRESS,true);  
-     Serial.println("ISR(D2) LOW");         
+        
   }
   
   if (PIND & B00001000) {   //Pin D3 HIGH 
@@ -1162,42 +1181,49 @@ ISR (PCINT2_vect) {
         return;
      }
      long int timerDown=millis()-downTimer[INT1];
-     if (timerDown <  20) { return; }
-     if (timerDown < 500) {         
-        Serial.println("ISR(D3) HIGH SP");         
+     if (timerDown <  BOUNCE_TIME) { return; }
+     if (timerDown < SHORT_TIME) {
         setWord(&button[INT1],SHORTPUSH,true);
         setWord(&button[INT1],LONGPUSH,false);
         setWord(&SSW,DNPUSH,true);
+        
+        #ifdef DEBUG               
+           Serial.println("DN=SP");         
+        #endif //DEBUG        
+
      } else {
-        Serial.println("ISR(D3) HIGH LP");         
         setWord(&button[INT1],SHORTPUSH,false);
         setWord(&button[INT1],LONGPUSH,true);
         setWord(&SSW,DNPUSH,true);
+        
+        #ifdef DEBUG      
+           Serial.println("DN=LP");         
+        #endif //DEBUG        
+
      }   
   } else {
      downTimer[INT1]=millis();
      setWord(&button[INT1],SHORTPUSH,false);
      setWord(&button[INT1],LONGPUSH,false);   
      setWord(&button[INT1],INPROGRESS,true);  
-     Serial.println("ISR(D3) LOW");         
-
   }
 
-  if (PIND & B00010000) {   //Pin D4 HIGH 
+  if (PIND & B00010000) {   //Pin TXSW HIGH 
      if (getWord(button[INT2],INPROGRESS) == false) {
         downTimer[INT2]=millis();
         setWord(&SSW,TXPUSH,false);
         return;
      }
      long int timerDown=millis()-downTimer[INT2];
-     if (timerDown <  20) { 
+     if (timerDown <  BOUNCE_TIME) { 
      } else {
-        sprintf(hi,"ISR(D4) timerDown=%ld\n",timerDown);
-        Serial.print(hi);
         setWord(&button[INT2],SHORTPUSH,true);
         setWord(&button[INT2],LONGPUSH,false);
         setWord(&SSW,TXPUSH,true);
-        Serial.println("ISR(D4) HIGH SP");         
+        
+        #ifdef DEBUG        
+           Serial.println("TX=HI");         
+        #endif //DEBUG        
 
      }
   } else {
@@ -1206,16 +1232,25 @@ ISR (PCINT2_vect) {
         setWord(&button[INT2],SHORTPUSH,false);
         setWord(&button[INT2],LONGPUSH,false);
         setWord(&button[INT2],INPROGRESS,true);  
-        Serial.println("ISR(D4) LOW");
+        
+        #ifdef DEBUG        
+           Serial.println("TX=LOW");
+        #endif //DEBUG        
+        
      } else {
         long int timerDown=millis()-downTimer[INT2];
-        if (timerDown < 20) {
+        if (timerDown < BOUNCE_TIME) {
            return;            
         } else {
           setWord(&button[INT2],SHORTPUSH,true);
           setWord(&button[INT2],LONGPUSH,false);
           setWord(&button[INT2],INPROGRESS,true);
           setWord(&SSW,TXPUSH,true);
+          
+          #ifdef DEBUG        
+           Serial.println("TX=HI");
+          #endif //DEBUG        
+
         }
      }
    
@@ -1469,14 +1504,7 @@ uint16_t n = VOX_MAXTRY;
        //if ((d2-d1) == 0) break;
        unsigned long codefreq = CPU_CLOCK/(d2-d1);
        
-#ifdef DEBUG
-       tx++;
-       if (tx>1200) {          
-          tx=0;
-          sprintf(hi,"freq(%ld) f(%ld)\n",codefreq,freq);
-          Serial.print(hi);
-       }
-#endif       
+
        if ((codefreq < FRQ_MAX) && (codefreq > 0)){
           if (getWord(SSW,VOX) == false){
              switch_RXTX(HIGH);
