@@ -17,10 +17,19 @@ My goal with this project is to design a simple HF Transceiver optimized for ope
 
 - For ease of following which parts to solder while building Main board of ADX, Intercative BOM File - ibom_ADX.html file is a great help. Just run that file on Microsoft edge and follow each highlighted component and solder one by one. This interactive BOM was prepared by Gilles DELPECH - F1BFU. Thank you Gilles!
 
-## Mods by LU7DZ
+## Mods by LU7DZ (version 1.2t)
 
--	Code re-organization/Modularize
--	Band expansion (still 4 bands supported)
+-	Code re-organization/Modularization.
+-	Band expansion (still 4 bands supported), but all HF-6m bands can be selected
 -	EEPROM write cycle to reduce wear and tear.
--	Watchdog.
--	CW transceiver (still in progress)
+-	Watchdog reset
+-	CW transceiver
+	- Tunning capability (+/- 20 KHz).
+	- (Somewhat crude) LED tunning indication.
+	- Full break-in support.
+	- CW shift (600 Hz).
+
+### Hardware mods
+
+-	Straight keyer connected from SPKR(tip) to TX pushbutton.
+-	Cut wire between SPKR(tip) and SPKR(sleeve), audio signal will be taken from sleeve only.
