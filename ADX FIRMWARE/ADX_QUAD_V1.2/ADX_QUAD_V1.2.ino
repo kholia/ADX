@@ -73,11 +73,11 @@
  * CONFIGURATION Properties                                      *
  *****************************************************************/
 #define WDT         1     //Hardware watchdog enabled
-#define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
+//#define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
 #define EE          1     //User EEPROM for persistence
 #define CW          1
 //#define ECHO        1
-//#define CAT         1     //Emulates a TS-440 transceiver CAT protocol
+#define CAT         1     //Emulates a TS-440 transceiver CAT protocol
 
 /*****************************************************************
  * Consistency rules                                             *
@@ -91,7 +91,7 @@
 
 
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
-    #undef  DEBUG
+   #undef  DEBUG
 #endif // CAT && DEBUG
 
 #ifdef CAT
@@ -111,6 +111,7 @@
 //#define EXCP  1
 //#define TRACE 1
 #endif //DEBUG
+
 
 #ifdef DEBUG
 #define _DEBUG           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
@@ -170,7 +171,7 @@
 #define UPPUSH 0B00000100    //UP button (analog) pressed
 #define DNPUSH 0B00001000    //DOWN button (analog) pressed
 #define TXPUSH 0B00010000    //TXSW button (analog) pressed
-#define dummy1 0B00100000    //Not used
+#define CATTX  0B00100000    //TX turned on via CAT (disable VOX)
 #define SAVEEE 0B01000000    //Mark of EEPROM updated
 #define CWMODE 0B10000000    //CW Active
 
@@ -346,8 +347,6 @@ void Command_SETFreqB()          //Set Frequency VFO (B) -- fallback to VFO (B) 
 void Command_IF()               //General purpose status information command (IF), needs to be modified if RIT is implemented
 {
 
-  char txrx = (getWord(SSW,TXON)==true ? '1' : '0');
-  
   sprintf(hi,"IF%011ld",freq);   //Freq
   Serial.print(hi);
   sprintf(hi,"00000");       //Empty
@@ -362,8 +361,7 @@ void Command_IF()               //General purpose status information command (IF
   Serial.print(hi);
   sprintf(hi,"00");         //Memory channel 00
   Serial.print(hi);
-  sprintf(hi,"%c",txrx);    //RX/TX Status
-  Serial.print(hi);
+  if (getWord(SSW,CATTX)==false) {Serial.print("0"); } else { Serial.print("1");}
   sprintf(hi,"%c",modeTS480());
   Serial.print(hi);
   sprintf(hi,"0000000;");   //Constants
@@ -393,13 +391,15 @@ void Command_SetMD()      //Set MODE command, only USB (2) and CW (3) are suppor
 
 void Command_RX()
 {
-  switch_RXTX(false);
+  setWord(&SSW,CATTX,false);
+  switch_RXTX(LOW);
   Serial.print("RX0;");
 }
 
 void Command_TX()
 {
-  switch_RXTX(true);
+  setWord(&SSW,CATTX,true);
+  switch_RXTX(HIGH);
   Serial.print("TX0;");
 }
 
@@ -517,7 +517,6 @@ void analyseCATcmd()
   else if((CATcmd[0] == 'R') && (CATcmd[1] == 'M'))                        {Serial.print("RM00000;");}  
   else if((CATcmd[0] == 'R') && (CATcmd[1] == 'S'))                        {Serial.print("RS0;");}  
   else if((CATcmd[0] == 'R') && (CATcmd[1] == 'T'))                        {Serial.print("RT0;");}      //To be reviewed when RIT is implemented
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'X'))                        {Serial.print("RX0;");}      //To be reviewed when RIT is implemented
   else if((CATcmd[0] == 'S') && (CATcmd[1] == 'C'))                        {Serial.print("SC00;");}      //To be reviewed when RIT is implemented
   else if((CATcmd[0] == 'I') && (CATcmd[1] == 'S'))                        {Serial.print("IS00000;");}  
   else if((CATcmd[0] == 'K') && (CATcmd[1] == 'S'))                        {Serial.print("KS000;");}  
@@ -649,6 +648,8 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 /*------------------------------------*
  *                RX                  *
  *------------------------------------*/
+    if (getWord(SSW,CATTX)==true) { return;}  //if the PTT is managed by the CAT subsystem get out of the way.
+
     digitalWrite(RX,HIGH);
     si5351.output_enable(SI5351_CLK0, 0);   //TX off    
     if (getWord(SSW,TXON)==HIGH) {
@@ -1558,9 +1559,11 @@ uint16_t n = VOX_MAXTRY;
  * when out of the loop no further TX activity is performed, therefore the TX is   *
  * turned off and the board is set into RX mode                                    *
  *---------------------------------------------------------------------------------*/
- switch_RXTX(LOW);
- setWord(&SSW,VOX,false);
- setWord(&SSW,TXON,false);
+ if (getWord(SSW,CATTX)==true) {
+    switch_RXTX(LOW);
+    setWord(&SSW,VOX,false);
+    setWord(&SSW,TXON,false);
+ }   
 
  #ifdef WDT
  wdt_reset();
