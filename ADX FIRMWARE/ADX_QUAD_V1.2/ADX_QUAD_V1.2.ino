@@ -76,8 +76,9 @@
 //#define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
 #define EE          1     //User EEPROM for persistence
 #define CW          1
-//#define ECHO        1
 #define CAT         1     //Emulates a TS-440 transceiver CAT protocol
+//#define CAT_FULL    1
+//#define ECHO        1
 
 /*****************************************************************
  * Consistency rules                                             *
@@ -197,7 +198,7 @@
 #define BDLY        200         //Delay when blinking LED
 #define DELAY_WAIT  BDLY*2      //Double Delay
 #define DELAY_CAL   DELAY_WAIT/10
-#define  MAXMODE    4           //Max number of digital modes
+#define  MAXMODE    5           //Max number of digital modes
 #define  MAXBLINK   4           //Max number of blinks
 #define  MAXBAND    10          //Max number of bands defined (actually uses 4 out of MAXBAND)
 
@@ -219,7 +220,7 @@
 
    uint32_t tout=0;
 
-   //#define EEPROM_CLR    1   //Initialize EEPROM (only to be used to initialize contents)
+   #define EEPROM_CLR    1   //Initialize EEPROM (only to be used to initialize contents)
    #define EEPROM_SAVE 100     //Signature of EEPROM being updated at least once
    #define EEPROM_TOUT 500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
@@ -228,6 +229,7 @@
 #define CWSHIFT        600
 #define CWSTEP         500
 #define MAXSHIFT     15000
+#define CWSLOT           5
 #endif //CW
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
@@ -240,17 +242,17 @@ uint16_t cal_factor=0;
 
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
-unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
-unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600},   //80m [0]
-                                      { 3573000, 3575000, 3578000, 3568600},   //80m [1]
-                                      { 7074000, 7047500, 7078000, 7038600},   //40m [2]
-                                      {10136000,10140000,10130000,10138700},   //30m [3]
-                                      {14074000,14080000,14078000,14095600},   //20m [4]
-                                      {18100000,18104000,18104000,18104600},   //17m [5]
-                                      {21074000,21140000,21078000,21094600},   //15m [6]                           
-                                      {24915000,24915000,24922000,24924600},   //12m [7] FT4 equal to FT8                           
-                                      {28074000,28074000,28078000,28124600},   //10m [8]                           
-                                      {50310000,50310000,50318000,50293000}};  //6m  [9]          
+unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
+unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //80m [0]
+                                                    { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
+                                                    { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
+                                                    {10136000,10140000,10130000,10138700,10106000},   //30m [3]
+                                                    {14074000,14080000,14078000,14095600,14060000},   //20m [4]
+                                                    {18100000,18104000,18104000,18104600,18096000},   //17m [5]
+                                                    {21074000,21140000,21078000,21094600,21060000},   //15m [6]                           
+                                                    {24915000,24915000,24922000,24924600,24906000},   //12m [7] FT4 equal to FT8                           
+                                                    {28074000,28074000,28078000,28124600,28060000},   //10m [8]                           
+                                                    {50310000,50310000,50318000,50293000,50060000}};  //6m  [9]          
 
                                                       
 unsigned long freq      = f[Band_slot]; 
@@ -261,8 +263,8 @@ uint8_t       button[3]={0,0};
 unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
 
 #ifdef CW
-unsigned long qrp[MAXBAND]          = { 1810000, 3560000, 7030000,10106000,14060000,18096000,21060000,24906000,28060000,50060000};
-unsigned long freqCW                = qrp[2]; //default assignment consistent with digital mode's default, 40m
+//unsigned long qrp[MAXBAND]          = { 1810000, 3560000, 7030000,10106000,14060000,18096000,21060000,24906000,28060000,50060000};
+unsigned long freqCW     = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
 #endif //CW
 
 //**********************************[CW mode implementation]***************************************
@@ -336,12 +338,20 @@ void Command_SETFreqA()          //Set Frequency VFO (A)
 
 void Command_GETFreqB()          //Get Frequency VFO (B) -- fallback to VFO (A) until implementation of VFOA/B pair
 {
- Command_GETFreqA();    //While A/B VFO isn't implemented changes the unique VFO
+  sprintf(hi,"FB%011ld;",freq);
+  Serial.print(hi);
+ 
 }
 
 void Command_SETFreqB()          //Set Frequency VFO (B) -- fallback to VFO (B) until implementation for VFOA/B pair
 {
-  Command_SETFreqA();    //While A/B VFO isnt't implemented changes the unique VFO
+  char Catbuffer[16];
+  strncpy(Catbuffer,CATcmd+2,11);
+  Catbuffer[11]='\0';
+
+  freq=(uint32_t)atol(Catbuffer);
+  Command_GETFreqB();
+
 }
 
 void Command_IF()               //General purpose status information command (IF), needs to be modified if RIT is implemented
@@ -376,16 +386,27 @@ void Command_ST() {       //STEP command Modify when STEP is implemented
 
 void Command_GetMD()      //Get MODE command, only USB (2) and CW (3) are supported, 4 digital modes (mode 0,1,2,3 are mapped as USB)
 {
+  _DEBUGLIST("%s CAT=%c CWMODE=%s\n",__func__,CATcmd[2],BOOL2CHAR(getWord(SSW,CWMODE)));
   sprintf(hi,"MD%c;",modeTS480());
   Serial.print(hi);
 }
 
 void Command_SetMD()      //Set MODE command, only USB (2) and CW (3) are supported
 {
-
-  sprintf(hi,"MD2;");    // at this time only USB is allowed, needs to be modified when CW is added
+  if (CATcmd[2] != '3') {
+     setWord(&SSW,CWMODE,false);
+     mode=0;
+     Mode_assign();
+     _DEBUGLIST("%s CAT=%c CWMODE=%s\n",__func__,CATcmd[2],BOOL2CHAR(getWord(SSW,CWMODE)));
+     sprintf(hi,"MD2;");    // at this time only USB is allowed, needs to be modified when CW is added
+  } else {
+     setWord(&SSW,CWMODE,true);
+     mode=4;
+     Mode_assign();
+     _DEBUGLIST("%s CAT=%c CWMODE=%s\n",__func__,CATcmd[2],BOOL2CHAR(getWord(SSW,CWMODE)));
+     sprintf(hi,"MD3;");   
+  }
   Serial.print(hi);
-  
 }
 
 
@@ -413,20 +434,11 @@ void Command_VX()
 
 char modeTS480() {
 
-  switch(mode) {
-    case 0 : return '2';
-    case 1 : return '2';
-    case 2 : return '2';
-    case 3 : return '3';
-    case 4 : return '2';
-    case 5 : return '2';
-    case 6 : return '2';
-    case 7 : return '2';
-    case 8 : return '2';
-    case 9 : return '2';
-    default: return '2';
-
+  if (mode==4) {
+     return '3';
   }
+  return '2';
+
 }
 void Command_AS() {
 
@@ -453,100 +465,106 @@ void Command_BChange(int c) { //Change band up or down
  *---------------------------------------------------------------------------------------------*/
 void analyseCATcmd()
 {
-  if     ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';')) {Command_GETFreqA();}
-  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[13] == ';')) Command_SETFreqA();
-  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[2] == ';')) {Command_GETFreqB();}
-  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[13] == ';')) Command_SETFreqB(); 
-  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'C'))                        {Serial.print("AC000;");}
-  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'G'))                        {Serial.print("AG0000;");}
-  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'N'))                        {Serial.print("AN0;");}
-  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'F'))                        {Serial.print("MF0;");}
-  else if((CATcmd[0] == 'N') && (CATcmd[1] == 'R'))                        {Serial.print("NR0;");}
-  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'R'))                        {Serial.print("PR0;");}
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'U'))                        {Serial.print("SU00000000000;");}
-  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'G'))                        {Serial.print("MG000;");}
-  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'L'))                        {Serial.print("ML000;");}
-  else if((CATcmd[0] == 'N') && (CATcmd[1] == 'L'))                        {Serial.print("NL000;");}
-  else if((CATcmd[0] == 'O') && (CATcmd[1] == 'P'))                        {Serial.print("OP000;");}
-  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'B'))                        {Serial.print("PB000;");}
-  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'C'))                        {Serial.print("PC005;");}
-  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'L'))                        {Serial.print("PL000000;");}
-  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'A'))                        {Serial.print("PA00;");}
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'N'))                        {Serial.print("TN00;");}
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'O'))                        {Serial.print("TO0;");}
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'S'))                        {Serial.print("TS0;");}
-  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'R'))                        {Serial.print("MR00000000000000000000000000000000000000000000000;");}
-  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'S'))                        Command_AS();
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'T'))                        Command_ST();      //Step when implemented
-  else if((CATcmd[0] == 'X') && (CATcmd[1] == 'I'))                        Command_XI();      //Step when implemented
-  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'C'))                        {Serial.print("BC0;");}
-  else if((CATcmd[0] == 'N') && (CATcmd[1] == 'B'))                        {Serial.print("NB0;");}
-  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'S'))                        {Serial.print("BS0;");}
-  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        Command_BChange(-1);
-  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        Command_BChange(+1);
-  else if((CATcmd[0] == 'B') && (CATcmd[1] == 'Y'))                        {Serial.print("BY0;");}
-  else if((CATcmd[0] == 'X') && (CATcmd[1] == 'T'))                        {Serial.print("XT0;");}
-  else if((CATcmd[0] == 'X') && (CATcmd[1] == 'O'))                        {Serial.print("XO000000000000;");}
-  else if((CATcmd[0] == 'C') && (CATcmd[1] == 'A'))                        {Serial.print("CA0;");}
-  else if((CATcmd[0] == 'C') && (CATcmd[1] == 'H'))                        {}
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'V'))                        {}
-  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'W'))                        {}
-  else if((CATcmd[0] == 'Q') && (CATcmd[1] == 'I'))                        {}
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'C'))                        {}
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'R'))                        {}
-  else if((CATcmd[0] == 'U') && (CATcmd[1] == 'P'))                        {}
-  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'R'))                        {}
-  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'V'))                        {}
-  else if((CATcmd[0] == 'D') && (CATcmd[1] == 'N'))                        {}
-  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'D'))                        {Serial.print("VD0100;");}  //Review regarding VOX
-  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'X'))                        {Serial.print("VX1;");}  //Review regarding VOX
-  else if((CATcmd[0] == 'C') && (CATcmd[1] == 'N'))                        {Serial.print("CN00;");}  
-  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'G'))                        {Serial.print("VC009;");}  
-  else if((CATcmd[0] == 'Q') && (CATcmd[1] == 'R'))                        {Serial.print("QR00;");}  
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'H'))                        {Serial.print("SH00;");}  
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'S'))                        {Serial.print("SS0000000000000;");}  
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'L'))                        {Serial.print("RL00;");}  
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'L'))                        {Serial.print("SL00;");}  
-  else if((CATcmd[0] == 'C') && (CATcmd[1] == 'T'))                        {Serial.print("CT0;");}  
-  else if((CATcmd[0] == 'D') && (CATcmd[1] == 'L'))                        {Serial.print("DL000;");}  
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'D'))                        {Serial.print("SD0000;");}  
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'M'))                        {Serial.print("SM00000;");}  
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;");}  
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'G'))                        {Serial.print("RG000;");}  
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'A'))                        {Serial.print("RA0000;");}  
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'M'))                        {Serial.print("RM00000;");}  
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'S'))                        {Serial.print("RS0;");}  
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'T'))                        {Serial.print("RT0;");}      //To be reviewed when RIT is implemented
-  else if((CATcmd[0] == 'S') && (CATcmd[1] == 'C'))                        {Serial.print("SC00;");}      //To be reviewed when RIT is implemented
-  else if((CATcmd[0] == 'I') && (CATcmd[1] == 'S'))                        {Serial.print("IS00000;");}  
-  else if((CATcmd[0] == 'K') && (CATcmd[1] == 'S'))                        {Serial.print("KS000;");}  
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'Y'))                        {Serial.print("TY000;");}  
-  else if((CATcmd[0] == 'K') && (CATcmd[1] == 'Y'))                        {Serial.print("KY1;");}  
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'U'))                        {Serial.print("RU1;");}  
-  else if((CATcmd[0] == 'U') && (CATcmd[1] == 'L'))                        {Serial.print("UL0;");}  
-  else if((CATcmd[0] == 'L') && (CATcmd[1] == 'K'))                        {Serial.print("LK00;");}  
-  else if((CATcmd[0] == 'L') && (CATcmd[1] == 'M'))                        {Serial.print("LM00000;");}  
-  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'C'))                        {Serial.print("MC000;");}   
-  else if((CATcmd[0] == 'E') && (CATcmd[1] == 'X'))                        {Serial.print("EX000000000;");}  
-  else if((CATcmd[0] == 'I') && (CATcmd[1] == 'F') && (CATcmd[2] == ';'))  {Command_IF();}
-  else if((CATcmd[0] == 'I') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  {Serial.print("ID020;");}
-  else if((CATcmd[0] == 'P') && (CATcmd[1] == 'S'))                        {Serial.print("PS1;");}
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'D'))                        {Serial.print("RD1;");}
-  else if((CATcmd[0] == 'A') && (CATcmd[1] == 'I'))                        {Serial.print("AI0;");}
-  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  Command_GetMD();
-  else if((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[3] == ';'))  Command_SetMD();
-  else if((CATcmd[0] == 'R') && (CATcmd[1] == 'X'))                        {Command_RX();}
-  else if((CATcmd[0] == 'T') && (CATcmd[1] == 'X'))                        {Command_TX();}
-  else if((CATcmd[0] == 'V') && (CATcmd[1] == 'X'))                        {Command_VX();} 
-  else if((CATcmd[0] == 'X') && (CATcmd[1] == 'T'))                       {Serial.print("XT1;");}
-  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'L'))                       {Serial.print("FL0;");}  // 
-  else if((CATcmd[0] == 'G') && (CATcmd[1] == 'T'))                       {Serial.print("GT000;");}  // 
-  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'R'))                       {Serial.print("FR0;");}  // Modify when VFO A/B is implemented and split is used
-  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'T'))                       {Serial.print("FT0;");}  // Modify when VFO A/B is implemented and split is used
-  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'S'))                       {Serial.print("FS0;");}  // Modify when VFO A/B is implemented
-  else if((CATcmd[0] == 'F') && (CATcmd[1] == 'W'))                       {Serial.print("FW0000;");}  // Modify when VFO A/B is implemented
-  else                                                                    Serial.print("?;");
-  
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';'))  {Command_GETFreqA(); return;}
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[13] == ';')) {Command_SETFreqA(); return;}
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[2] == ';'))  {Command_GETFreqB(); return;}
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[13] == ';')) {Command_SETFreqB(); return;}
+  if ((CATcmd[0] == 'I') && (CATcmd[1] == 'F') && (CATcmd[2] == ';'))  {Command_IF(); return;}
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  {Command_GetMD(); return;}
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[3] == ';'))  {Command_SetMD(); return;}
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'X'))                        {Command_RX(); return;}
+  if ((CATcmd[0] == 'T') && (CATcmd[1] == 'X'))                        {Command_TX(); return;}
+  if ((CATcmd[0] == 'V') && (CATcmd[1] == 'X'))                        {Command_VX(); return;} 
+  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'S'))                        {Command_AS(); return;}
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'T'))                        {Command_ST(); return;}      //Step when implemented
+  if ((CATcmd[0] == 'X') && (CATcmd[1] == 'I'))                        {Command_XI(); return;}      //Step when implemented
+  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        {Command_BChange(-1); return;}
+  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        {Command_BChange(+1); return;}
+  if ((CATcmd[0] == 'G') && (CATcmd[1] == 'T'))                        {Serial.print("GT000;"); return;}  // 
+  if ((CATcmd[0] == 'I') && (CATcmd[1] == 'S'))                        {Serial.print("IS00000;"); return;}  
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'G'))                        {Serial.print("MG000;"); return;}
+  if ((CATcmd[0] == 'N') && (CATcmd[1] == 'B'))                        {Serial.print("NB0;"); return;}
+  if ((CATcmd[0] == 'N') && (CATcmd[1] == 'L'))                        {Serial.print("NL000;"); return;}
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'A'))                        {Serial.print("RA0000;"); return;}  
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'C'))                        { return;}
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'T'))                        {Serial.print("RT0;"); return;}       //To be reviewed when RIT is implemented
+  if ((CATcmd[0] == 'V') && (CATcmd[1] == 'X'))                        {Serial.print("VX1;"); return;}  //Review regarding VOX
+  if ((CATcmd[0] == 'X') && (CATcmd[1] == 'T'))                        {Serial.print("XT1;"); return;}
+  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'Y'))                        {Serial.print("BY0;"); return;}
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'R'))                        {Serial.print("FR0;"); return;}  // Modify when VFO A/B is implemented and split is used
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'T'))                        {Serial.print("FT0;"); return;}  // Modify when VFO A/B is implemented and split is used
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'S'))                        {Serial.print("FS0;"); return;}  // Modify when VFO A/B is implemented
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'L'))                        {Serial.print("ML000;"); return;}
+  if ((CATcmd[0] == 'P') && (CATcmd[1] == 'C'))                        {Serial.print("PC005;"); return;}
+  if ((CATcmd[0] == 'N') && (CATcmd[1] == 'R'))                        {Serial.print("NR0;"); return;}
+  if ((CATcmd[0] == 'P') && (CATcmd[1] == 'R'))                        {Serial.print("PR0;"); return;}
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'S'))                        {Serial.print("RS0;"); return;}  
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'L'))                        {Serial.print("RL00;"); return;}  
+
+
+#ifdef CAT_FULL
+
+  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'C'))                        {Serial.print("AC000;"); return;}
+  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'G'))                        {Serial.print("AG0000;"); return;}
+  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'N'))                        {Serial.print("AN0;"); return;}
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'F'))                        {Serial.print("MF0;"); return;}
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'U'))                        {Serial.print("SU00000000000;"); return;}
+  if ((CATcmd[0] == 'O') && (CATcmd[1] == 'P'))                        {Serial.print("OP000;"); return;}
+  if ((CATcmd[0] == 'P') && (CATcmd[1] == 'B'))                        {Serial.print("PB000;"); return;}
+  if ((CATcmd[0] == 'P') && (CATcmd[1] == 'L'))                        {Serial.print("PL000000;"); return;}
+  if ((CATcmd[0] == 'P') && (CATcmd[1] == 'A'))                        {Serial.print("PA00;"); return;}
+  if ((CATcmd[0] == 'T') && (CATcmd[1] == 'N'))                        {Serial.print("TN00;"); return;}
+  if ((CATcmd[0] == 'T') && (CATcmd[1] == 'O'))                        {Serial.print("TO0;"); return;}
+  if ((CATcmd[0] == 'T') && (CATcmd[1] == 'S'))                        {Serial.print("TS0;"); return;}
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'R'))                        {Serial.print("MR00000000000000000000000000000000000000000000000;"); return;}
+  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'C'))                        {Serial.print("BC0;"); return;}
+  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'S'))                        {Serial.print("BS0;"); return;}
+  if ((CATcmd[0] == 'X') && (CATcmd[1] == 'T'))                        {Serial.print("XT0;"); return;}
+  if ((CATcmd[0] == 'X') && (CATcmd[1] == 'O'))                        {Serial.print("XO000000000000;"); return;}
+  if ((CATcmd[0] == 'C') && (CATcmd[1] == 'A'))                        {Serial.print("CA0;"); return;}
+  if ((CATcmd[0] == 'C') && (CATcmd[1] == 'H'))                        { return;}
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'V'))                        { return;}
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'W'))                        { return;}
+  if ((CATcmd[0] == 'Q') && (CATcmd[1] == 'I'))                        { return;}
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'R'))                        { return;}
+  if ((CATcmd[0] == 'U') && (CATcmd[1] == 'P'))                        { return;}
+  if ((CATcmd[0] == 'V') && (CATcmd[1] == 'R'))                        { return;}
+  if ((CATcmd[0] == 'V') && (CATcmd[1] == 'V'))                        { return;}
+  if ((CATcmd[0] == 'D') && (CATcmd[1] == 'N'))                        { return;}
+  if ((CATcmd[0] == 'V') && (CATcmd[1] == 'D'))                        {Serial.print("VD0100;"); return;}  //Review regarding VOX
+  if ((CATcmd[0] == 'C') && (CATcmd[1] == 'N'))                        {Serial.print("CN00;"); return;}  
+  if ((CATcmd[0] == 'V') && (CATcmd[1] == 'G'))                        {Serial.print("VC009;"); return;}  
+  if ((CATcmd[0] == 'Q') && (CATcmd[1] == 'R'))                        {Serial.print("QR00;"); return;}  
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'H'))                        {Serial.print("SH00;"); return;}  
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'S'))                        {Serial.print("SS0000000000000;"); return;}  
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'L'))                        {Serial.print("SL00;"); return;}  
+  if ((CATcmd[0] == 'C') && (CATcmd[1] == 'T'))                        {Serial.print("CT0;"); return;}  
+  if ((CATcmd[0] == 'D') && (CATcmd[1] == 'L'))                        {Serial.print("DL000;"); return;}  
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'D'))                        {Serial.print("SD0000;"); return;}  
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'M'))                        {Serial.print("SM00000;"); return;}  
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;"); return;}  
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'G'))                        {Serial.print("RG000;"); return;}  
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'M'))                        {Serial.print("RM00000;"); return;}  
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'C'))                        {Serial.print("SC00;");}      //To be reviewed when RIT is implemented
+  if ((CATcmd[0] == 'K') && (CATcmd[1] == 'S'))                        {Serial.print("KS000;"); return;}  
+  if ((CATcmd[0] == 'T') && (CATcmd[1] == 'Y'))                        {Serial.print("TY000;"); return;}  
+  if ((CATcmd[0] == 'K') && (CATcmd[1] == 'Y'))                        {Serial.print("KY1;"); return;}  
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'U'))                        {Serial.print("RU1;"); return;}  
+  if ((CATcmd[0] == 'U') && (CATcmd[1] == 'L'))                        {Serial.print("UL0;"); return;}  
+  if ((CATcmd[0] == 'L') && (CATcmd[1] == 'K'))                        {Serial.print("LK00;"); return;}  
+  if ((CATcmd[0] == 'L') && (CATcmd[1] == 'M'))                        {Serial.print("LM00000;"); return;}  
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'C'))                        {Serial.print("MC000;"); return;}   
+  if ((CATcmd[0] == 'E') && (CATcmd[1] == 'X'))                        {Serial.print("EX000000000;"); return;}  
+  if ((CATcmd[0] == 'I') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  {Serial.print("ID020;"); return;}
+  if ((CATcmd[0] == 'P') && (CATcmd[1] == 'S'))                        {Serial.print("PS1;"); return;}
+  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'D'))                        {Serial.print("RD1;"); return;}
+  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'I'))                        {Serial.print("AI0;"); return;}
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'L'))                        {Serial.print("FL0;"); return;}  // 
+  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'W'))                        {Serial.print("FW0000;"); return;}  // Modify when VFO A/B is implemented
+
+#endif //CAT_FULL
+   
+  Serial.print("?;");
 }
 /*-----------------------------------------------------------------*
  * serialEvent
@@ -624,7 +642,7 @@ long cal = XT_CAL_F;
 void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
   if (t != getWord(SSW,TXON)) {
-      _INFOLIST("%s (%s)\n",__func__,BOOL2CHAR(t));
+      _TRACELIST("%s (%s)\n",__func__,BOOL2CHAR(t));
   } 
   
   if (t) {    //Set to TX
@@ -635,7 +653,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
      digitalWrite(RX,LOW);
      si5351.output_enable(SI5351_CLK1, 0);   //RX off
      long int freqtx=(getWord(SSW,CWMODE)==false ? freq : freq+CWSHIFT);
-     _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
+     _TRACELIST("%s TX+ f=%ld\n",__func__,freqtx);
      si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
      si5351.output_enable(SI5351_CLK0, 1);   // TX on
      digitalWrite(TX,HIGH);
@@ -653,7 +671,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     digitalWrite(RX,HIGH);
     si5351.output_enable(SI5351_CLK0, 0);   //TX off    
     if (getWord(SSW,TXON)==HIGH) {
-       _INFOLIST("%s RX+ f=%ld\n",__func__,freq);
+       _TRACELIST("%s RX+ f=%ld\n",__func__,freq);
     }
     si5351.set_freq(freq*100ULL, SI5351_CLK1);
     si5351.output_enable(SI5351_CLK1, 1);   //RX on
@@ -973,7 +991,7 @@ uint16_t save=EEPROM_SAVE;
    EEPROM.put(EEPROM_MODE,mode);
    EEPROM.put(EEPROM_BAND,Band_slot);
 
-   _INFOLIST("%s save(%d) cal(%d) m(%d) slot(%d)\n",__func__,save,cal_factor,mode,Band_slot);
+   _TRACELIST("%s save(%d) cal(%d) m(%d) slot(%d)\n",__func__,save,cal_factor,mode,Band_slot);
 
     setWord(&SSW,SAVEEE,false);
 
@@ -983,13 +1001,23 @@ uint16_t save=EEPROM_SAVE;
 /**********************************************************************************************/
 /*                               Operational state management                                 */
 /**********************************************************************************************/
+
 /*----------------------------------------------------------*
  * Mode assign                                              *
  *----------------------------------------------------------*/
+void displayFrequencyCW();
 void Mode_assign(){
-      
+
    freq=f[mode];
-   setLED(LED[mode],true);
+   if (mode==4) {
+      setWord(&SSW,CWMODE,true);
+      freqCW=freq;    
+      displayFrequencyCW();
+   } else {
+      setWord(&SSW,CWMODE,false);
+      setLED(LED[mode],true);
+
+   }
 
 /*--------------------------------------------*   
  * Update master frequency here               *
@@ -999,8 +1027,7 @@ void Mode_assign(){
    tout=millis();
    setWord(&SSW,SAVEEE,true);
    #endif //EE
-
-   _TRACELIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
+   _INFOLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
 }
 /*----------------------------------------------------------*
  * Frequency assign (band dependant)                        *
@@ -1037,14 +1064,14 @@ void Freq_assign(){
  * Update master frequency here          *
  *---------------------------------------*/
     freq=f[Band_slot];
-    freqCW=qrp[b];
+    //freqCW=f[CWSLOT];
 
     #ifdef EE
     tout=millis();
     setWord(&SSW,SAVEEE,true);
     #endif //EE
 
-    _TRACELIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld CW=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freqCW);
+    _TRACELIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
 }
 
 /*----------------------------------------------------------*
@@ -1058,8 +1085,7 @@ void Band_assign(){
     delay(DELAY_WAIT); 
     Freq_assign();
     Mode_assign();
- 
-    _TRACELIST("%s m(%d) slot(%d)\n",__func__,mode,Band_slot);
+    _INFOLIST("%s m(%d) slot(%d) f=%d\n",__func__,mode,Band_slot,freq);
   
 }
 /*----------------------------------------------------------*
@@ -1086,7 +1112,6 @@ void Band_Select(){
    if ((upButton == LOW) && (downButton == HIGH)) {
        Band_slot=(Band_slot-1)%4;
        setLED(LED[3-Band_slot],true);
-
        _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
           
    } 
@@ -1130,12 +1155,12 @@ void displayFrequencyCW() {
 
   if ((df>     0) && (df<= 5000)) {setLED(FT4,true);}
   if ((df>  5000) && (df<=10000)) {setLED(FT4,true);setLED(FT8,false);}
-  if ((df> 10000) && (df<=15000)) {setLED(FT8,true);}
+  if ((df> 10000)) {setLED(FT8,true);}
   if (df<0) {
      df=abs(df);
      if ((df>     0) && (df<= 5000)) {setLED(JS8,true);}
      if ((df>  5000) && (df<=10000)) {setLED(JS8,true);setLED(WSPR,false);}
-     if ((df> 10000) && (df<=15000)) {setLED(WSPR,true);}
+     if ((df> 10000)) {setLED(WSPR,true);}
   }
 }
 
@@ -1147,7 +1172,8 @@ void setFrequencyCW(int f) {
   long int step=f*CWSTEP;
 
   _TRACELIST("%s f=%ld\n",__func__,freq+step);
-  
+
+/*  
   if ((freq+step)>(freqCW+MAXSHIFT)) {
 
      _TRACELIST("%s (%d): %ld out of band\n",__func__,step,freq+step);
@@ -1166,9 +1192,9 @@ void setFrequencyCW(int f) {
   }
    
   _TRACELIST("%s f=%ld):\n",__func__,freq+step);
+*/
 
-  freq=freq+step;
-  
+  freq=freq+step; 
   displayFrequencyCW();
   return;
   
@@ -1191,23 +1217,20 @@ bool downButtonPL = getSwitchPL(DOWN);
  * long push press of the DOWN button (to exit CW)      *
  *------------------------------------------------------*/
   #ifdef CW
+
   
   if (upButtonPL == LOW && getWord(SSW,CWMODE)==false) {
-     setWord(&SSW,CWMODE,true);
+     mode=4;
+     Mode_assign();   
+     _INFOLIST("%s CW+ f=%ld\n",__func__,freq);
 
-     _INFOLIST("%s CW+\n",__func__);
-     
-     freq=freqCW;
-     setFrequencyCW(0);
-     
   }
 
-  if (downButtonPL == LOW && getWord(SSW,CWMODE)== true) {
-     setWord(&SSW,CWMODE,false);
-     
-     _INFOLIST("%s CW-\n",__func__);
 
+  if (downButtonPL == LOW && getWord(SSW,CWMODE)== true) {
+     mode=0;
      Mode_assign();
+     _INFOLIST("%s CW- f=%ld\n",__func__,freq);
      
   }
 
@@ -1217,18 +1240,14 @@ bool downButtonPL = getSwitchPL(DOWN);
  * +/- MAXRIT                                                *
  *-----------------------------------------------------------*/
 
-  if (downButton == LOW && getWord(SSW,CWMODE)==true) {
-     
-     _INFOLIST("%s f-",__func__);
-      
+  if (downButton == LOW && getWord(SSW,CWMODE)==true) {   
      setFrequencyCW(-1);
+     _INFOLIST("%s f+ f=%ld\n",__func__,freq);      
   }
 
-  if (upButton == LOW && getWord(SSW,CWMODE)==true) {
-     
-     _INFOLIST("%s f-",__func__);
-     
+  if (upButton == LOW && getWord(SSW,CWMODE)==true) {     
      setFrequencyCW(+1);
+     _INFOLIST("%s f- f=%ld\n",__func__,freq);     
   }
 
   #endif //CW  
@@ -1238,9 +1257,7 @@ bool downButtonPL = getSwitchPL(DOWN);
   if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
 
      _INFOLIST("%s TX+\n",__func__);
-
-     ManualTX();
-   
+     ManualTX(); 
      _INFOLIST("%s TX-\n",__func__);
   }
 
@@ -1259,16 +1276,14 @@ bool downButtonPL = getSwitchPL(DOWN);
  * manage band, mode and  calibration selections               *
  *-------------------------------------------------------------*/
   if ((upButton == LOW)&&(downButton == LOW)&&(getWord(SSW,TXON)==false)) {
-
-      _INFOLIST("%s U+D",__func__);
-
      Band_Select();
+      _INFOLIST("%s U+D f=%ld",__func__,freq);
   }
 
   if ((upButton == LOW)&&(downButton == HIGH)&&(getWord(SSW,TXON)==false)) {
-      mode=(mode-1)%4;
 
-      _INFOLIST("%s m+(%d)\n",__func__,mode);
+      mode=(mode-1)%4;
+      _TRACELIST("%s m+(%d)\n",__func__,mode);
 
       #ifdef EE
       EEPROM.put(EEPROM_MODE, mode); 
@@ -1280,9 +1295,9 @@ bool downButtonPL = getSwitchPL(DOWN);
    
 
   if ((upButton == HIGH) && (downButton == LOW)&&(getWord(SSW,TXON)==false)) {
+      
       mode=(mode+1)%4;
-
-      _INFOLIST("%s m-(%d)\n",__func__,mode);
+      _TRACELIST("%s m-(%d)\n",__func__,mode);
 
       #ifdef EE
       tout=millis();
@@ -1318,6 +1333,7 @@ void keepAlive() {
  *----------------------------------------------------------*/
 void INIT(){
 
+
 #ifdef EE
 
  uint16_t temp;
@@ -1333,6 +1349,7 @@ void INIT(){
  if (temp != save){
 
     updateEEPROM();
+  _TRACELIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     
  } else {
 
@@ -1353,11 +1370,10 @@ void INIT(){
   EEPROM.get(EEPROM_MODE,mode);
   EEPROM.get(EEPROM_BAND,Band_slot);
 
-  _INFOLIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+  _TRACELIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
 }  
 
 #endif // EE
-  
 Band_assign();
 Freq_assign();
 Mode_assign();
