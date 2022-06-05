@@ -500,12 +500,10 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'P') && (CATcmd[1] == 'R'))                        {Serial.print("PR0;"); return;}
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'S'))                        {Serial.print("RS0;"); return;}  
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'L'))                        {Serial.print("RL00;"); return;}  
-
-
-#ifdef CAT_FULL
-
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'C'))                        {Serial.print("AC000;"); return;}
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'G'))                        {Serial.print("AG0000;"); return;}
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;"); return;}  
+
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'N'))                        {Serial.print("AN0;"); return;}
   if ((CATcmd[0] == 'M') && (CATcmd[1] == 'F'))                        {Serial.print("MF0;"); return;}
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'U'))                        {Serial.print("SU00000000000;"); return;}
@@ -542,7 +540,6 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'D') && (CATcmd[1] == 'L'))                        {Serial.print("DL000;"); return;}  
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'D'))                        {Serial.print("SD0000;"); return;}  
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'M'))                        {Serial.print("SM00000;"); return;}  
-  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;"); return;}  
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'G'))                        {Serial.print("RG000;"); return;}  
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'M'))                        {Serial.print("RM00000;"); return;}  
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'C'))                        {Serial.print("SC00;");}      //To be reviewed when RIT is implemented
@@ -561,6 +558,10 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'I'))                        {Serial.print("AI0;"); return;}
   if ((CATcmd[0] == 'F') && (CATcmd[1] == 'L'))                        {Serial.print("FL0;"); return;}  // 
   if ((CATcmd[0] == 'F') && (CATcmd[1] == 'W'))                        {Serial.print("FW0000;"); return;}  // Modify when VFO A/B is implemented
+
+
+
+#ifdef CAT_FULL
 
 #endif //CAT_FULL
    
