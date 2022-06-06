@@ -19,8 +19,8 @@
 //*     X re-style of the code to facilitate customization for multiple boards
 //*     X Add all frequency definitions for HF bands
 //*     X Optimize EEPROM read/write cycles
-//*     / add CW support (includes keyer support)
-//*     X add CAT support (TS-440)
+//*     X add CW support (includes keyer support)
+//*     X add CAT support (TS-440), thru FLRig (see README.md)
 //*     X add timeout & watchdog support
 //* Forked version of the original ADX firmware located at http://www.github.com/lu7did/ADX
 //*-----------------------------------------------------------------------------------------------------------------*
@@ -66,7 +66,7 @@
 #include "Wire.h"
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
-#define VERSION        "1.2a"
+#define VERSION        "1.2e"
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #define _NOP          (byte)0
 /*****************************************************************
@@ -504,6 +504,8 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'G'))                        {Serial.print("AG0000;"); return;}
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;"); return;}  
 
+#ifdef CAT_FULL
+
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'N'))                        {Serial.print("AN0;"); return;}
   if ((CATcmd[0] == 'M') && (CATcmd[1] == 'F'))                        {Serial.print("MF0;"); return;}
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'U'))                        {Serial.print("SU00000000000;"); return;}
@@ -558,10 +560,6 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'I'))                        {Serial.print("AI0;"); return;}
   if ((CATcmd[0] == 'F') && (CATcmd[1] == 'L'))                        {Serial.print("FL0;"); return;}  // 
   if ((CATcmd[0] == 'F') && (CATcmd[1] == 'W'))                        {Serial.print("FW0000;"); return;}  // Modify when VFO A/B is implemented
-
-
-
-#ifdef CAT_FULL
 
 #endif //CAT_FULL
    
