@@ -248,16 +248,16 @@ uint16_t cal_factor=0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
 unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //80m [0]
-                                                    { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
-                                                    { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
-                                                    {10136000,10140000,10130000,10138700,10106000},   //30m [3]
-                                                    {14074000,14080000,14078000,14095600,14060000},   //20m [4]
-                                                    {18100000,18104000,18104000,18104600,18096000},   //17m [5]
-                                                    {21074000,21140000,21078000,21094600,21060000},   //15m [6]                           
-                                                    {24915000,24915000,24922000,24924600,24906000},   //12m [7] FT4 equal to FT8                           
-                                                    {28074000,28074000,28078000,28124600,28060000},   //10m [8]                           
-                                                    {50310000,50310000,50318000,50293000,50060000}};  //6m  [9]          
+unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //160m [0]
+                                      { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
+                                      { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
+                                      {10136000,10140000,10130000,10138700,10106000},   //30m [3]
+                                      {14074000,14080000,14078000,14095600,14060000},   //20m [4]
+                                      {18100000,18104000,18104000,18104600,18096000},   //17m [5]
+                                      {21074000,21140000,21078000,21094600,21060000},   //15m [6]                           
+                                      {24915000,24915000,24922000,24924600,24906000},   //12m [7] FT4 equal to FT8                           
+                                      {28074000,28074000,28078000,28124600,28060000},   //10m [8]                           
+                                      {50310000,50310000,50318000,50293000,50060000}};  //6m  [9]          
 
                                                       
 unsigned long freq      = f[Band_slot]; 
@@ -265,11 +265,11 @@ uint8_t       LED[4]    = {FT8,FT4,JS8,WSPR};
 /*-------------------------------------*
  * Manage button state                 *
  *-------------------------------------*/
-uint8_t       button[3]={0,0};
+uint8_t       button[3]   ={0,0,0};
 unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
 
 #ifdef CW
-unsigned long freqCW     = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
+unsigned long freqCW      = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
 #endif //CW
 
 //**********************************[ BAND SELECT ]************************************************
@@ -319,7 +319,8 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
  * At this point this code needs to work with FLRig as a HamLib server                                 *
  * ----------------------------------------------------------------------------------------------------*/
 
-// CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX, source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
+// CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX, 
+// source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
 // https://www.kenwood.com/i/products/info/amateur/ts_480/pdf/ts_480_pc.pdf
 // Code excerpts from QCX-SSB by Guido (PE1NNZ)
 // Mods by Pedro E. Colla(LU7DZ) 2022
