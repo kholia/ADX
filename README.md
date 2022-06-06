@@ -1,4 +1,4 @@
-#ADX is an Arduino based Digital Modes Transceiver.
+# ADX is an Arduino based Digital Modes Transceiver.
 
 - ADX - is abbreviation for Arduino Digital Xceiver.
 
