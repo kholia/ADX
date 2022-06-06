@@ -73,12 +73,12 @@
  * CONFIGURATION Properties                                      *
  *****************************************************************/
 #define WDT         1     //Hardware watchdog enabled
-//#define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
 #define EE          1     //User EEPROM for persistence
 #define CW          1
 #define CAT         1     //Emulates a TS-440 transceiver CAT protocol
 //#define CAT_FULL    1
 //#define ECHO        1
+//#define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
 
 /*****************************************************************
  * Consistency rules                                             *
