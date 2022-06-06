@@ -75,10 +75,12 @@
 #define WDT         1     //Hardware watchdog enabled
 #define EE          1     //User EEPROM for persistence
 #define CW          1
-#define CAT         1     //Emulates a TS-440 transceiver CAT protocol
-//#define CAT_FULL    1
-//#define ECHO        1
-//#define DEBUG       1     //DEBUG is nullified when CAT is enabled to avoid conflicts
+#define CAT         1     //Emulates a TS-480 transceiver CAT protocol (reduced footprint)
+//#define CAT_FULL    1     //Emulates a TS-480 (full command set)
+//#define ECHO        1     //CAT commands has echo (for testing and debug purposes)
+//#define DEBUG       1     //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
+//#define SHIFTLIMIT   1     //Enforces tunning shift range into +/- 15 KHz when in CW mode
+//#define ONEBAND      1     //Forces a single band operation in order not to mess up because of a wrong final filter
 
 /*****************************************************************
  * Consistency rules                                             *
@@ -90,14 +92,13 @@
     #define BAUD_DEBUG 115200
 #endif //DEBUG or CAT
 
-
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
    #undef  DEBUG
 #endif // CAT && DEBUG
 
 #ifdef CAT
    #define CATCMD_SIZE          32
-   #define BAUD_CAT           9600
+   #define BAUD_CAT           9600       //Baud rate
    
    char CATcmd[CATCMD_SIZE];
    volatile uint8_t  cat_active = 0;
@@ -108,12 +109,15 @@
  * Trace and debugging macros                                    *
  *****************************************************************/
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-//#define INFO  1    
-//#define EXCP  1
-//#define TRACE 1
+//#define INFO  1   //Enable _INFO and _INFOLIST statements
+//#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+//#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 
 
+/*-------------------------------------------------------------------------*
+ * Define Info,Exception and Trace macros (replaced by NOP if not enabled) *
+ *-------------------------------------------------------------------------*/
 #ifdef DEBUG
 #define _DEBUG           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
 #define _DEBUGLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
@@ -177,13 +181,13 @@
 #define CWMODE 0B10000000    //CW Active
 
 /*----------------------------------------------------------------*
- *  Timer variables (Binary)                                      *
- *----------------------------------------------------------------*/
-#define BLINK  0B00000001 
-
-/*----------------------------------------------------------------*
  * Operating switch                                               *
  * ---------------------------------------------------------------*/
+#define PUSHSTATE   0B00000001
+#define SHORTPUSH   0B00000010    //simple push flag
+#define LONGPUSH    0B00000100    //long push flag
+#define INPROGRESS  0B00001000    //in progress mark
+
 
 /*----------------------------------------------------------------*
  * General purpose global define                                  *
@@ -198,20 +202,18 @@
 #define BDLY        200         //Delay when blinking LED
 #define DELAY_WAIT  BDLY*2      //Double Delay
 #define DELAY_CAL   DELAY_WAIT/10
-#define  MAXMODE    5           //Max number of digital modes
-#define  MAXBLINK   4           //Max number of blinks
-#define  MAXBAND    10          //Max number of bands defined (actually uses 4 out of MAXBAND)
+#define MAXMODE     5           //Max number of digital modes
+#define MAXBLINK    4           //Max number of blinks
+#define MAXBAND    10           //Max number of bands defined (actually uses 4 out of MAXBAND)
 
 #define INT0        0
 #define INT1        1
 #define INT2        2
 
-#define PUSHSTATE   0B00000001
-#define SHORTPUSH   0B00000010    //simple push flag
-#define LONGPUSH    0B00000100    //long push flag
-#define INPROGRESS  0B00001000    //in progress mark
-
-
+/*------------------------------------------------------------------------*
+ * Define EEPROM related configuration parameters, if EE is not defined   *
+ * no EEPROM support is provided                                          *
+ *------------------------------------------------------------------------*/
 #ifdef EE
    #define EEPROM_CAL  10
    #define EEPROM_TEMP 30
@@ -225,11 +227,14 @@
    #define EEPROM_TOUT 500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
 
+/*-------------------------------------------------------------------------*
+ * Define CW related configuration parameters                              *
+ *-------------------------------------------------------------------------*/
 #ifdef CW
-#define CWSHIFT        600
-#define CWSTEP         500
-#define MAXSHIFT     15000
-#define CWSLOT           5
+   #define CWSHIFT        600
+   #define CWSTEP         500
+   #define MAXSHIFT     15000
+   #define CWSLOT           5
 #endif //CW
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
@@ -257,18 +262,15 @@ unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810
                                                       
 unsigned long freq      = f[Band_slot]; 
 uint8_t       LED[4]    = {FT8,FT4,JS8,WSPR};
-
-
+/*-------------------------------------*
+ * Manage button state                 *
+ *-------------------------------------*/
 uint8_t       button[3]={0,0};
 unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
 
 #ifdef CW
-//unsigned long qrp[MAXBAND]          = { 1810000, 3560000, 7030000,10106000,14060000,18096000,21060000,24906000,28060000,50060000};
 unsigned long freqCW     = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
 #endif //CW
-
-//**********************************[CW mode implementation]***************************************
-
 
 //**********************************[ BAND SELECT ]************************************************
 
@@ -282,8 +284,11 @@ unsigned long freqCW     = f[CWSLOT]; //default assignment consistent with digit
  Supported Bands are: 80m, 40m, 30m, 20m,17m, 15m
 */
 
-uint16_t Bands[4]={40,30,20,17}; //Band1,Band2,Band3,Band4
-
+#ifdef ONEBAND
+   uint16_t Bands[4]={40,40,40,40}; //Band1,Band2,Band3,Band4
+#else
+   uint16_t Bands[4]={40,30,20,17}; //Band1,Band2,Band3,Band4
+#endif //ONEBAND
 /****************************************************************************************************************************************/
 /*                                                     CODE INFRAESTRUCTURE                                                             */
 /****************************************************************************************************************************************/
@@ -311,6 +316,7 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
  *                                     CAT SubSystem                                                   *
  * cloned from uSDX (QCX-SSB) firmware                                                                 *                                    
  * adaptations and extensions by P.E.Colla (LU7DZ)                                                     *
+ * At this point this code needs to work with FLRig as a HamLib server                                 *
  * ----------------------------------------------------------------------------------------------------*/
 
 // CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX, source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
@@ -318,42 +324,44 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 // Code excerpts from QCX-SSB by Guido (PE1NNZ)
 // Mods by Pedro E. Colla(LU7DZ) 2022
 
-void switch_RXTX(bool t);     //advance definition for compilation purposes
-//*--- GETFreqA
+void switch_RXTX(bool t);     //advance definition for compilation purposes (interface only)
+
+//*--- Get Freq VFO A
 void Command_GETFreqA()          //Get Frequency VFO (A)
 {
   sprintf(hi,"FA%011ld;",freq);
   Serial.print(hi);
 }
-
-void Command_SETFreqA()          //Set Frequency VFO (A)
-{
+//*--- Set Freq VFO A
+void setFreqCAT() {
   char Catbuffer[16];
   strncpy(Catbuffer,CATcmd+2,11);
   Catbuffer[11]='\0';
-
   freq=(uint32_t)atol(Catbuffer);
+  
+}
+
+void Command_SETFreqA()          //Set Frequency VFO (A)
+{
+  setFreqCAT();
   Command_GETFreqA();
 }
 
+//*--- Get Freq VFO B
 void Command_GETFreqB()          //Get Frequency VFO (B) -- fallback to VFO (A) until implementation of VFOA/B pair
 {
   sprintf(hi,"FB%011ld;",freq);
   Serial.print(hi);
  
 }
-
+//*--- Set Freq VFO B
 void Command_SETFreqB()          //Set Frequency VFO (B) -- fallback to VFO (B) until implementation for VFOA/B pair
 {
-  char Catbuffer[16];
-  strncpy(Catbuffer,CATcmd+2,11);
-  Catbuffer[11]='\0';
-
-  freq=(uint32_t)atol(Catbuffer);
+  setFreqCAT();
   Command_GETFreqB();
-
 }
 
+//*--- Prepare and send response to IF; command
 void Command_IF()               //General purpose status information command (IF), needs to be modified if RIT is implemented
 {
 
@@ -378,15 +386,16 @@ void Command_IF()               //General purpose status information command (IF
   Serial.print(hi);
   
 }
-
+//*--- Response to STEP command
 void Command_ST() {       //STEP command Modify when STEP is implemented
    sprintf(hi,"ST01;");
    Serial.print(hi);
 }
 
+//*--- Get current Mode (only 2=USB and 3=CW are supported)
+
 void Command_GetMD()      //Get MODE command, only USB (2) and CW (3) are supported, 4 digital modes (mode 0,1,2,3 are mapped as USB)
 {
-  _DEBUGLIST("%s CAT=%c CWMODE=%s\n",__func__,CATcmd[2],BOOL2CHAR(getWord(SSW,CWMODE)));
   sprintf(hi,"MD%c;",modeTS480());
   Serial.print(hi);
 }
@@ -397,19 +406,17 @@ void Command_SetMD()      //Set MODE command, only USB (2) and CW (3) are suppor
      setWord(&SSW,CWMODE,false);
      mode=0;
      Mode_assign();
-     _DEBUGLIST("%s CAT=%c CWMODE=%s\n",__func__,CATcmd[2],BOOL2CHAR(getWord(SSW,CWMODE)));
      sprintf(hi,"MD2;");    // at this time only USB is allowed, needs to be modified when CW is added
   } else {
      setWord(&SSW,CWMODE,true);
      mode=4;
      Mode_assign();
-     _DEBUGLIST("%s CAT=%c CWMODE=%s\n",__func__,CATcmd[2],BOOL2CHAR(getWord(SSW,CWMODE)));
      sprintf(hi,"MD3;");   
   }
   Serial.print(hi);
 }
 
-
+//*--- Place transceiver in RX mode
 void Command_RX()
 {
   setWord(&SSW,CATTX,false);
@@ -417,6 +424,7 @@ void Command_RX()
   Serial.print("RX0;");
 }
 
+//*--- Place transceiver in TX mode
 void Command_TX()
 {
   setWord(&SSW,CATTX,true);
@@ -424,14 +432,14 @@ void Command_TX()
   Serial.print("TX0;");
 }
 
-
+//*--- Response for VOX command
 void Command_VX()
 {
-  sprintf(hi,"VX%c;",(getWord(SSW,VOX)==true ? '1' : '0'));
+  sprintf(hi,"VX%s;",(getWord(SSW,VOX)==true ? "1" : "0"));
+  Serial.print(hi);
 }
 
-//*---- Translate mode into the TS-480 coding for mode
-
+//*---- Translate ADX mode into the TS-480 coding for mode
 char modeTS480() {
 
   if (mode==4) {
@@ -440,12 +448,14 @@ char modeTS480() {
   return '2';
 
 }
+//*--- Fake response for AS; command (not implemented)
 void Command_AS() {
 
   sprintf(hi,"AS000%011ld%c;",freq,modeTS480());
   Serial.print(hi);
   return;
 }
+//*--- Fake response for XI; command (not implemented)
 void Command_XI() {
 
   sprintf(hi,"XI%011ld%c0;",freq,modeTS480());
@@ -453,9 +463,7 @@ void Command_XI() {
   return;
 }
 
-
-
-
+//*--- Band change command (not implemented)
 void Command_BChange(int c) { //Change band up or down
 
   //Do not return anything
@@ -480,9 +488,17 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'X') && (CATcmd[1] == 'I'))                        {Command_XI(); return;}      //Step when implemented
   if ((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        {Command_BChange(-1); return;}
   if ((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        {Command_BChange(+1); return;}
+  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'C'))                        {Serial.print("AC000;"); return;}
+  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'G'))                        {Serial.print("AG0000;"); return;}
+  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;"); return;}  
+  if ((CATcmd[0] == 'I') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  {Serial.print("ID020;"); return;}
+  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'G'))                        {Serial.print("MG000;"); return;}
+
+
+#ifdef CAT_FULL
+
   if ((CATcmd[0] == 'G') && (CATcmd[1] == 'T'))                        {Serial.print("GT000;"); return;}  // 
   if ((CATcmd[0] == 'I') && (CATcmd[1] == 'S'))                        {Serial.print("IS00000;"); return;}  
-  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'G'))                        {Serial.print("MG000;"); return;}
   if ((CATcmd[0] == 'N') && (CATcmd[1] == 'B'))                        {Serial.print("NB0;"); return;}
   if ((CATcmd[0] == 'N') && (CATcmd[1] == 'L'))                        {Serial.print("NL000;"); return;}
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'A'))                        {Serial.print("RA0000;"); return;}  
@@ -500,12 +516,6 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'P') && (CATcmd[1] == 'R'))                        {Serial.print("PR0;"); return;}
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'S'))                        {Serial.print("RS0;"); return;}  
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'L'))                        {Serial.print("RL00;"); return;}  
-  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'C'))                        {Serial.print("AC000;"); return;}
-  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'G'))                        {Serial.print("AG0000;"); return;}
-  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;"); return;}  
-
-#ifdef CAT_FULL
-
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'N'))                        {Serial.print("AN0;"); return;}
   if ((CATcmd[0] == 'M') && (CATcmd[1] == 'F'))                        {Serial.print("MF0;"); return;}
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'U'))                        {Serial.print("SU00000000000;"); return;}
@@ -554,7 +564,6 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'L') && (CATcmd[1] == 'M'))                        {Serial.print("LM00000;"); return;}  
   if ((CATcmd[0] == 'M') && (CATcmd[1] == 'C'))                        {Serial.print("MC000;"); return;}   
   if ((CATcmd[0] == 'E') && (CATcmd[1] == 'X'))                        {Serial.print("EX000000000;"); return;}  
-  if ((CATcmd[0] == 'I') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  {Serial.print("ID020;"); return;}
   if ((CATcmd[0] == 'P') && (CATcmd[1] == 'S'))                        {Serial.print("PS1;"); return;}
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'D'))                        {Serial.print("RD1;"); return;}
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'I'))                        {Serial.print("AI0;"); return;}
@@ -566,8 +575,9 @@ void analyseCATcmd()
   Serial.print("?;");
 }
 /*-----------------------------------------------------------------*
- * serialEvent
- * Process serialEvent
+ * serialEvent                                                     *
+ * Process incoming characters from the serial buffer assemble     *
+ * commands and process responses according with the TS480 cat prot*
  *-----------------------------------------------------------------*/
 volatile uint8_t cat_ptr = 0;
 void serialEvent(){
@@ -631,7 +641,6 @@ long cal = XT_CAL_F;
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);// SET For Max Power
   si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);// Set for reduced power for RX 
-
   
 }
 
@@ -640,9 +649,11 @@ long cal = XT_CAL_F;
  *---------------------------------------------------------------------------------------------*/
 void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
+#ifdef DEBUG
   if (t != getWord(SSW,TXON)) {
       _TRACELIST("%s (%s)\n",__func__,BOOL2CHAR(t));
   } 
+#endif //DEBUG  
   
   if (t) {    //Set to TX
 
@@ -652,7 +663,11 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
      digitalWrite(RX,LOW);
      si5351.output_enable(SI5351_CLK1, 0);   //RX off
      long int freqtx=(getWord(SSW,CWMODE)==false ? freq : freq+CWSHIFT);
+     
+#ifdef DEBUG     
      _TRACELIST("%s TX+ f=%ld\n",__func__,freqtx);
+#endif //DEBUG
+     
      si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
      si5351.output_enable(SI5351_CLK0, 1);   // TX on
      digitalWrite(TX,HIGH);
@@ -669,9 +684,13 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
     digitalWrite(RX,HIGH);
     si5351.output_enable(SI5351_CLK0, 0);   //TX off    
+    
+#ifdef DEBUG
     if (getWord(SSW,TXON)==HIGH) {
        _TRACELIST("%s RX+ f=%ld\n",__func__,freq);
     }
+#endif //DEBUG
+    
     si5351.set_freq(freq*100ULL, SI5351_CLK1);
     si5351.output_enable(SI5351_CLK1, 1);   //RX on
     digitalWrite(TX,0); 
@@ -711,7 +730,9 @@ void setLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
    (clrLED==true ? resetLED() : void(_NOP)); 
    digitalWrite(LEDpin,HIGH);
 
+#ifdef DEBUG
    _TRACELIST("%s(%d)\n",__func__,LEDpin);
+#endif //DEBUG   
 
 }
 
@@ -720,7 +741,9 @@ void setLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
  */
 void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 
+#ifdef DEBUG
    _TRACELIST("%s (%d)\n",__func__,LEDpin);
+#endif //DEBUG   
    
    uint8_t n=(MAXBLINK-1);
 
@@ -762,7 +785,9 @@ ISR (PCINT2_vect) {
   
   for (byte p=INT0;p<=INT2;p++){ 
 
+#ifdef DEBUG
       _TRACELIST("%s check pin(%d)\n",__func__,p);
+#endif //DEBUG      
 
       switch (p) {
         case INT0 : {v=UPPUSH;break;}
@@ -774,7 +799,9 @@ ISR (PCINT2_vect) {
 
 //*--- Change detected
 
+#ifdef DEBUG
          _TRACELIST("%s pin(%d) [%d]->[%d]\n",__func__,p,getWord(button[p],PUSHSTATE),pstate);
+#endif //DEBUG         
          
          setWord(&button[p],PUSHSTATE,pstate);
          if (pstate == LOW) {
@@ -782,20 +809,26 @@ ISR (PCINT2_vect) {
          } else {
            timerDown=millis()-downTimer[p];
            if (timerDown<BOUNCE_TIME) {
-              
-              _TRACELIST("%s pin(%d) too short, ignored!\n",__func__,p);
+              #ifdef DEBUG
+                 _TRACELIST("%s pin(%d) too short, ignored!\n",__func__,p);
+              #endif //DEBUG   
             
            }
            setWord(&SSW,v,true);
            if (timerDown<SHORT_TIME){
               setWord(&button[p],SHORTPUSH,true);
               setWord(&button[p],LONGPUSH,false);
-              _TRACELIST("%s pin(%d) <SP>\n",__func__,p);
+              
+              #ifdef DEBUG
+                 _TRACELIST("%s pin(%d) <SP>\n",__func__,p);
+              #endif //DEBUG
 
            } else {
               setWord(&button[p],SHORTPUSH,false);
               setWord(&button[p],LONGPUSH,true);       
-              _TRACELIST("%s pin(%d) <LP>\n",__func__,p);
+              #ifdef DEBUG
+                 _TRACELIST("%s pin(%d) <LP>\n",__func__,p);
+              #endif //DEBUG   
            }       
          }
       }
@@ -805,7 +838,7 @@ ISR (PCINT2_vect) {
 /*----------------------------------------------------------*
  * Manually turn TX while pressed                           *
  *----------------------------------------------------------*/
-bool getTXSW();
+bool getTXSW();  //prototype for forward reference
 void ManualTX(){
    
     bool buttonTX=getTXSW();
@@ -813,7 +846,7 @@ void ManualTX(){
     while(buttonTX==LOW) {
 
        #ifdef WDT      
-       wdt_reset();
+          wdt_reset();
        #endif //WDT
        buttonTX=getTXSW();
                 
@@ -839,7 +872,9 @@ bool getSwitchPL(uint8_t pin) {
 
     if (getWord(SSW,v) == true && getWord(button[p],LONGPUSH)==true) {
 
-       _TRACELIST("%s (%d): <PL>\n",__func__,p);
+       #ifdef DEBUG
+          _TRACELIST("%s (%d): <PL>\n",__func__,p);
+       #endif //DEBUG   
 
        setWord(&SSW,v,false);
        setWord(&button[p],LONGPUSH,false);
@@ -864,8 +899,10 @@ bool getSwitch(uint8_t pin) {
     }
 
     if (getWord(SSW,v) == true && getWord(button[p],SHORTPUSH)==true) {
-       
-       _TRACELIST("%s (%d): <SP>\n",__func__,p);
+
+       #ifdef DEBUG
+          _TRACELIST("%s (%d): <SP>\n",__func__,p);
+       #endif //DEBUG
 
        setWord(&SSW,v,false);
        setWord(&button[p],SHORTPUSH,false);
@@ -886,6 +923,7 @@ bool getUPSSW() {
  * read DOWN Switch
  *----------------------------------------------------------*/
 bool getDOWNSSW() {
+  
     return getSwitch(DOWN); 
 
 }
@@ -910,7 +948,7 @@ void Calibration(){
 
 
   #ifdef DEBUG
-  _TRACE;
+     _TRACE;
   #endif //DEBUG
   
   resetLED();
@@ -919,32 +957,32 @@ void Calibration(){
   while (n>0) {
 
      #ifdef WDT
-     wdt_reset();
+        wdt_reset();
      #endif //WDT
          
      callibrateLED();
      n--;
 
   #ifdef WDT
-  wdt_reset();
+     wdt_reset();
   #endif //WDT
   }
 
   #ifdef EE  
-  EEPROM.get(EEPROM_CAL,cal_factor);
+     EEPROM.get(EEPROM_CAL,cal_factor);
   #endif //EEPROM
   
   while (true) {
 
      #ifdef WDT
-     wdt_reset();
+        wdt_reset();
      #endif //WDT
      
      if (getUPSSW() == LOW) {
         cal_factor = cal_factor - 100;
 
         #ifdef EE
-        EEPROM.put(EEPROM_CAL, cal_factor); 
+           EEPROM.put(EEPROM_CAL, cal_factor); 
         #endif //EEPROM
         
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
@@ -961,7 +999,7 @@ void Calibration(){
         cal_factor = cal_factor + 100;
 
         #ifdef EE
-        EEPROM.put(EEPROM_CAL, cal_factor);    
+           EEPROM.put(EEPROM_CAL, cal_factor);    
         #endif //EEPROM
         
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
@@ -990,7 +1028,9 @@ uint16_t save=EEPROM_SAVE;
    EEPROM.put(EEPROM_MODE,mode);
    EEPROM.put(EEPROM_BAND,Band_slot);
 
-   _TRACELIST("%s save(%d) cal(%d) m(%d) slot(%d)\n",__func__,save,cal_factor,mode,Band_slot);
+   #ifdef DEBUG
+      _TRACELIST("%s save(%d) cal(%d) m(%d) slot(%d)\n",__func__,save,cal_factor,mode,Band_slot);
+   #endif //DEBUG
 
     setWord(&SSW,SAVEEE,false);
 
@@ -1023,10 +1063,13 @@ void Mode_assign(){
  *--------------------------------------------*/
 
    #ifdef EE
-   tout=millis();
-   setWord(&SSW,SAVEEE,true);
+      tout=millis();
+      setWord(&SSW,SAVEEE,true);
    #endif //EE
-   _INFOLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
+
+   #ifdef DEBUG
+      _INFOLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
+   #endif //DEBUG   
 }
 /*----------------------------------------------------------*
  * Frequency assign (band dependant)                        *
@@ -1053,7 +1096,7 @@ void Freq_assign(){
       f[i]=slot[b][i];
 
       #ifdef WDT      
-      wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
+         wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
       #endif //WDT      
 
     }
@@ -1063,14 +1106,15 @@ void Freq_assign(){
  * Update master frequency here          *
  *---------------------------------------*/
     freq=f[Band_slot];
-    //freqCW=f[CWSLOT];
 
     #ifdef EE
-    tout=millis();
-    setWord(&SSW,SAVEEE,true);
+       tout=millis();
+       setWord(&SSW,SAVEEE,true);
     #endif //EE
 
-    _TRACELIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
+    #ifdef DEBUG
+       _TRACELIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
+    #endif //DEBUG   
 }
 
 /*----------------------------------------------------------*
@@ -1081,10 +1125,15 @@ void Band_assign(){
 
     resetLED();
     blinkLED(LED[3-Band_slot]);
+    
     delay(DELAY_WAIT); 
+    
     Freq_assign();
     Mode_assign();
-    _INFOLIST("%s m(%d) slot(%d) f=%d\n",__func__,mode,Band_slot,freq);
+
+    #ifdef DEBUG
+       _INFOLIST("%s m(%d) slot(%d) f=%d\n",__func__,mode,Band_slot,freq);
+    #endif //DEBUG   
   
 }
 /*----------------------------------------------------------*
@@ -1094,14 +1143,16 @@ void Band_Select(){
   
    resetLED();
 
-   _INFOLIST("%s slot(%d) LED(%d)\n",__func__,Band_slot,LED[3-Band_slot]);
+   #ifdef DEBUG
+      _INFOLIST("%s slot(%d) LED(%d)\n",__func__,Band_slot,LED[3-Band_slot]);
+   #endif //DEBUG
    
    blinkLED(LED[3-Band_slot]);
    setLED(LED[3-Band_slot],true);
    
    while (true) {
    #ifdef WDT
-   wdt_reset();
+      wdt_reset();
    #endif //WDT      
       
    bool upButton   = getUPSSW();
@@ -1111,21 +1162,27 @@ void Band_Select(){
    if ((upButton == LOW) && (downButton == HIGH)) {
        Band_slot=(Band_slot-1)%4;
        setLED(LED[3-Band_slot],true);
-       _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
-          
+
+       #ifdef DEBUG
+          _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
+       #endif //DEBUG   
    } 
    
    if ((upButton == HIGH) && (downButton == LOW)) {
       Band_slot=(Band_slot+1)%4;
       setLED(LED[3-Band_slot],true);
-      _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
+
+      #ifdef DEBUG
+         _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
+      #endif //DEBUG   
 
    }                                               
    if (txButton == LOW) {
       digitalWrite(TX,0);
+      
       #ifdef EE
-      tout=millis();
-      setWord(&SSW,SAVEEE,true);
+         tout=millis();
+         setWord(&SSW,SAVEEE,true);
       #endif //EE
 
       Band_assign();
@@ -1146,12 +1203,19 @@ void displayFrequencyCW() {
   if (freq==freqCW) {
      setLED(JS8,true);
      setLED(FT4,false);
-     _TRACELIST("%s set QRP QRG f=%ld\n",__func__,freq);
+     #ifdef DEBUG
+        _TRACELIST("%s set QRP QRG f=%ld\n",__func__,freq);
+     #endif //DEBUG   
      return;
   }
 
   long int df=freq-freqCW;
 
+/*-----------------------------------------------------------*
+ * compute a fancy LED lighting to signal where the frequency*
+ * is located compared with the QRP calling frequency (only  *
+ * valid for CW mode when activated                          *
+ *-----------------------------------------------------------*/
   if ((df>     0) && (df<= 5000)) {setLED(FT4,true);}
   if ((df>  5000) && (df<=10000)) {setLED(FT4,true);setLED(FT8,false);}
   if ((df> 10000)) {setLED(FT8,true);}
@@ -1169,13 +1233,18 @@ void displayFrequencyCW() {
 void setFrequencyCW(int f) {
 
   long int step=f*CWSTEP;
+  
+  #ifdef DEBUG
+     _TRACELIST("%s f=%ld\n",__func__,freq+step);
+  #endif //DEBUG   
 
-  _TRACELIST("%s f=%ld\n",__func__,freq+step);
+#ifdef SHIFTLIMIT
 
-/*  
   if ((freq+step)>(freqCW+MAXSHIFT)) {
 
-     _TRACELIST("%s (%d): %ld out of band\n",__func__,step,freq+step);
+     #ifdef DEBUG
+        _TRACELIST("%s (%d): %ld out of band\n",__func__,step,freq+step);
+     #endif //DEBUG   
 
      blinkLED(FT8);
      setLED(FT8,true);
@@ -1183,15 +1252,19 @@ void setFrequencyCW(int f) {
   }
   if ((freq+step)<(freqCW-MAXSHIFT)) {
 
-     _TRACELIST("%s step=%ld f=%ld out of band\n",__func__,step,freq+step);
+     #ifdef DEBUG
+        _TRACELIST("%s step=%ld f=%ld out of band\n",__func__,step,freq+step);
+     #endif //DEBUG   
      
      blinkLED(WSPR);
      setLED(WSPR,true);
      return;
   }
-   
-  _TRACELIST("%s f=%ld):\n",__func__,freq+step);
-*/
+  #ifdef DEBUG
+     _TRACELIST("%s f=%ld):\n",__func__,freq+step);
+  #endif //DEBUG
+     
+#endif //SHIFTLIMIT
 
   freq=freq+step; 
   displayFrequencyCW();
@@ -1220,8 +1293,11 @@ bool downButtonPL = getSwitchPL(DOWN);
   
   if (upButtonPL == LOW && getWord(SSW,CWMODE)==false) {
      mode=4;
-     Mode_assign();   
-     _INFOLIST("%s CW+ f=%ld\n",__func__,freq);
+     Mode_assign();
+        
+     #ifdef DEBUG
+        _INFOLIST("%s CW+ f=%ld\n",__func__,freq);
+     #endif //DEBUG   
 
   }
 
@@ -1229,7 +1305,10 @@ bool downButtonPL = getSwitchPL(DOWN);
   if (downButtonPL == LOW && getWord(SSW,CWMODE)== true) {
      mode=0;
      Mode_assign();
-     _INFOLIST("%s CW- f=%ld\n",__func__,freq);
+     
+     #ifdef DEBUG
+        _INFOLIST("%s CW- f=%ld\n",__func__,freq);
+     #endif //DEBUG   
      
   }
 
@@ -1241,12 +1320,17 @@ bool downButtonPL = getSwitchPL(DOWN);
 
   if (downButton == LOW && getWord(SSW,CWMODE)==true) {   
      setFrequencyCW(-1);
-     _INFOLIST("%s f+ f=%ld\n",__func__,freq);      
+     
+     #ifdef DEBUG
+        _INFOLIST("%s f+ f=%ld\n",__func__,freq);      
+     #endif //DEBUG   
   }
 
   if (upButton == LOW && getWord(SSW,CWMODE)==true) {     
      setFrequencyCW(+1);
-     _INFOLIST("%s f- f=%ld\n",__func__,freq);     
+     #ifdef DEBUG
+        _INFOLIST("%s f- f=%ld\n",__func__,freq);     
+     #endif //DEBUG   
   }
 
   #endif //CW  
@@ -1255,9 +1339,14 @@ bool downButtonPL = getSwitchPL(DOWN);
 
   if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
 
-     _INFOLIST("%s TX+\n",__func__);
+     #ifdef DEBUG
+        _INFOLIST("%s TX+\n",__func__);
+     #endif //DEBUG
+        
      ManualTX(); 
-     _INFOLIST("%s TX-\n",__func__);
+     #ifdef DEBUG
+        _INFOLIST("%s TX-\n",__func__);
+     #endif //DEBUG   
   }
 
 /*------------------------------------------------------------*
@@ -1276,16 +1365,21 @@ bool downButtonPL = getSwitchPL(DOWN);
  *-------------------------------------------------------------*/
   if ((upButton == LOW)&&(downButton == LOW)&&(getWord(SSW,TXON)==false)) {
      Band_Select();
+     
+     #ifdef DEBUG
       _INFOLIST("%s U+D f=%ld",__func__,freq);
+     #endif //DEBUG 
   }
 
   if ((upButton == LOW)&&(downButton == HIGH)&&(getWord(SSW,TXON)==false)) {
 
       mode=(mode-1)%4;
-      _TRACELIST("%s m+(%d)\n",__func__,mode);
-
+      #ifdef DEBUG
+         _TRACELIST("%s m+(%d)\n",__func__,mode);
+      #endif //DEBUG
+      
       #ifdef EE
-      EEPROM.put(EEPROM_MODE, mode); 
+         EEPROM.put(EEPROM_MODE, mode); 
       #endif //EEPROM     
 
       Mode_assign();
@@ -1296,11 +1390,13 @@ bool downButtonPL = getSwitchPL(DOWN);
   if ((upButton == HIGH) && (downButton == LOW)&&(getWord(SSW,TXON)==false)) {
       
       mode=(mode+1)%4;
-      _TRACELIST("%s m-(%d)\n",__func__,mode);
+      #ifdef DEBUG
+         _TRACELIST("%s m-(%d)\n",__func__,mode);
+      #endif //DEBUG   
 
       #ifdef EE
-      tout=millis();
-      setWord(&SSW,SAVEEE,true);
+         tout=millis();
+         setWord(&SSW,SAVEEE,true);
       #endif //EE Avoid the tear and wear of the EEPROM because of successive changes
      
       Mode_assign();
@@ -1342,13 +1438,15 @@ void INIT(){
  EEPROM.get(EEPROM_TEMP,temp);
  
  #ifdef EEPROM_CLR
- temp=-1;
+    temp=-1;
  #endif //EEPROM_CLR  
  
  if (temp != save){
 
     updateEEPROM();
-  _TRACELIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+    #ifdef DEBUG
+       _TRACELIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+    #endif //DEBUG
     
  } else {
 
@@ -1368,8 +1466,9 @@ void INIT(){
    
   EEPROM.get(EEPROM_MODE,mode);
   EEPROM.get(EEPROM_BAND,Band_slot);
-
-  _TRACELIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+  #ifdef DEBUG
+     _TRACELIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+  #endif //DEBUG   
 }  
 
 #endif // EE
@@ -1409,12 +1508,12 @@ void setup()
 {
 
    #ifdef DEBUG
-   Serial.begin(BAUD_DEBUG);
-   _DEBUGLIST("%s ADX Firmware V(%s)\n",__func__,VERSION);
+      Serial.begin(BAUD_DEBUG);
+      _DEBUGLIST("%s ADX Firmware V(%s)\n",__func__,VERSION);
    #endif //DEBUG
 
    #ifdef CAT
-   Serial.begin(BAUD_CAT);
+      Serial.begin(BAUD_CAT);
    #endif //CAT   
 
    definePinOut();
@@ -1425,7 +1524,9 @@ void setup()
    setWord(&button[INT1],PUSHSTATE,HIGH);
    setWord(&button[INT2],PUSHSTATE,HIGH);
 
-   _INFOLIST("%s INT ok\n",__func__);
+   #ifdef DEBUG
+      _INFOLIST("%s INT ok\n",__func__);
+   #endif //DEBUG   
 
    setup_si5351();   
    INIT();
@@ -1446,16 +1547,21 @@ void setup()
   
   pinMode(AIN1, INPUT); //PD7 = AN1 = HiZ, PD6 = AN0 = 0
 
-  _INFOLIST("%s Timer1 set\n",__func__);
+  #ifdef DEBUG
+     _INFOLIST("%s Timer1 set\n",__func__);
+  #endif //DEBUG   
   
   switch_RXTX(LOW);
   Mode_assign(); 
 
   #ifdef WDT
-  wdt_disable();
-  wdt_enable(WDTO_8S);
+     wdt_disable();
+     wdt_enable(WDTO_8S);
   #endif //WDT
-  _INFOLIST("%s completed ok\n",__func__);
+
+  #ifdef DEBUG
+     _INFOLIST("%s completed ok\n",__func__);
+  #endif //DEBUG   
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
 
@@ -1482,12 +1588,12 @@ void loop()
 
     #ifdef CAT 
 //*--- if CAT enabled check for serial events
-    serialEvent();
+       serialEvent();
     #endif //CAT
 
     #ifdef WDT
 //*--- if WDT enabled reset the watchdog
-    wdt_reset();
+       wdt_reset();
     #endif //WDT
 
 /*----------------------------------------------------------------------------------*
@@ -1553,7 +1659,7 @@ uint16_t n = VOX_MAXTRY;
        setWord(&SSW,VOX,true);
 
        #ifdef WDT
-       wdt_reset();
+          wdt_reset();
        #endif //WDT
           
        }
@@ -1562,11 +1668,11 @@ uint16_t n = VOX_MAXTRY;
     }
     #ifdef CAT 
 //*--- if CAT enabled check for serial events (again)
-    serialEvent();
+       serialEvent();
     #endif
     
     #ifdef WDT
-    wdt_reset();
+       wdt_reset();
     #endif //WDT
  }
 
@@ -1581,7 +1687,7 @@ uint16_t n = VOX_MAXTRY;
  }   
 
  #ifdef WDT
- wdt_reset();
+    wdt_reset();
  #endif //WDT     
 
 }
