@@ -99,13 +99,11 @@
 #ifdef CAT
    #define CATCMD_SIZE          18
    #define BAUD_CAT           9600       //Baud rate
+   volatile char    CATcmd[CATCMD_SIZE];
+
    
-   char CATcmd[CATCMD_SIZE];
-   char serialBuffer[CATCMD_SIZE];
-   byte ptrRead=0;
-   byte ptrWrite=0;
-   volatile uint8_t  cat_active = 0;
-   volatile uint32_t rxend_event = 0;
+   //volatile uint8_t  cat_active = 0;
+   //volatile uint32_t rxend_event = 0;
 #endif
 
 /*****************************************************************
@@ -584,13 +582,47 @@ void analyseCATcmd()
  * commands and process responses according with the TS480 cat prot*
  *-----------------------------------------------------------------*/
 volatile uint8_t cat_ptr = 0;
+volatile char    serialBuffer[CATCMD_SIZE];
+
 void serialEvent(){
   
-
+  char *strCmd="RX;ID;";
   if(!Serial.available()){
     return;
   }
-    
+  int j=0;
+  while (Serial.available()) {
+     char inByte=Serial.read();
+     if (inByte=="\n" || inByte=="\r" || inByte==0x0a) {
+       
+     } else {
+       serialBuffer[j++]=inByte;
+    } 
+  }
+  serialBuffer[j]=0x00;
+  if (strcmp(serialBuffer,strCmd)==0) { //coincidence
+     Serial.print("RX0;ID020;");
+     delay(10);
+     return;
+  }
+  for (int i=0;i<j;i++) {
+    char data=serialBuffer[i];
+
+    CATcmd[cat_ptr++] = data;
+    if(data == ';'){      
+      CATcmd[cat_ptr] = '\0'; // terminate the array
+      cat_ptr = 0;            // reset for next CAT command
+      analyseCATcmd();
+      delay(10);
+    } else {
+      if(cat_ptr > (CATCMD_SIZE - 1)){
+         Serial.print("?;"); 
+         cat_ptr = 0;  // overrun       
+      }
+    } 
+  }
+
+/*    
   char data = Serial.read();
 
   if (data=="\n" || data=="\r" || data==0x0a) {
@@ -616,6 +648,7 @@ void serialEvent(){
          cat_ptr = 0;  // overrun       
       }
   } 
+*/  
 }
 #endif //CAT
 
