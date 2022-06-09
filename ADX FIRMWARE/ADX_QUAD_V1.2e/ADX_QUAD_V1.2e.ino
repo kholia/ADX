@@ -97,10 +97,13 @@
 #endif // CAT && DEBUG
 
 #ifdef CAT
-   #define CATCMD_SIZE          32
+   #define CATCMD_SIZE          18
    #define BAUD_CAT           9600       //Baud rate
    
    char CATcmd[CATCMD_SIZE];
+   char serialBuffer[CATCMD_SIZE];
+   byte ptrRead=0;
+   byte ptrWrite=0;
    volatile uint8_t  cat_active = 0;
    volatile uint32_t rxend_event = 0;
 #endif
@@ -338,7 +341,7 @@ void setFreqCAT() {
   char Catbuffer[16];
   strncpy(Catbuffer,CATcmd+2,11);
   Catbuffer[11]='\0';
-  freq=(uint32_t)atol(Catbuffer);
+  freq=(uint32_t)(atol(Catbuffer)/1000)*1000;
   
 }
 
@@ -492,7 +495,7 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'C'))                        {Serial.print("AC000;"); return;}
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'G'))                        {Serial.print("AG0000;"); return;}
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'Q'))                        {Serial.print("SQ0000;"); return;}  
-  if ((CATcmd[0] == 'I') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  {Serial.print("ID020;"); return;}
+  if ((CATcmd[0] == 'I') && (CATcmd[1] == 'D'))                        {Serial.print("ID020;"); return;}
   if ((CATcmd[0] == 'M') && (CATcmd[1] == 'G'))                        {Serial.print("MG000;"); return;}
 
 
@@ -588,7 +591,6 @@ void serialEvent(){
     return;
   }
     
-  rxend_event = millis() + 10;  
   char data = Serial.read();
 
   if (data=="\n" || data=="\r" || data==0x0a) {
@@ -615,7 +617,6 @@ void serialEvent(){
       }
   } 
 }
-
 #endif //CAT
 
 /**********************************************************************************************/
@@ -634,8 +635,10 @@ void setup_si5351() {
  
 #define XT_CAL_F   33000 
 long cal = XT_CAL_F;
-
-  _INFO;
+  
+  #ifdef DEBUG
+    _INFO;
+  #endif //DEBUG
 
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
@@ -756,7 +759,7 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
        n--;
 
        #ifdef WDT       
-       wdt_reset();
+          wdt_reset();
        #endif //WDT       
    }
 }
@@ -786,9 +789,9 @@ ISR (PCINT2_vect) {
   
   for (byte p=INT0;p<=INT2;p++){ 
 
-#ifdef DEBUG
-      _TRACELIST("%s check pin(%d)\n",__func__,p);
-#endif //DEBUG      
+      #ifdef DEBUG
+         _TRACELIST("%s check pin(%d)\n",__func__,p);
+      #endif //DEBUG      
 
       switch (p) {
         case INT0 : {v=UPPUSH;break;}
@@ -800,9 +803,9 @@ ISR (PCINT2_vect) {
 
 //*--- Change detected
 
-#ifdef DEBUG
-         _TRACELIST("%s pin(%d) [%d]->[%d]\n",__func__,p,getWord(button[p],PUSHSTATE),pstate);
-#endif //DEBUG         
+         #ifdef DEBUG
+            _TRACELIST("%s pin(%d) [%d]->[%d]\n",__func__,p,getWord(button[p],PUSHSTATE),pstate);
+         #endif //DEBUG         
          
          setWord(&button[p],PUSHSTATE,pstate);
          if (pstate == LOW) {
@@ -964,14 +967,14 @@ void Calibration(){
      callibrateLED();
      n--;
 
-  #ifdef WDT
-     wdt_reset();
-  #endif //WDT
+     #ifdef WDT
+        wdt_reset();
+     #endif //WDT
   }
 
-  #ifdef EE  
-     EEPROM.get(EEPROM_CAL,cal_factor);
-  #endif //EEPROM
+     #ifdef EE  
+        EEPROM.get(EEPROM_CAL,cal_factor);
+     #endif //EEPROM
   
   while (true) {
 
@@ -1189,8 +1192,7 @@ void Band_Select(){
       Band_assign();
 /*------------------------------------------*
  * Update master frequency                  *
- *------------------------------------------*/
-         
+ *------------------------------------------*/ 
       return; 
    } 
 }
@@ -1329,6 +1331,7 @@ bool downButtonPL = getSwitchPL(DOWN);
 
   if (upButton == LOW && getWord(SSW,CWMODE)==true) {     
      setFrequencyCW(+1);
+     
      #ifdef DEBUG
         _INFOLIST("%s f- f=%ld\n",__func__,freq);     
      #endif //DEBUG   
@@ -1345,6 +1348,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      #endif //DEBUG
         
      ManualTX(); 
+     
      #ifdef DEBUG
         _INFOLIST("%s TX-\n",__func__);
      #endif //DEBUG   
@@ -1375,6 +1379,7 @@ bool downButtonPL = getSwitchPL(DOWN);
   if ((upButton == LOW)&&(downButton == HIGH)&&(getWord(SSW,TXON)==false)) {
 
       mode=(mode-1)%4;
+      
       #ifdef DEBUG
          _TRACELIST("%s m+(%d)\n",__func__,mode);
       #endif //DEBUG
@@ -1391,6 +1396,7 @@ bool downButtonPL = getSwitchPL(DOWN);
   if ((upButton == HIGH) && (downButton == LOW)&&(getWord(SSW,TXON)==false)) {
       
       mode=(mode+1)%4;
+      
       #ifdef DEBUG
          _TRACELIST("%s m-(%d)\n",__func__,mode);
       #endif //DEBUG   
@@ -1445,6 +1451,7 @@ void INIT(){
  if (temp != save){
 
     updateEEPROM();
+    
     #ifdef DEBUG
        _TRACELIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     #endif //DEBUG
@@ -1467,6 +1474,7 @@ void INIT(){
    
   EEPROM.get(EEPROM_MODE,mode);
   EEPROM.get(EEPROM_BAND,Band_slot);
+  
   #ifdef DEBUG
      _TRACELIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
   #endif //DEBUG   
