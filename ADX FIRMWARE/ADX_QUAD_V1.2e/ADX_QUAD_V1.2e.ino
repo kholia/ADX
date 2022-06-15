@@ -84,7 +84,7 @@
  * The following definitions are disabled but can be enabled selectively
  */
  
-//#define CW             1      //Enable CW operation
+//#define CW           1      //Enable CW operation
 //#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 //#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
 //#define ONEBAND      1      //Forces a single band operation in order not to mess up because of a wrong final filter
@@ -110,8 +110,10 @@
 
 #ifdef CAT
    //#define CAT_FULL_PROTOCOL   1
+   
    #define CATCMD_SIZE          18
    #define SERIAL_TOUT          10
+   
    volatile char    CATcmd[CATCMD_SIZE];
    const int        BUFFER_SIZE = CATCMD_SIZE;
    char             buf[BUFFER_SIZE];
@@ -262,7 +264,7 @@ uint16_t cal_factor=0;
 
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
-unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
+unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
 const unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //160m [0]
                                             { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
                                             { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
@@ -411,11 +413,15 @@ void Command_SetMD()      //Set MODE command, only USB (2) and CW (3) are suppor
      mode=0;
      Mode_assign();
      sprintf(hi,"MD2;");    // at this time only USB is allowed, needs to be modified when CW is added
+     
+#ifdef CW     
   } else {
      setWord(&SSW,CWMODE,true);
      mode=4;
      Mode_assign();
-     sprintf(hi,"MD3;");   
+     sprintf(hi,"MD3;");
+#endif //CW
+        
   }
   Serial.print(hi);
 }
@@ -635,6 +641,7 @@ void serialEvent(){
         serialBuffer[k++]=buf[j];
     }    
   }
+  
 #ifdef DEBUG  
    _TRACELIST("%s cleansed buffer=%s len=%d\n",__func__,serialBuffer,rc);
 #endif //DEBUG  
@@ -642,40 +649,40 @@ void serialEvent(){
   if (strcmp((const char*)serialBuffer,strCmd)==0) { //coincidence
 
 #ifdef DEBUG
-   _TRACELIST("%s Hit RX;ID; string\n",__func__);
-#endif //DEBUG     
-
+     _TRACELIST("%s Hit RX;ID; string\n",__func__);
+#endif //DEBUG
+     
      Serial.write(strResp,10);
      setWord(&SSW,CATTX,false);
      switch_RXTX(LOW);
      delay(2);
-   
-  for (int i=0;i<k;i++) {
-    char data=serialBuffer[i];
-    CATcmd[cat_ptr++] = data;
+  } else { 
+    for (int i=0;i<k;i++) {
+       char data=serialBuffer[i];
+       CATcmd[cat_ptr++] = data;
 
 #ifdef DEBUG
-   _TRACELIST("%s data=%c CATcmd[%d]=%c\n",__func__,data,i,CATcmd[i]);
+       _TRACELIST("%s data=%c CATcmd[%d]=%c\n",__func__,data,i,CATcmd[i]);
 #endif //DEBUG
 
-    if(data == ';'){      
-      CATcmd[cat_ptr] = '\0'; // terminate the array
-      cat_ptr = 0;            // reset for next CAT command
+       if(data == ';'){      
+         CATcmd[cat_ptr] = '\0'; // terminate the array
+         cat_ptr = 0;            // reset for next CAT command
 
 #ifdef DEBUG
-   _TRACELIST("%s cmd(%s)\n",__func__,CATcmd);
+        _TRACELIST("%s cmd(%s)\n",__func__,CATcmd);
 #endif //DEBUG
 
-      analyseCATcmd();
-      delay(2);
-    } else {
-      if(cat_ptr > (CATCMD_SIZE - 1)){
-         Serial.print("?;");  //Overrun, send error
-         cat_ptr = 0;         //Overrun, cleanse buffer       
-      }
-    }  
-  }   
-}
+        analyseCATcmd();
+        delay(2);
+      } else {
+        if(cat_ptr > (CATCMD_SIZE - 1)){
+           Serial.print("?;");  //Overrun, send error
+           cat_ptr = 0;         //Overrun, cleanse buffer       
+        }
+      }  
+   }   
+ }
 }
 
 #endif //CAT
@@ -1368,6 +1375,10 @@ bool downButtonPL = getSwitchPL(DOWN);
  *------------------------------------------------------*/
   #ifdef CW
 
+/*--------------------------------*
+ * UP button long press && !CW    *
+ * Start CW mode                  *
+ *--------------------------------*/
   
   if (upButtonPL == LOW && getWord(SSW,CWMODE)==false) {
      mode=4;
@@ -1379,7 +1390,10 @@ bool downButtonPL = getSwitchPL(DOWN);
 
   }
 
-
+/*--------------------------------*
+ * DN button long press && CW     *
+ * Exit CW mode                   *
+ *--------------------------------*/
   if (downButtonPL == LOW && getWord(SSW,CWMODE)== true) {
      mode=0;
      Mode_assign();
@@ -1395,7 +1409,6 @@ bool downButtonPL = getSwitchPL(DOWN);
  * means frequency down by CWSTEP Hz. The tunning range is   *
  * +/- MAXRIT                                                *
  *-----------------------------------------------------------*/
-
   if (downButton == LOW && getWord(SSW,CWMODE)==true) {   
      setFrequencyCW(-1);
      
@@ -1411,11 +1424,14 @@ bool downButtonPL = getSwitchPL(DOWN);
         _INFOLIST("%s f- f=%ld\n",__func__,freq);     
      #endif //DEBUG   
   }
+//*-------------------------[CW Implementation]------------------
 
   #endif //CW  
 
-//*-------------------------[CW Implementation]------------------
-
+/*--------------------------------*
+ * TX button short press          *
+ * Transmit mode                  *
+ *--------------------------------*/
   if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
 
      #ifdef DEBUG
@@ -1556,10 +1572,11 @@ void INIT(){
 }  
 
 #endif // EE
-Band_assign();
-Freq_assign();
-Mode_assign();
-switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
+
+  Band_assign();
+  Freq_assign();
+  Mode_assign();
+  switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
 }
 /*--------------------------------------------------------------------------*
  * definePinOut
@@ -1584,9 +1601,6 @@ void definePinOut() {
    _INFO;
 #endif //DEBUG      
 }
-
-
-
 //*************************************[ SETUP FUNCTION ]************************************** 
 void setup()
 {
@@ -1598,11 +1612,10 @@ void setup()
 
    #ifdef CAT
       Serial.begin(BAUD,SERIAL_8N2);
-      while (!Serial) {
-        
-#ifdef WDT      
+      while (!Serial) {    //Wait till Serial port ready  
+      #ifdef WDT      
          wdt_reset();
-#endif //WDT         
+      #endif //WDT         
       
       }
       Serial.setTimeout(SERIAL_TOUT);
@@ -1674,6 +1687,7 @@ void loop()
 
     #ifdef EE
 //*--- if EEPROM enabled check if timeout to write has been elapsed
+
     if((millis()-tout)>EEPROM_TOUT && getWord(SSW,SAVEEE)==true ) {
        updateEEPROM();
     }
@@ -1785,5 +1799,5 @@ uint16_t n = VOX_MAXTRY;
 
 }
 
-//*********************[ END OF MAIN LOOP FUNCTION ]*************************
+//****************************[ END OF MAIN LOOP FUNCTION ]*******************************
 //********************************[ END OF FIRMWARE ]*************************************
