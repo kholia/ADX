@@ -4,6 +4,9 @@
 // FW VERSION: ADX_QUAD_V1.1 - Version release date: 04/11/2022
 // Barb(Barbaros ASUROGLU) - WB2CBA - 2022
 //*********************************************************************************************************
+// FW VERSION: ADX_QUAD_V1.2e (Experimental) release date 01/jun/2022
+// PEC (Dr. Pedro E. Colla) - LU7DZ - 2022
+//*********************************************************************************************************
 // Required Libraries
 // ----------------------------------------------------------------------------------------------------------------------
 // Etherkit Si5351 (Needs to be installed via Library Manager to arduino ide) - 
@@ -68,36 +71,47 @@
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.2e"
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
+#undef  _NOP
 #define _NOP          (byte)0
 /*****************************************************************
  * CONFIGURATION Properties                                      *
  *****************************************************************/
-#define WDT         1     //Hardware watchdog enabled
-#define EE          1     //User EEPROM for persistence
-#define CW          1
-#define CAT         1     //Emulates a TS-480 transceiver CAT protocol (reduced footprint)
-//#define ECHO        1     //CAT commands has echo (for testing and debug purposes)
-//#define DEBUG       1     //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
-//#define SHIFTLIMIT   1     //Enforces tunning shift range into +/- 15 KHz when in CW mode
-//#define ONEBAND      1     //Forces a single band operation in order not to mess up because of a wrong final filter
+#define WDT            1      //Hardware watchdog enabled
+#define EE             1      //User EEPROM for persistence
+#define CAT            1      //Emulates a TS-480 transceiver CAT protocol (reduced footprint)
 
+/*
+ * The following definitions are disabled but can be enabled selectively
+ */
+ 
+//#define CW             1      //Enable CW operation
+//#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
+//#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
+//#define ONEBAND      1      //Forces a single band operation in order not to mess up because of a wrong final filter
+//#define CAT_FULL_PROTOCOL 1 //Extend CAT support to the entire TS480 CAT commands
 /*****************************************************************
  * Consistency rules                                             *
  *****************************************************************/
 #if (defined(DEBUG) || defined(CAT))
+
+    #define BAUD 115200    
     char hi[120];
-    uint32_t tx=0;
-    #define _SERIAL 1
-    #define BAUD 115200
+    
 #endif //DEBUG or CAT
 
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
    #undef  DEBUG
 #endif // CAT && DEBUG
 
+#if (!defined(CAT))  //Rule for conflicting usage of the CAT Protocol (can't activate extended without basic)
+   #undef  CAT_EXTENDED_PROTOCOL
+#endif // CAT && DEBUG
+
+
 #ifdef CAT
    //#define CAT_FULL_PROTOCOL   1
    #define CATCMD_SIZE          18
+   #define SERIAL_TOUT          10
    volatile char    CATcmd[CATCMD_SIZE];
    const int        BUFFER_SIZE = CATCMD_SIZE;
    char             buf[BUFFER_SIZE];
@@ -108,9 +122,9 @@
  * Trace and debugging macros                                    *
  *****************************************************************/
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-//#define INFO  1   //Enable _INFO and _INFOLIST statements
-//#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
-//#define TRACE 1   //Enable _TRACE and _TRACELIST statements
+   //#define INFO  1   //Enable _INFO and _INFOLIST statements
+   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 
 
@@ -118,35 +132,35 @@
  * Define Info,Exception and Trace macros (replaced by NOP if not enabled) *
  *-------------------------------------------------------------------------*/
 #ifdef DEBUG
-#define _DEBUG           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-#define _DEBUGLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+   #define _DEBUG           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
+   #define _DEBUGLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
 #else
-#define _DEBUG _NOP
-#define _DEBUGLIST(...)  _DEBUG
+   #define _DEBUG _NOP
+   #define _DEBUGLIST(...)  _DEBUG
 #endif
 
 #ifdef TRACE
-#define _TRACE           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-#define _TRACELIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+   #define _TRACE           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
+   #define _TRACELIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
 #else
-#define _TRACE _NOP
-#define _TRACELIST(...)  _TRACE
+   #define _TRACE _NOP
+   #define _TRACELIST(...)  _TRACE
 #endif
 
 #ifdef INFO
-#define _INFO           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-#define _INFOLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+   #define _INFO           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
+   #define _INFOLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
 #else
-#define _INFO _NOP
-#define _INFOLIST(...)  _INFO
+   #define _INFO _NOP
+   #define _INFOLIST(...)  _INFO
 #endif
 
 #ifdef EXCP
-#define _EXCP           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-#define _EXCPLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+   #define _EXCP           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
+   #define _EXCPLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
 #else
-#define _EXCP           _NOP
-#define _EXCPLIST(...)  _EXCP
+   #define _EXCP           _NOP
+   #define _EXCPLIST(...)  _EXCP
 #endif
 
 /*---------------------------------------------------------------*
@@ -204,6 +218,8 @@
 #define MAXMODE     5           //Max number of digital modes
 #define MAXBLINK    4           //Max number of blinks
 #define MAXBAND    10           //Max number of bands defined (actually uses 4 out of MAXBAND)
+#define XT_CAL_F   33000 
+
 
 #define INT0        0
 #define INT1        1
@@ -247,16 +263,16 @@ uint16_t cal_factor=0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
 unsigned long f[MAXMODE]            = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //160m [0]
-                                      { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
-                                      { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
-                                      {10136000,10140000,10130000,10138700,10106000},   //30m [3]
-                                      {14074000,14080000,14078000,14095600,14060000},   //20m [4]
-                                      {18100000,18104000,18104000,18104600,18096000},   //17m [5]
-                                      {21074000,21140000,21078000,21094600,21060000},   //15m [6]                           
-                                      {24915000,24915000,24922000,24924600,24906000},   //12m [7] FT4 equal to FT8                           
-                                      {28074000,28074000,28078000,28124600,28060000},   //10m [8]                           
-                                      {50310000,50310000,50318000,50293000,50060000}};  //6m  [9]          
+const unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //160m [0]
+                                            { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
+                                            { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
+                                            {10136000,10140000,10130000,10138700,10106000},   //30m [3]
+                                            {14074000,14080000,14078000,14095600,14060000},   //20m [4]
+                                            {18100000,18104000,18104000,18104600,18096000},   //17m [5]
+                                            {21074000,21140000,21078000,21094600,21060000},   //15m [6]                           
+                                            {24915000,24915000,24922000,24924600,24906000},   //12m [7] FT4 equal to FT8                           
+                                            {28074000,28074000,28078000,28124600,28060000},   //10m [8]                           
+                                            {50310000,50310000,50318000,50293000,50060000}};  //6m  [9]          
 
                                                       
 unsigned long freq      = f[Band_slot]; 
@@ -283,10 +299,10 @@ unsigned long freqCW      = f[CWSLOT]; //default assignment consistent with digi
  Supported Bands are: 80m, 40m, 30m, 20m,17m, 15m
 */
 
-#ifdef ONEBAND
-   uint16_t Bands[4]={40,40,40,40}; //Band1,Band2,Band3,Band4
+#ifdef ONEBAND                       //If defined selects a single band to avoid mistakes with PA filter 
+   uint16_t Bands[4]={40,40,40,40}; //All bands the same (change to suit needs)
 #else
-   uint16_t Bands[4]={40,30,20,17}; //Band1,Band2,Band3,Band4
+   uint16_t Bands[4]={40,30,20,17}; //Band1,Band2,Band3,Band4 (initial setup)
 #endif //ONEBAND
 /****************************************************************************************************************************************/
 /*                                                     CODE INFRAESTRUCTURE                                                             */
@@ -318,14 +334,16 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
  * adaptations and extensions by P.E.Colla (LU7DZ)                                                     *
  * At this point this code needs to work with FLRig as a HamLib server                                 *
  * ----------------------------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------------------------*
+   CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX, 
+   source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
+   https://www.kenwood.com/i/products/info/amateur/ts_480/pdf/ts_480_pc.pdf
+   Code excerpts from QCX-SSB by Guido (PE1NNZ)
+   Mods by Pedro E. Colla(LU7DZ) 2022
+ *----------------------------------------------------------------------------------------------------*/
 
-// CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX, 
-// source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
-// https://www.kenwood.com/i/products/info/amateur/ts_480/pdf/ts_480_pc.pdf
-// Code excerpts from QCX-SSB by Guido (PE1NNZ)
-// Mods by Pedro E. Colla(LU7DZ) 2022
-
-void switch_RXTX(bool t);     //advance definition for compilation purposes (interface only)
+void switch_RXTX(bool t);     //advanced definition for compilation purposes (interface only)
+void Mode_assign();           //advanced definition for compilation purposes
 
 //*--- Get Freq VFO A
 void Command_GETFreqA()          //Get Frequency VFO (A)
@@ -531,7 +549,8 @@ void analyseCATcmd()
 
 #endif  //CAT_FULL_PROTOCOL
   
-  strncpy(strcmd,CATcmd,2);
+  strcmd[0]=CATcmd[0];
+  strcmd[1]=CATcmd[1];
   strcmd[2]=0x00;
 
   if (strcmp(strcmd,cID)==0)                                                      {sprintf(hi,"%s",cIDr);Serial.print(hi);return;}
@@ -595,13 +614,14 @@ void analyseCATcmd()
  * commands and process responses according with the TS480 cat prot*
  *-----------------------------------------------------------------*/
 volatile uint8_t cat_ptr = 0;
-volatile char    serialBuffer[CATCMD_SIZE];
+volatile char serialBuffer[CATCMD_SIZE];
 
 void serialEvent(){
-  
-  char *strCmd="RX;ID;";
-  char *strResp="RX0;ID020;";
 
+  char strCmd[7];
+  char const *strResp="RX0;ID020;";
+  sprintf(strCmd,"RX;ID;");
+  
   int nread=Serial.available();
   if (nread<=0) return;
 
@@ -611,41 +631,54 @@ void serialEvent(){
 
   int k=0;
   for (int j;j<rc;j++){
-    if (buf[j]!="\n" && buf[j]!="\r" && buf[j]!=0x0a) { 
+    if (buf[j]!=0x0d && buf[j]!=0x0a) { 
         serialBuffer[k++]=buf[j];
     }    
   }
-  //sprintf(hi,"cleansed buffer=%s len=%d\n",serialBuffer,rc);Serial.print(hi);
-  if (strcmp(serialBuffer,strCmd)==0) { //coincidence
-     //sprintf(hi,"Hit RX;ID; string\n"); Serial.println(hi);
+#ifdef DEBUG  
+   _TRACELIST("%s cleansed buffer=%s len=%d\n",__func__,serialBuffer,rc);
+#endif //DEBUG  
+
+  if (strcmp((const char*)serialBuffer,strCmd)==0) { //coincidence
+
+#ifdef DEBUG
+   _TRACELIST("%s Hit RX;ID; string\n",__func__);
+#endif //DEBUG     
+
      Serial.write(strResp,10);
      setWord(&SSW,CATTX,false);
      switch_RXTX(LOW);
      delay(2);
-     return;
-  }
-  
+   
   for (int i=0;i<k;i++) {
     char data=serialBuffer[i];
     CATcmd[cat_ptr++] = data;
-    //sprintf(hi,"data=%c CATcmd[%d]=%c\n",data,i,CATcmd[i]);Serial.print(hi);
+
+#ifdef DEBUG
+   _TRACELIST("%s data=%c CATcmd[%d]=%c\n",__func__,data,i,CATcmd[i]);
+#endif //DEBUG
+
     if(data == ';'){      
       CATcmd[cat_ptr] = '\0'; // terminate the array
       cat_ptr = 0;            // reset for next CAT command
-      //sprintf(hi,"analyzeCATcmd(%s)\n",CATcmd);Serial.print(hi);
+
+#ifdef DEBUG
+   _TRACELIST("%s cmd(%s)\n",__func__,CATcmd);
+#endif //DEBUG
+
       analyseCATcmd();
       delay(2);
     } else {
       if(cat_ptr > (CATCMD_SIZE - 1)){
-         Serial.print("?;"); 
-         cat_ptr = 0;  // overrun       
+         Serial.print("?;");  //Overrun, send error
+         cat_ptr = 0;         //Overrun, cleanse buffer       
       }
     }  
   }   
 }
+}
 
 #endif //CAT
-
 /**********************************************************************************************/
 /*                                   Si5351 Management                                        */
 /**********************************************************************************************/
@@ -660,7 +693,7 @@ void setup_si5351() {
 // The crystal load value needs to match in order to have an accurate calibration
 //---------------------------------------------------------------------------------
  
-#define XT_CAL_F   33000 
+
 long cal = XT_CAL_F;
   
   #ifdef DEBUG
@@ -693,7 +726,12 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
  *-----------------------------------*/
      digitalWrite(RX,LOW);
      si5351.output_enable(SI5351_CLK1, 0);   //RX off
+     
+#ifdef CW
      long int freqtx=(getWord(SSW,CWMODE)==false ? freq : freq+CWSHIFT);
+#else
+     long int freqtx=freq;
+#endif //CW          
      
 #ifdef DEBUG     
      _TRACELIST("%s TX+ f=%ld\n",__func__,freqtx);
@@ -1075,14 +1113,21 @@ uint16_t save=EEPROM_SAVE;
 /*----------------------------------------------------------*
  * Mode assign                                              *
  *----------------------------------------------------------*/
+#ifdef CW
 void displayFrequencyCW();
+#endif //CW
+
 void Mode_assign(){
 
    freq=f[mode];
    if (mode==4) {
       setWord(&SSW,CWMODE,true);
+
+#ifdef CW
       freqCW=freq;    
       displayFrequencyCW();
+#endif //CW
+      
    } else {
       setWord(&SSW,CWMODE,false);
       setLED(LED[mode],true);
@@ -1151,7 +1196,6 @@ void Freq_assign(){
 /*----------------------------------------------------------*
  * Band assignment based on selected slot                   *
  *----------------------------------------------------------*/
-
 void Band_assign(){
 
     resetLED();
@@ -1224,6 +1268,7 @@ void Band_Select(){
    } 
 }
 }
+#ifdef CW
 /*----------------------------------------------------------------*
  * select LED representation according with the frequency shift   *
  * with the center (initial) qrp calling frequency                *
@@ -1256,7 +1301,9 @@ void displayFrequencyCW() {
      if ((df> 10000)) {setLED(WSPR,true);}
   }
 }
+#endif //CW
 
+#ifdef CW
 /*-------------------------------------------------------------*
  * setFrequencyCW tuning function when CW mode is active       *
  *-------------------------------------------------------------*/
@@ -1301,6 +1348,7 @@ void setFrequencyCW(int f) {
   return;
   
 }
+#endif //CW
 /*---------------------------------------------------------------------------*
  *  checkMode
  *  manage change in mode during run-time
@@ -1447,7 +1495,7 @@ void keepAlive() {
 
 #ifdef DEBUG
 
-   /* Code here */
+   /* Code here -- Reserved for future usage -- hook into loop()*/
 
 #endif //DEBUG
    
@@ -1549,7 +1597,16 @@ void setup()
    #endif //DEBUG
 
    #ifdef CAT
-      Serial.begin(BAUD);
+      Serial.begin(BAUD,SERIAL_8N2);
+      while (!Serial) {
+        
+#ifdef WDT      
+         wdt_reset();
+#endif //WDT         
+      
+      }
+      Serial.setTimeout(SERIAL_TOUT);
+      
    #endif //CAT   
 
    definePinOut();

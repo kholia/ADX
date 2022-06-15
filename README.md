@@ -48,7 +48,7 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 	- Configure ADX CAT suppport at *config/setup/transceiver*.
 		- *Rig*: TS-480HX.
 		- *Update*: (whatever the USB serial port of the Arduino Nano is recognized as).
-		- *Baud*: 9600.
+		- *Baud*: 115200
 		- (check) *2-Stop bit*.
 		- *Retries*: 2.
 		- *Poll intvl*: 465.
