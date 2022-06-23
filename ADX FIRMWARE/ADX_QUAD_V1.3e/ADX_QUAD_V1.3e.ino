@@ -18,8 +18,8 @@
 // PEC (Dr. Pedro E. Colla) - LU7DZ - 2022
 // This is an experimental version implementing the following features over the 1.2e experimental version
 //     - Support for the QUAD (4 bands) PA & LPF daughter board
-//     - Support for an external ATU (control signal to reset on band changes)
-//     - Other minor code optimizations
+//     - Support for an external ATU (control signal to reset on band changes), D5 line used for this control
+//     - Other minor code optimizations & bug fixing
 //*********************************************************************************************************
 // Required Libraries
 // ----------------------------------------------------------------------------------------------------------------------
@@ -40,7 +40,7 @@
 //*     X add CAT support (TS-440), thru FLRig (see README.md)
 //*     X add timeout & watchdog support
 //*     X support for the QUAD/OCTO band filter boards
-//*     X support for an external ATU
+//*     X support for an external ATU (D5 line)
 //* Forked version of the original ADX firmware located at http://www.github.com/lu7did/ADX
 //*-----------------------------------------------------------------------------------------------------------------*
 // License  
@@ -102,7 +102,7 @@
  */
 //#define ONEBAND      1      //Forces a single band operation in order not to mess up because of a wrong final filter
 //#define CW           1      //Enable CW operation
-#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
+//#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 //#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
 //#define CAT_FULL     1 //Extend CAT support to the entire TS480 CAT commands
 /*****************************************************************
@@ -118,7 +118,7 @@
 #endif //QUAD, no ONEBAND    
 
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
-   //#undef  DEBUG
+   #undef  DEBUG
 #endif // CAT && DEBUG
 
 #if (!defined(CAT))  //Rule for conflicting usage of the CAT Protocol (can't activate extended without basic)
@@ -141,7 +141,7 @@
  *****************************************************************/
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
-   #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 
@@ -189,7 +189,8 @@
 #define TXSW           4           //TX Switch
 
 #ifdef ATUCTL
-   #define ATU            5           //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+   #define ATU            5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+   #define ATU_DELAY    200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
 #endif //ATUCTL
 
 #define AIN0           6           //(PD6)
@@ -356,7 +357,7 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 void flipATU() {
   
    digitalWrite(ATU,HIGH);
-   delay(200);
+   delay(ATU_DELAY);
    digitalWrite(ATU,LOW);
    
    #ifdef DEBUG
@@ -376,10 +377,6 @@ void flipATU() {
 void setQUAD(uint16_t LPFslot) {
 
    if (LPFslot<0  || LPFslot >BANDS) {
-   #ifdef DEBUG
-      _EXCPLIST("%s() invalid slot LPFslot=%d\n",__func__,LPFslot);
-   #endif //DEBUG 
-
       return;
    }
    
@@ -394,8 +391,6 @@ void setQUAD(uint16_t LPFslot) {
   
    #ifdef DEBUG
       _EXCPLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
-      resetLED();
-      bandLED(LPFslot);
    #endif //DEBUG 
   
 }
@@ -444,7 +439,7 @@ void Mode_assign();           //advanced definition for compilation purposes
  *---------------------------------------*/
 int getBand(uint32_t f) {
 
-   uint16_t b=-1;
+   int b=-1;
    if (f>= 1800000 && f< 1900000) {b=160;}
    if (f>= 3500000 && f< 4000000) {b=80;}
    if (f>= 5350000 && f< 5367000) {b=60;}
@@ -454,7 +449,6 @@ int getBand(uint32_t f) {
    if (f>=18068000 && f<18168000) {b=17;}
    if (f>=21000000 && f<21450000) {b=15;}
    if (f>=28000000 && f<29700000) {b=10;}
-   if (f>=50000000 && f<54000000) {b=6;}
 
 #ifdef DEBUG
    _EXCPLIST("%s() f=%ld band=%d\n",__func__,f,b);
@@ -466,9 +460,9 @@ int getBand(uint32_t f) {
  * findSlot                                                   *
  * find the slot [0..3] on the Bands array (band slot)        *
  *------------------------------------------------------------*/
-uint16_t findSlot(uint16_t band) {
+int findSlot(uint16_t band) {
 
-  uint16_t s=-1;
+  int s=-1;
   for (int i=0;i<BANDS;i++) {
     if (Bands[i]==band) {
        s=i;
@@ -491,15 +485,9 @@ int setSlot(uint32_t f) {
 
    int band=getBand(f);
    if (band == -1) {
-
-#ifdef DEBUG
-       sprintf(hi,"(%s) f=%ld invalid band\n",__func__,f);
-       Serial.print(hi);
-#endif //DEBUG           
-
        return Band_slot;
    }
-   uint16_t s=findSlot(band);
+   int s=findSlot(band);
 
 #ifdef DEBUG
    _EXCPLIST("%s() f=%ld band=%d slot=%d\n",__func__,f,band,s);
@@ -528,9 +516,6 @@ void setFreqCAT() {
   Catbuffer[11]='\0';
   uint32_t fx=(uint32_t)(atol(Catbuffer)*1000/1000);
   int      b=setSlot(fx);
-  #ifdef DEBUG
-    _EXCPLIST("%s() fx=%ld b=%d band_slot=%d\n",__func__,fx,b,Band_slot);
-  #endif //DEBUG 
 
   if (b<0) {return; }
   
@@ -1863,7 +1848,7 @@ void setup()
 
    #ifdef DEBUG
       Serial.begin(BAUD);
-      _DEBUGLIST("%s ADX Firmware V(%s)\n",__func__,VERSION);
+      _INFOLIST("%s ADX Firmware V(%s)\n",__func__,VERSION);
    #endif //DEBUG
 
    #ifdef CAT
