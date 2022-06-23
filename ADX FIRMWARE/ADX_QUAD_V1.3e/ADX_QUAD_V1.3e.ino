@@ -129,6 +129,7 @@
 #ifdef CAT
    #define CATCMD_SIZE          18
    #define SERIAL_TOUT          10
+   #define SERIAL_WAIT           2
    
    volatile char    CATcmd[CATCMD_SIZE];
    const int        BUFFER_SIZE = CATCMD_SIZE;
@@ -191,6 +192,7 @@
 #ifdef ATUCTL
    #define ATU            5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
    #define ATU_DELAY    200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
+uint32_t   tATU=0;
 #endif //ATUCTL
 
 #define AIN0           6           //(PD6)
@@ -223,6 +225,7 @@
 #define SHORTPUSH   0B00000010    //simple push flag
 #define LONGPUSH    0B00000100    //long push flag
 #define INPROGRESS  0B00001000    //in progress mark
+#define ATUCLK      0B00010000    //control the width of the ATU pulse
 
 
 /*----------------------------------------------------------------*
@@ -280,6 +283,7 @@
 
 
 uint8_t  SSW=0;               //System SSW variable (to be used with getWord/setWord)
+uint8_t  TSW=0;               //System timer variable (to be used with getWord/setWord);
 uint16_t mode=0;              //Default to mode=0 (FT8)
 uint16_t Band_slot=0;         //Default to Bands[0]=40
 uint16_t cal_factor=0;
@@ -310,6 +314,7 @@ unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
 #ifdef CW
 unsigned long freqCW      = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
 #endif //CW
+
 
 //**********************************[ BAND SELECT ]************************************************
 
@@ -357,8 +362,8 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 void flipATU() {
   
    digitalWrite(ATU,HIGH);
-   delay(ATU_DELAY);
-   digitalWrite(ATU,LOW);
+   setWord(&TSW,ATUCLK,true);
+   tATU=millis();
    
    #ifdef DEBUG
       _EXCPLIST("%s()\n",__func__);
@@ -431,6 +436,52 @@ void setupQUAD() {
 
 void switch_RXTX(bool t);     //advanced definition for compilation purposes (interface only)
 void Mode_assign();           //advanced definition for compilation purposes
+
+  const char *cID="ID";    
+  const char *cIDr="ID020;";
+  const char *cRX0="RX0;";
+  const char *cTX0="TX0;";
+  const char *cMD2="MD2;";
+  const char *cMD3="MD3;";
+  const char *cFR="FR"; const char *cFT="FT"; const char *cEX="EX";
+  const char *cKY="KY"; const char *cXT="XT"; const char *cVX="VX";
+  const char *cRU="RU"; const char *cPS="PS"; const char *cRD="RD";
+  
+#ifdef CAT_FULL
+
+  const char *cISr="IS+0000;";
+  const char *cPCr="PC005;";
+  const char *cXOr="XO00000000000;";
+  const char *cSUr="SU00000000000;";
+  const char *cMRr="MR00000000000000000000000000000000000000000000000;";
+  const char *cVDr="VD0100;";
+  const char *cVGr="VG005;";
+  const char *cSMr="SM00000;";
+  const char *cPLr="PL000000;";
+  const char *cRMr="RM00000;";
+  const char *cLMr="LM00000;";
+  const char *cSSr="SS0000000000000;";
+  const char *cSM="SM"; const char *cRA="RA"; const char *cIS="IS";  const char *cAC="AC";  const char *cAG="AG";  const char *cSQ="SQ";
+  const char *cMG="MG"; const char *cGT="GT"; const char *cNL="NL";  const char *cRT="RT";
+  const char *cSH="SH"; const char *cCN="CN"; const char *cRL="RL";  const char *cPA="PA";  const char *cTN="TN";
+  const char *cQR="QR"; const char *cLK="LK"; const char *cSC="SC"; 
+  const char *cNB="NB"; const char *cBC="BC"; const char *cNR="NR";  const char *cBY="BY";
+  const char *cFS="FS"; const char *cPR="PR"; const char *cRS="RS";  const char *cAN="AN";  const char *cMF="MF";  const char *cTO="TO";
+  const char *cTS="TS"; const char *cBS="BS"; const char *cCA="CA";  const char *cCT="CT";
+  const char *cUL="UL"; const char *cAI="AI"; const char *cFL="FL";
+  
+  
+  const char *cML="ML"; const char *cOP="OP"; const char *cPB="PB"; const char *cDL="DL";
+  const char *cRG="RG"; const char *cKS="KS"; const char *cTY="TY"; const char *cMC="MC";
+  const char *cSD="SD"; const char *cFW="FW";
+  const char *cDN="DN"; const char *cRC="RC"; const char *cCH="CH"; const char *cSV="SV"; const char *cMW="MW";  const char *cQT="QT";
+  const char *cSR="SR"; const char *cUP="UP"; const char *cVR="VR"; const char *cVV="VV";
+  const char *cPC="PC"; const char *cPL="PL"; const char *cSU="SU"; const char *cMR="MR"; const char *cXO="XO"; const char *cVG="VG";
+  const char *cSS="SS"; const char *cRM="RM"; const char *cLM="LM"; const char *cVD="VD"; const char *cSL="SL"; const char *cQI="QI";
+
+#endif //CAT_FULL
+
+
 
 /*---------------------------------------*
  * getBand                               *
@@ -517,7 +568,9 @@ void setFreqCAT() {
   uint32_t fx=(uint32_t)(atol(Catbuffer)*1000/1000);
   int      b=setSlot(fx);
 
-  if (b<0) {return; }
+  if (b<0) {
+    return;
+  }
   
   freq=fx;
   
@@ -563,11 +616,6 @@ void Command_IF()               //General purpose status information command (IF
   Serial.print(hi);
 
 }
-//*--- Response to STEP command
-void Command_ST() {       //STEP command Modify when STEP is implemented
-   sprintf(hi,"ST01;");
-   Serial.print(hi);
-}
 
 //*--- Get current Mode (only 2=USB and 3=CW are supported)
 
@@ -583,14 +631,14 @@ void Command_SetMD()      //Set MODE command, only USB (2) and CW (3) are suppor
      setWord(&SSW,CWMODE,false);
      mode=0;
      Mode_assign();
-     sprintf(hi,"MD2;");    // at this time only USB is allowed, needs to be modified when CW is added
+     sprintf(hi,"%s",cMD2);    // at this time only USB is allowed, needs to be modified when CW is added
      
 #ifdef CW     
   } else {
      setWord(&SSW,CWMODE,true);
      mode=4;
      Mode_assign();
-     sprintf(hi,"MD3;");
+     sprintf(hi,"%s",cMD3);
 #endif //CW
         
   }
@@ -602,7 +650,8 @@ void Command_RX()
 {
   setWord(&SSW,CATTX,false);
   switch_RXTX(LOW);
-  Serial.print("RX0;");
+  sprintf(hi,"%s",cRX0);
+  Serial.print(hi);
 }
 
 //*--- Place transceiver in TX mode
@@ -610,7 +659,8 @@ void Command_TX()
 {
   setWord(&SSW,CATTX,true);
   switch_RXTX(HIGH);
-  Serial.print("TX0;");
+  sprintf(hi,"%s",cTX0);
+  Serial.print(hi);
 }
 
 //*--- Response for VOX command
@@ -670,45 +720,6 @@ void analyseCATcmd()
 {
   char strcmd[4];
 
-  const char *cID="ID";    
-  const char *cIDr="ID020;";
-  const char *cFR="FR"; const char *cFT="FT"; const char *cEX="EX";
-  const char *cKY="KY"; const char *cXT="XT"; const char *cVX="VX";
-  const char *cRU="RU"; const char *cPS="PS"; const char *cRD="RD";
-  
-#ifdef CAT_FULL
-
-  const char *cISr="IS+0000;";
-  const char *cPCr="PC005;";
-  const char *cXOr="XO00000000000;";
-  const char *cSUr="SU00000000000;";
-  const char *cMRr="MR00000000000000000000000000000000000000000000000;";
-  const char *cVDr="VD0100;";
-  const char *cVGr="VG005;";
-  const char *cSMr="SM00000;";
-  const char *cPLr="PL000000;";
-  const char *cRMr="RM00000;";
-  const char *cLMr="LM00000;";
-  const char *cSSr="SS0000000000000;";
-  const char *cSM="SM"; const char *cRA="RA"; const char *cIS="IS";  const char *cAC="AC";  const char *cAG="AG";  const char *cSQ="SQ";
-  const char *cMG="MG"; const char *cGT="GT"; const char *cNL="NL";  const char *cRT="RT";
-  const char *cSH="SH"; const char *cCN="CN"; const char *cRL="RL";  const char *cPA="PA";  const char *cTN="TN";
-  const char *cQR="QR"; const char *cLK="LK"; const char *cSC="SC"; 
-  const char *cNB="NB"; const char *cBC="BC"; const char *cNR="NR";  const char *cBY="BY";
-  const char *cFS="FS"; const char *cPR="PR"; const char *cRS="RS";  const char *cAN="AN";  const char *cMF="MF";  const char *cTO="TO";
-  const char *cTS="TS"; const char *cBS="BS"; const char *cCA="CA";  const char *cCT="CT";
-  const char *cUL="UL"; const char *cAI="AI"; const char *cFL="FL";
-  
-  
-  const char *cML="ML"; const char *cOP="OP"; const char *cPB="PB"; const char *cDL="DL";
-  const char *cRG="RG"; const char *cKS="KS"; const char *cTY="TY"; const char *cMC="MC";
-  const char *cSD="SD"; const char *cFW="FW";
-  const char *cDN="DN"; const char *cRC="RC"; const char *cCH="CH"; const char *cSV="SV"; const char *cMW="MW";  const char *cQT="QT";
-  const char *cSR="SR"; const char *cUP="UP"; const char *cVR="VR"; const char *cVV="VV";
-  const char *cPC="PC"; const char *cPL="PL"; const char *cSU="SU"; const char *cMR="MR"; const char *cXO="XO"; const char *cVG="VG";
-  const char *cSS="SS"; const char *cRM="RM"; const char *cLM="LM"; const char *cVD="VD"; const char *cSL="SL"; const char *cQI="QI";
-
-#endif //CAT_FULL
   
   if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';'))  {Command_GETFreqA(); return;}
   if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[13] == ';')) {Command_SETFreqA(); return;}
@@ -831,7 +842,7 @@ void serialEvent(){
      Serial.write(strResp,10);
      setWord(&SSW,CATTX,false);
      switch_RXTX(LOW);
-     delay(2);
+     delay(SERIAL_WAIT);
   } else { 
     for (int i=0;i<k;i++) {
        char data=serialBuffer[i];
@@ -850,11 +861,16 @@ void serialEvent(){
 #endif //DEBUG
 
         analyseCATcmd();
-        delay(2);
+        delay(SERIAL_WAIT);
+        Serial.flush();
+        delay(50);
+        
       } else {
         if(cat_ptr > (CATCMD_SIZE - 1)){
            Serial.print("?;");  //Overrun, send error
            cat_ptr = 0;         //Overrun, cleanse buffer       
+           Serial.flush();
+           delay(50);
         }
       }  
    }   
@@ -1947,6 +1963,14 @@ void loop()
        updateEEPROM();
     }
     #endif //EEPROM
+
+    #ifdef ATUCTL
+//*--- ATU pulse width control
+    if ((millis()-tATU)>ATU_DELAY && getWord(TSW,ATUCLK)==true) {
+       setWord(&TSW,ATUCLK,false);
+       digitalWrite(ATU,LOW);
+    }
+    #endif //ATUCTL       
 
     #ifdef CAT 
 //*--- if CAT enabled check for serial events

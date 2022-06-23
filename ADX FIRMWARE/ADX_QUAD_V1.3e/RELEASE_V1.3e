@@ -23,6 +23,7 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 
 -	Support for QUAD (4 bands) switching scheme (activaded with #define QUAD 1 sentence).
 -	Support for external ATU initialization/reset, line D5 would briefly (200 mSecs) flash a high on band changes.
+-       Improved CAT support for WSJT-X (TS-480 emulation).
 -	Minor memory & code optimizations, bug removal.
 -	6 meters band removed from slot[][] options as it's unlikely the receiver can be moved that high, 10m works fine though
 
@@ -35,7 +36,18 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 ### Software mods for CAT support
 
 -	CAT support works Ok with almost any program based on HamLib, in particular with FLRig.
--	WSJT-X(Z) direct CAT command is still on the works, as a workaround it works Ok thru FLRig.
+-	WSJT-X(Z) direct CAT command are mostly working but still in test, if it experiences problems as a workaround that works Ok is to use FLRig (see below).
+
+#### CAT TS-480 emulation configuration
+        - Access WSJT-X Settings (File/Settings/Radio).
+	- Select "Rig" as "Kenwood TS-480".
+	- Select Serial port the one that your computer assigned to the Arduino Nano (typically COMx on Windows and /dev/tty* on Linux)
+	- Select 115200 as the speed.
+	- Select 8 bits, 2 stop bits, handshake none.
+ 	- Select PTT method either VOX or CAT.
+	- Select Polling time as 6 secs.
+	- Press CAT Test, it should go green after a while.
+#### CAT FlRig configuration
 	- Download and install FLRig from the [W1HKJ site] (http://www.w1hkj.com/files/flrig/) according with your Operating System
 		- Configuration tested with Win10, Raspbian Debian and MacOs.
 	- Configure ADX CAT suppport at *config/setup/transceiver*.
