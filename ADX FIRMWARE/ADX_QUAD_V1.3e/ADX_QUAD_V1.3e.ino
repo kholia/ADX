@@ -6,6 +6,20 @@
 //*********************************************************************************************************
 // FW VERSION: ADX_QUAD_V1.2e (Experimental) release date 01/jun/2022
 // PEC (Dr. Pedro E. Colla) - LU7DZ - 2022
+// This is an experimental version implementing the following features over the standard ADX firmware
+//     - CAT support (TS480 protocol, limited implementation)
+//     - CW support (no envelop shape control, see release notes)
+//     - EEPROM optimized read/write
+//     - Hardware watchdog
+//     - Few minor code optimizations
+//     - Frequency definitions for all HF bands
+//*********************************************************************************************************
+// FW VERSION: ADX_QUAD_V1.3e (Experimental) release data 22/jun/2022
+// PEC (Dr. Pedro E. Colla) - LU7DZ - 2022
+// This is an experimental version implementing the following features over the 1.2e experimental version
+//     - Support for the QUAD (4 bands) PA & LPF daughter board
+//     - Support for an external ATU (control signal to reset on band changes)
+//     - Other minor code optimizations
 //*********************************************************************************************************
 // Required Libraries
 // ----------------------------------------------------------------------------------------------------------------------
@@ -25,6 +39,8 @@
 //*     X add CW support (includes keyer support)
 //*     X add CAT support (TS-440), thru FLRig (see README.md)
 //*     X add timeout & watchdog support
+//*     X support for the QUAD/OCTO band filter boards
+//*     X support for an external ATU
 //* Forked version of the original ADX firmware located at http://www.github.com/lu7did/ADX
 //*-----------------------------------------------------------------------------------------------------------------*
 // License  
@@ -69,7 +85,7 @@
 #include "Wire.h"
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
-#define VERSION        "1.2e"
+#define VERSION        "1.3e"
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -78,39 +94,39 @@
  *****************************************************************/
 #define WDT            1      //Hardware watchdog enabled
 #define EE             1      //User EEPROM for persistence
-//#define CAT            1      //Emulates a TS-480 transceiver CAT protocol (reduced footprint)
-//#define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
-
+#define CAT            1      //Emulates a TS-480 transceiver CAT protocol (reduced footprint)
+#define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
+#define ATUCTL         1      //Control external ATU device
 /*
  * The following definitions are disabled but can be enabled selectively
  */
- 
+//#define ONEBAND      1      //Forces a single band operation in order not to mess up because of a wrong final filter
 //#define CW           1      //Enable CW operation
-//#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
+#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 //#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
-//#define CAT_FULL_PROTOCOL 1 //Extend CAT support to the entire TS480 CAT commands
+//#define CAT_FULL     1 //Extend CAT support to the entire TS480 CAT commands
 /*****************************************************************
  * Consistency rules                                             *
  *****************************************************************/
 #if (defined(DEBUG) || defined(CAT))
-
     #define BAUD 115200    
-    char hi[120];
-    
+    char hi[120];    
 #endif //DEBUG or CAT
 
+#if (defined(QUAD))
+    #undef   ONEBAND
+#endif //QUAD, no ONEBAND    
+
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
-   #undef  DEBUG
+   //#undef  DEBUG
 #endif // CAT && DEBUG
 
 #if (!defined(CAT))  //Rule for conflicting usage of the CAT Protocol (can't activate extended without basic)
-   #undef  CAT_EXTENDED_PROTOCOL
+   #undef  CAT_FULL
 #endif // CAT && DEBUG
 
 
 #ifdef CAT
-   //#define CAT_FULL_PROTOCOL   1
-   
    #define CATCMD_SIZE          18
    #define SERIAL_TOUT          10
    
@@ -125,7 +141,7 @@
  *****************************************************************/
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
-   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 
@@ -171,6 +187,10 @@
 #define UP             2           //UP Switch
 #define DOWN           3           //DOWN Switch
 #define TXSW           4           //TX Switch
+
+#ifdef ATUCTL
+   #define ATU            5           //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+#endif //ATUCTL
 
 #define AIN0           6           //(PD6)
 #define AIN1           7           //(PD7)
@@ -219,7 +239,8 @@
 #define DELAY_CAL   DELAY_WAIT/10
 #define MAXMODE     5           //Max number of digital modes
 #define MAXBLINK    4           //Max number of blinks
-#define MAXBAND    10           //Max number of bands defined (actually uses 4 out of MAXBAND)
+#define BANDS       4           //Max number of bands allowed
+#define MAXBAND    10           //Max number of bands defined (actually uses BANDS out of MAXBAND)
 #define XT_CAL_F   33000 
 
 
@@ -265,20 +286,20 @@ uint16_t cal_factor=0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
 unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-const unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //160m [0]
+const unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //160m[0]
                                             { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
-                                            { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
-                                            {10136000,10140000,10130000,10138700,10106000},   //30m [3]
-                                            {14074000,14080000,14078000,14095600,14060000},   //20m [4]
-                                            {18100000,18104000,18104000,18104600,18096000},   //17m [5]
-                                            {21074000,21140000,21078000,21094600,21060000},   //15m [6]                           
-                                            {24915000,24915000,24922000,24924600,24906000},   //12m [7] FT4 equal to FT8                           
-                                            {28074000,28074000,28078000,28124600,28060000},   //10m [8]                           
-                                            {50310000,50310000,50318000,50293000,50060000}};  //6m  [9]          
+                                            { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [2] 
+                                            { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [3]
+                                            {10136000,10140000,10130000,10138700,10106000},   //30m [4]
+                                            {14074000,14080000,14078000,14095600,14060000},   //20m [5]
+                                            {18100000,18104000,18104000,18104600,18096000},   //17m [6]
+                                            {21074000,21140000,21078000,21094600,21060000},   //15m [7]  
+                                            {24915000,24915000,24922000,24924600,24906000},   //12m [8]                                                                     
+                                            {28074000,28074000,28078000,28124600,28060000}};  //10m [9]                           
 
                                                       
-unsigned long freq      = f[Band_slot]; 
-uint8_t       LED[4]    = {FT8,FT4,JS8,WSPR};
+unsigned long freq      = f[mode]; 
+const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};
 /*-------------------------------------*
  * Manage button state                 *
  *-------------------------------------*/
@@ -301,10 +322,11 @@ unsigned long freqCW      = f[CWSLOT]; //default assignment consistent with digi
  Supported Bands are: 80m, 40m, 30m, 20m,17m, 15m
 */
 
-#ifdef ONEBAND                       //If defined selects a single band to avoid mistakes with PA filter 
-   uint16_t Bands[4]={10,10,10,10}; //All bands the same (change to suit needs)
+                                                    
+#ifdef ONEBAND                                      //If defined selects a single band to avoid mistakes with PA filter 
+   const uint16_t Bands[BANDS]={40,40,40,40};             //All bands the same (change to suit needs)
 #else
-   uint16_t Bands[4]={10,30,20,17}; //Band1,Band2,Band3,Band4 (initial setup)
+   const uint16_t Bands[BANDS]={40,30,20,17};             //Band1,Band2,Band3,Band4 (initial setup)
 #endif //ONEBAND
 /****************************************************************************************************************************************/
 /*                                                     CODE INFRAESTRUCTURE                                                             */
@@ -327,6 +349,74 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
     *SysWord = *SysWord | v;
   }
 }
+#ifdef ATUCTL
+/*====================================================================================================*/
+/*                                     ATU Device management                                          */
+/*====================================================================================================*/
+void flipATU() {
+  
+   digitalWrite(ATU,HIGH);
+   delay(200);
+   digitalWrite(ATU,LOW);
+   
+   #ifdef DEBUG
+      _EXCPLIST("%s()\n",__func__);
+   #endif //DEBUG    
+}
+#endif //ATUCTL
+
+#ifdef QUAD
+/*====================================================================================================*/
+/*                                     QUAD Board management                                          */
+/*====================================================================================================*/
+/*-------------------------------------------------------------------*
+ * setQUAD                                                           *
+ * Set the QUAD filter with the proper slot [0..3]                   *
+ *-------------------------------------------------------------------*/
+void setQUAD(uint16_t LPFslot) {
+
+   if (LPFslot<0  || LPFslot >BANDS) {
+   #ifdef DEBUG
+      _EXCPLIST("%s() invalid slot LPFslot=%d\n",__func__,LPFslot);
+   #endif //DEBUG 
+
+      return;
+   }
+   
+   uint8_t s =0;
+   s |= (1<<((LPFslot) & 0x03));
+   
+   Wire.beginTransmission(0x20);   //I2C device address
+   Wire.write(0x09);               // address port A
+   Wire.write(s);                  // Band Relay value to write 
+   Wire.endTransmission();
+   delay(100);
+  
+   #ifdef DEBUG
+      _EXCPLIST("%s() LPFslot=%d\n",__func__,LPFslot);
+      resetLED();
+      bandLED(LPFslot);
+   #endif //DEBUG 
+  
+}
+/*-------------------------------------------------------------------*
+ * setupQUAD                                                          *
+ * init the QUAD Board [0..3]                                        *
+ *-------------------------------------------------------------------*/
+void setupQUAD() {
+
+   Wire.begin();                   // wake up I2C bus
+   Wire.beginTransmission(0x20);   //I2C device address
+   Wire.write(0x00);               // IODIRA register
+   Wire.write(0x00);               // set entire PORT A as output
+   Wire.endTransmission();
+
+   #ifdef DEBUG
+      _EXCPLIST("%s()\n",__func__);
+   #endif //DEBUG
+  
+}
+#endif //QUAD
 
 #ifdef CAT
 
@@ -347,12 +437,88 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 void switch_RXTX(bool t);     //advanced definition for compilation purposes (interface only)
 void Mode_assign();           //advanced definition for compilation purposes
 
+/*---------------------------------------*
+ * getBand                               *
+ * get a band number from frequency      *
+ * (-1) is unsupported band              *
+ *---------------------------------------*/
+int getBand(uint32_t f) {
+
+   uint16_t b=-1;
+   if (f>= 1800000 && f< 1900000) {b=160;}
+   if (f>= 3500000 && f< 4000000) {b=80;}
+   if (f>= 5350000 && f< 5367000) {b=60;}
+   if (f>= 7000000 && f< 7300000) {b=40;}
+   if (f>=10100000 && f<10150000) {b=30;}
+   if (f>=14000000 && f<14350000) {b=20;}
+   if (f>=18068000 && f<18168000) {b=17;}
+   if (f>=21000000 && f<21450000) {b=15;}
+   if (f>=28000000 && f<29700000) {b=10;}
+   if (f>=50000000 && f<54000000) {b=6;}
+
+#ifdef DEBUG
+   _EXCPLIST("%s() f=%ld band=%d\n",__func__,f,b);
+#endif //DEBUG
+
+   return b;  
+}
+/*------------------------------------------------------------*
+ * findSlot                                                   *
+ * find the slot [0..3] on the Bands array (band slot)        *
+ *------------------------------------------------------------*/
+uint16_t findSlot(uint16_t band) {
+
+  uint16_t s=-1;
+  for (int i=0;i<BANDS;i++) {
+    if (Bands[i]==band) {
+       s=i;
+       break;
+    }
+  }
+#ifdef DEBUG
+   _EXCPLIST("%s() band=%d slot=%d\n",__func__,band,s);
+#endif //DEBUG
+
+  return s;
+
+}
+/*-------------------------------------------------------------*
+ * setSlot                                                     *
+ * set a slot consistent with the frequency, do not if not     * 
+ * supported                                                   *
+ *-------------------------------------------------------------*/
+int setSlot(uint32_t f) {
+
+   int band=getBand(f);
+   if (band == -1) {
+
+#ifdef DEBUG
+       sprintf(hi,"(%s) f=%ld invalid band\n",__func__,f);
+       Serial.print(hi);
+#endif //DEBUG           
+
+       return Band_slot;
+   }
+   uint16_t s=findSlot(band);
+
+#ifdef DEBUG
+   _EXCPLIST("%s() f=%ld band=%d slot=%d\n",__func__,f,band,s);
+#endif //DEBUG
+
+   return s;
+ 
+}
+/*-------------------------------------------------------------*
+ * Specific CAT commands implementation                        *
+ *-------------------------------------------------------------*/
+ 
 //*--- Get Freq VFO A
 void Command_GETFreqA()          //Get Frequency VFO (A)
 {
   sprintf(hi,"FA%011ld;",freq);
   Serial.print(hi);
 }
+
 //*--- Set Freq VFO A
 void setFreqCAT() {
   char Catbuffer[16];
@@ -360,8 +526,28 @@ void setFreqCAT() {
     Catbuffer[i-2]=CATcmd[i];
   }
   Catbuffer[11]='\0';
-  freq=(uint32_t)(atol(Catbuffer)*1000/1000);
+  uint32_t fx=(uint32_t)(atol(Catbuffer)*1000/1000);
+  int      b=setSlot(fx);
+  #ifdef DEBUG
+    _EXCPLIST("%s() fx=%ld b=%d band_slot=%d\n",__func__,fx,b,Band_slot);
+  #endif //DEBUG 
+
+  if (b<0) {return; }
   
+  freq=fx;
+  
+  if (b!=Band_slot) { //band change
+     Band_slot=b;
+     Freq_assign();
+     freq=fx;
+  }
+  #ifdef QUAD  //Set the PA & LPF filter board settings if defined
+     setQUAD(b);
+  #endif //PALPF    
+
+   #ifdef DEBUG
+      _EXCPLIST("%s() CAT=%s f=%ld slot=%d\n",__func__,Catbuffer,freq,b);
+   #endif //DEBUG 
 }
 
 void Command_SETFreqA()          //Set Frequency VFO (A)
@@ -485,7 +671,12 @@ void Command_XI() {
 //*--- Band change command (not implemented)
 void Command_BChange(int c) { //Change band up or down
 
-  //Do not return anything
+  Band_slot=changeBand(c);
+  Band_assign();
+  #ifdef DEBUG
+      _EXCPLIST("%s() change=%d Band_slot=%d\n",__func__,c,Band_slot);
+  #endif //DEBUG 
+  
 }
 /*---------------------------------------------------------------------------------------------
  *  CAT Main command parser and dispatcher
@@ -500,7 +691,7 @@ void analyseCATcmd()
   const char *cKY="KY"; const char *cXT="XT"; const char *cVX="VX";
   const char *cRU="RU"; const char *cPS="PS"; const char *cRD="RD";
   
-#ifdef CAT_FULL_PROTOCOL
+#ifdef CAT_FULL
 
   const char *cISr="IS+0000;";
   const char *cPCr="PC005;";
@@ -532,7 +723,7 @@ void analyseCATcmd()
   const char *cPC="PC"; const char *cPL="PL"; const char *cSU="SU"; const char *cMR="MR"; const char *cXO="XO"; const char *cVG="VG";
   const char *cSS="SS"; const char *cRM="RM"; const char *cLM="LM"; const char *cVD="VD"; const char *cSL="SL"; const char *cQI="QI";
 
-#endif //CAT_FULL_PROTOCOL
+#endif //CAT_FULL
   
   if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';'))  {Command_GETFreqA(); return;}
   if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[13] == ';')) {Command_SETFreqA(); return;}
@@ -543,17 +734,17 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[3] == ';'))  {Command_SetMD(); return;}
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'X'))                        {Command_RX(); return;}
   if ((CATcmd[0] == 'T') && (CATcmd[1] == 'X'))                        {Command_TX(); return;}
+  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        {Command_BChange(-1); return;}
+  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        {Command_BChange(+1); return;}
 
-#ifdef CAT_FULL_PROTOCOL  
+#ifdef CAT_FULL
 
   if ((CATcmd[0] == 'V') && (CATcmd[1] == 'X'))                        {Command_VX(); return;} 
   if ((CATcmd[0] == 'A') && (CATcmd[1] == 'S'))                        {Command_AS(); return;}
   if ((CATcmd[0] == 'S') && (CATcmd[1] == 'T'))                        {Command_ST(); return;}      //Step when implemented
   if ((CATcmd[0] == 'X') && (CATcmd[1] == 'I'))                        {Command_XI(); return;}      //Step when implemented
-  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        {Command_BChange(-1); return;}
-  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        {Command_BChange(+1); return;}
 
-#endif  //CAT_FULL_PROTOCOL
+#endif  //CAT_FULL
   
   strcmd[0]=CATcmd[0];
   strcmd[1]=CATcmd[1];
@@ -564,7 +755,7 @@ void analyseCATcmd()
       strcmp(strcmd,cVX)==0 || strcmp(strcmd,cXT)==0 || strcmp(strcmd,cKY)==0 ||
       strcmp(strcmd,cRU)==0 || strcmp(strcmd,cPS)==0 || strcmp(strcmd,cRD)==0)    {sprintf(hi,"%s",CATcmd);Serial.print(hi);return;}
 
-#ifdef CAT_FULL_PROTOCOL
+#ifdef CAT_FULL
 
   if (strcmp(strcmd,cIS)==0)                                           {sprintf(hi,"%s",cISr);Serial.print(hi);return;}
   if (strcmp(strcmd,cPC)==0)                                           {sprintf(hi,"%s",cPCr);Serial.print(hi);return;}
@@ -609,7 +800,7 @@ void analyseCATcmd()
       strcmp(strcmd,cSR)==0 || strcmp(strcmd,cUP)==0 || strcmp(strcmd,cVR)==0 ||
       strcmp(strcmd,cVV)==0)                                                      {return;}
 
-#endif //CAT_FULL_PROTOCOL  
+#endif //CAT_FULL
               
   Serial.print("?;");
 }
@@ -670,7 +861,7 @@ void serialEvent(){
          cat_ptr = 0;            // reset for next CAT command
 
 #ifdef DEBUG
-        _TRACELIST("%s cmd(%s)\n",__func__,CATcmd);
+        _EXCPLIST("%s() cmd(%s)\n",__func__,CATcmd);
 #endif //DEBUG
 
         analyseCATcmd();
@@ -844,6 +1035,14 @@ void callibrateLED(){           //Set callibration mode
    digitalWrite(WSPR, HIGH); 
    digitalWrite(FT8, HIGH);
    delay(DELAY_CAL);        
+}
+/*-----
+ * Signal band selection with LED   (THIS NEEDS TO BE REVIEWED TO ACTUALLY SHOW MORE THAN 4 BANDS
+ */
+void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
+  
+  setLED(LED[3-b],true);
+
 }
 
 /**********************************************************************************************/
@@ -1116,7 +1315,16 @@ uint16_t save=EEPROM_SAVE;
 /**********************************************************************************************/
 /*                               Operational state management                                 */
 /**********************************************************************************************/
-
+/*----------------------------------------------------------*
+ * Band increase                                            *
+ *----------------------------------------------------------*/
+uint16_t changeBand(uint16_t c) {
+    uint16_t b=(Band_slot+c)%BANDS;
+    #ifdef DEBUG
+       _EXCPLIST("%s() change=%d Band_slot=%d b=%d\n",__func__,c,Band_slot,b);
+    #endif //DEBUG 
+    return b;
+}
 /*----------------------------------------------------------*
  * Mode assign                                              *
  *----------------------------------------------------------*/
@@ -1141,6 +1349,14 @@ void Mode_assign(){
 
    }
 
+/*---------------------------------------*          
+ * Change the DDS frequency              *
+ *---------------------------------------*/
+    switch_RXTX(LOW);
+    setWord(&SSW,VOX,false);
+    setWord(&SSW,TXON,false);
+    wdt_reset();
+
 /*--------------------------------------------*   
  * Update master frequency here               *
  *--------------------------------------------*/
@@ -1154,49 +1370,83 @@ void Mode_assign(){
       _INFOLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
    #endif //DEBUG   
 }
+
+/*------------------------------------------------------------------*
+ * Assign index in slot[x][] table based on the band                *
+ *------------------------------------------------------------------*/
+uint8_t band2Slot(uint16_t b) {
+
+      uint8_t s=3;
+      switch(b) {
+         case 160 : {s=0;break;}
+         case  80 : {s=1;break;}
+         case  60 : {s=2;break;}
+         case  40 : {s=3;break;}
+         case  30 : {s=4;break;}
+         case  20 : {s=5;break;}
+         case  17 : {s=6;break;}
+         case  15 : {s=7;break;}
+         case  12 : {s=8;break;}
+         case  10 : {s=9;break;}
+      }
+      #ifdef DEBUG
+       _EXCPLIST("%s() band=%d slot=%d\n",__func__,b,s);
+      #endif //DEBUG   
+      
+      return s;
+
+}
 /*----------------------------------------------------------*
  * Frequency assign (band dependant)                        *
  *----------------------------------------------------------*/
 void Freq_assign(){
 
-    uint8_t b;
     uint16_t Band=Bands[Band_slot];
-    
-    switch(Band) {
-      case 160: b=0;break;
-      case 80 : b=1;break;
-      case 40 : b=2;break;
-      case 30 : b=3;break;
-      case 20 : b=4;break;
-      case 17 : b=5;break;
-      case 15 : b=6;break;
-      case 12 : b=7;break;
-      case 10 : b=8;break;
-      case 6  : b=9;break;
-      default : b=2;break;     //40m is the default
-    }
+    uint8_t  b=band2Slot(Band);
     for (int i=0;i<MAXMODE;i++) {
       f[i]=slot[b][i];
-
       #ifdef WDT      
          wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
       #endif //WDT      
 
     }
-
-
 /*---------------------------------------*          
  * Update master frequency here          *
  *---------------------------------------*/
-    freq=f[Band_slot];
+    freq=f[mode];        //Actual frequency is set depending on the selected mode
 
+#ifdef QUAD
+/*---------------------------------------*          
+ * Update filter selection for QUAD      *
+ *---------------------------------------*/
+     setQUAD(Band_slot);
+#endif //PA and LPF daughter board defined
+
+#ifdef ATUCTL
+/*---------------------------------------*          
+ * Update ATU control                    *
+ *---------------------------------------*/
+     flipATU();
+
+#endif //ATUCTL
+/*---------------------------------------*          
+ * Flag EEPROM to be updated             *
+ *---------------------------------------*/
     #ifdef EE
        tout=millis();
        setWord(&SSW,SAVEEE,true);
     #endif //EE
 
+/*---------------------------------------*          
+ * Change the DDS frequency              *
+ *---------------------------------------*/
+    switch_RXTX(LOW);
+    setWord(&SSW,VOX,false);
+    setWord(&SSW,TXON,false);
+    wdt_reset();
+
     #ifdef DEBUG
-       _TRACELIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
+       _EXCPLIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
     #endif //DEBUG   
 }
 
@@ -1208,13 +1458,13 @@ void Band_assign(){
     resetLED();
     blinkLED(LED[3-Band_slot]);
     
-    delay(DELAY_WAIT); 
+    delay(DELAY_WAIT);             //This delay should be changed
     
     Freq_assign();
     Mode_assign();
 
     #ifdef DEBUG
-       _INFOLIST("%s m(%d) slot(%d) f=%d\n",__func__,mode,Band_slot,freq);
+       _EXCPLIST("%s mode(%d) slot(%d) f=%ld\n",__func__,mode,Band_slot,freq);
     #endif //DEBUG   
   
 }
@@ -1242,7 +1492,8 @@ void Band_Select(){
    bool txButton   = getTXSW();
           
    if ((upButton == LOW) && (downButton == HIGH)) {
-       Band_slot=(Band_slot-1)%4;
+         
+       Band_slot=changeBand(-1);
        setLED(LED[3-Band_slot],true);
 
        #ifdef DEBUG
@@ -1251,7 +1502,7 @@ void Band_Select(){
    } 
    
    if ((upButton == HIGH) && (downButton == LOW)) {
-      Band_slot=(Band_slot+1)%4;
+      Band_slot=changeBand(+1);
       setLED(LED[3-Band_slot],true);
 
       #ifdef DEBUG
@@ -1597,6 +1848,11 @@ void definePinOut() {
    pinMode(AIN0, INPUT);  //PD6=AN0 must be grounded
    pinMode(AIN1, INPUT);  //PD7=AN1=HiZ
 
+#ifdef ATUCTL
+   pinMode(ATU,  OUTPUT);
+   flipATU();
+#endif //ATUCTL      
+
 #ifdef DEBUG
    _INFO;
 #endif //DEBUG      
@@ -1635,11 +1891,21 @@ void setup()
    #endif //DEBUG   
 
    setup_si5351();   
+   
+   #ifdef QUAD
+     setupQUAD();
+   #endif //QUAD      
+   
    INIT();
+
+
 
    if ( getDOWNSSW() == LOW ) {
       Calibration();
    }
+
+
+
   
 /*--------------------------------------------------------*
  * initialize the timer1 as an analog comparator          *
