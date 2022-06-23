@@ -1879,6 +1879,10 @@ void setup()
    
    #ifdef QUAD
      setupQUAD();
+     /*---------
+      * Initialize the QUAD board with the default band (at slot 0)
+      */
+     setQUAD(Band_slot);
    #endif //QUAD      
    
    INIT();
