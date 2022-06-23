@@ -1,0 +1,104 @@
+# ADX is an Arduino based Digital Modes Transceiver authored by Barb (WB2CBA)
+
+RELEASE NOTES Version 1.2e (experimental)
+
+## Mods by LU7DZ (version 1.2e)
+
+Version ***"e"*** stands for *"experimental"*, ***use it as your own headache risk*** as it is not the firmware supported by WB2CBA.
+
+-	Code re-organization/Modularization.
+-	CAT support (using Arduino Nano USB-Serial driver), emulates a TS480 CAT protocol, uses FLRig as a HamLib server for WSJT-X.
+-	Band expansion (still 4 bands supported), but all HF-6m bands can be selected
+-	EEPROM write cycle to reduce wear and tear.
+-	Watchdog reset
+-	CW transceiver
+	- Tunning capability (+/- 20 KHz).
+	- (Somewhat crude) LED tunning indication.
+	- Full break-in support.
+	- CW shift (600 Hz).
+	- CW step +/-500 Hz.
+
+
+## Mods by LU7DZ (version 1.3e)
+
+-	Support for QUAD (4 bands) switching scheme (activaded with #define QUAD 1 sentence).
+-	Support for external ATU initialization/reset, line D5 would briefly (200 mSecs) flash a high on band changes.
+-       Improved CAT support for WSJT-X (TS-480 emulation).
+-	Minor memory & code optimizations, bug removal.
+-	6 meters band removed from slot[][] options as it's unlikely the receiver can be moved that high, 10m works fine though
+
+
+## Mods by LU7DZ (version 1.4e)
+
+-	Support for IC-746 CAT Protocol as suggested by Alan (AG7XS) because of being lighter and faster, TS480 still supported
+-	Minor memory & code optimizations, bug removal.
+
+
+### Hardware mods
+
+-	Straight keyer connected from SPKR(tip) to TX pushbutton.
+-	Cut wire between SPKR(tip) and SPKR(sleeve), audio signal will be taken from sleeve only.
+
+### Software mods for CAT support
+
+-	CAT support works Ok with almost any program based on HamLib, in particular with FLRig.
+-	WSJT-X(Z) direct CAT command are mostly working but still in test, if it experiences problems as a workaround that works Ok is to use FLRig (see below).
+
+#### CAT TS-480 emulation configuration
+        - Access WSJT-X Settings (File/Settings/Radio).
+	- Select "Rig" as "Kenwood TS-480".
+	- Select Serial port the one that your computer assigned to the Arduino Nano (typically COMx on Windows and /dev/tty* on Linux)
+	- Select 115200 as the speed.
+	- Select 8 bits, 2 stop bits, handshake none.
+ 	- Select PTT method either VOX or CAT.
+	- Select Polling time as 6 secs.
+	- Press CAT Test, it should go green after a while.
+#### CAT ICOM-746 emulation configuration
+        - Access WSJT-X Settings (File/Settings/Radio).
+	- Select "Rig" as "Icom IC-746".
+	- Select Serial port the one that your computer assigned to the Arduino Nano (typically COMx on Windows and /dev/tty* on Linux)
+	- Select 19200 as the speed.
+	- Select 8 bits, 2 stop bits, handshake none.
+ 	- Select PTT method either VOX or CAT.
+	- Select Polling time as 6 secs.
+	- Press CAT Test, it should go green after a while.
+
+#### CAT FlRig configuration (for TS480)
+	- Download and install FLRig from the [W1HKJ site] (http://www.w1hkj.com/files/flrig/) according with your Operating System
+		- Configuration tested with Win10, Raspbian Debian and MacOs.
+	- Configure ADX CAT suppport at *config/setup/transceiver*.
+		- *Rig*: TS-480HX.
+		- *Update*: (whatever the USB serial port of the Arduino Nano is recognized as).
+		- *Baud*: 115200
+		- (check) *2-Stop bit*.
+		- *Retries*: 2.
+		- *Poll intvl*: 465.
+		- Leave all other values as the proposed default.
+	- Re-launch FlRig connected with the ADX transceiver running ***this*** firmware version (other versions might behave in a different way), check:
+		- Frequency on both OFV reflect the one configured with ADX.
+		- Mode USB.
+		- PTT would put the ADX in transmit when activated (***ensure an antenna or a dummy load is connected not to blow your finals***).
+	- Launch WSJT-X, go to configure Radio, select:
+		- *Radio*: FLRig - FLRig.
+		- *Poll interval*: 5 secs
+		- *PTT method*: CAT
+		- *Mode*: None or USB
+		- *Split operation*: Fake split
+	- Configure the remainingn of the configuration values for WSJT-X as per the normal ADX operation without CAT.
+
+
+```
+Operation with any program other than WSJT-X is possible as long as it support CAT commands thru the HamLib library.
+In that case configure the transceiver in a similar way than explained above for FLRig
+```
+
+
+
+
+
+
+
+
+
+
+
