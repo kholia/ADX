@@ -393,7 +393,7 @@ void setQUAD(uint16_t LPFslot) {
    delay(100);
   
    #ifdef DEBUG
-      _EXCPLIST("%s() LPFslot=%d\n",__func__,LPFslot);
+      _EXCPLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
       resetLED();
       bandLED(LPFslot);
    #endif //DEBUG 
