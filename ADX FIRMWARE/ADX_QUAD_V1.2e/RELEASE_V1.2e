@@ -7,7 +7,7 @@ RELEASE NOTES Version 1.2e (experimental)
 Version ***"e"*** stands for *"experimental"*, ***use it as your own headache risk*** as it is not the firmware supported by WB2CBA.
 
 -	Code re-organization/Modularization.
--	CAT support (using Arduino Nano USB-Serial driver), emulates a TS440 CAT protocol, uses FLRig as a HamLib server for WSJT-X.
+-	CAT support (using Arduino Nano USB-Serial driver), emulates a TS480 CAT protocol, uses FLRig as a HamLib server for WSJT-X.
 -	Band expansion (still 4 bands supported), but all HF-6m bands can be selected
 -	EEPROM write cycle to reduce wear and tear.
 -	Watchdog reset
