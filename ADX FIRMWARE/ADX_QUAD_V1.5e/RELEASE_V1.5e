@@ -39,6 +39,7 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 +	Watchdog inhibits TX to be on for more than two consecutive minutes.
 +       Serial (simple) command line configuration facility.
 	ADX Transceiver Firmware V1.5e
+	>
 	(A) ATU Port(5)
 	(B) ATU Delay(200)
 	(C) BOUNCE(20)
@@ -51,10 +52,20 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 	(J) CW SHIFT(600)
 	(K) CW STEP(500)
 	(L) CW RITMAX(15000)
+	(M) QUAD BAND1(1)
+	(N) QUAD BAND2(2)
+	(O) QUAD BAND3(3)
+	(P) QUAD BAND4(4)
+	(R) BAND1(40)
+	(T) BAND2(30)
+	(U) BAND3(20)
+	(V) BAND4(17)
 	(S) SAVE
 	(Q) QUIT
 	(R) RESTORE DEFAULTS
+	(?) THIS MENU
 	>
+
 -	Minor memory & code optimizations, bug removal.
 
 ### Hardware mods
