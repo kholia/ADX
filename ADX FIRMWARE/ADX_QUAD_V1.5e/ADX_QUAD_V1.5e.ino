@@ -131,18 +131,20 @@
     #define IC746      1
 #endif
     
-#if (defined(DEBUG) || defined(CAT))
+#if (defined(DEBUG) || defined(CAT) || defined(TERMINAL))
    #define SERIAL_TOUT          10
    #define SERIAL_WAIT           2
    char hi[120];    
 #endif //DEBUG or CAT
 
 #if (defined(CAT))
+
 #if defined(TS480)
     #define BAUD 115200    
 #else    
     #define BAUD 19200    
 #endif //TS480
+
 #endif //CAT    
 
 #if (defined(QUAD))
@@ -387,7 +389,7 @@ int cmdLength    = 0;
  *****************************************************************/
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
-   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 
@@ -444,6 +446,7 @@ int cmdLength    = 0;
    uint8_t  atu       =  ATU;
    uint16_t atu_delay =  ATU_DELAY;
    uint32_t tATU=0;
+   
 #endif //ATUCTL
 
 #define AIN0           6           //(PD6)
@@ -594,8 +597,8 @@ uint8_t  TSW=0;               //System timer variable (to be used with getWord/s
 #endif //Either ATU or WDT has been defined
 
 #ifdef WDT
-#define       WDT_TOUT    120000
-uint32_t      wdt_max     = WDT_TOUT;
+#define       WDT_MAX    15000
+uint32_t      wdt_max     = WDT_MAX;
 uint32_t      wdt_tout    = 0;
 #endif //WDT
 //**********************************[ BAND SELECT ]************************************************
@@ -652,9 +655,12 @@ bool getCommand(char * commandLine)
 {
   static uint8_t charsRead = 0;                      //note: COMAND_BUFFER_LENGTH must be less than 255 chars long
   //read asynchronously until full command input
-  
+
+  /*------------------------------------------*
+   * Read till the serial buffer is exhausted *
+   *------------------------------------------*/
   while (Serial.available()) {
-    char c = Serial.read();
+    char c = tolower(Serial.read());
     switch (c) {
       case CR:      //likely have full command in buffer now, commands are terminated by CR and/or LS
       case LF:
@@ -685,9 +691,9 @@ bool getCommand(char * commandLine)
 }
 
 /*----------------------------------------------------------------------------------*
- * readNumber
- * Reads either a 8 or 16 bit number
- */
+ * readNumber                                                                       *
+ * Reads either a 8 or 16 bit number                                                *
+ *----------------------------------------------------------------------------------*/
 uint16_t readNumber () {
   char * numTextPtr = strtok(NULL, delimiters);         //K&R string.h  pg. 250
   return atoi(numTextPtr);                              //K&R string.h  pg. 251
@@ -705,7 +711,7 @@ char * readWord() {
  * Handle a command that hasn't been identified
  */
 void nullCommand(char * ptrToCommandName) {
-  sprintf(hi,"\rCommand not found: %s\n",ptrToCommandName);
+  sprintf(hi,"Command not found <%s>\r\n",ptrToCommandName);
   Serial.print(hi);
   }
 
@@ -714,7 +720,12 @@ void nullCommand(char * ptrToCommandName) {
  */
 
 int perform_atuToken () { 
-    return 0;
+    int v=readNumber();
+    if (v==0) {
+       return atu;
+    }
+    
+    return v;
 }
 int perform_atu_delayToken () { 
     return 0;
@@ -770,24 +781,20 @@ int perform_resetToken () {
     return 0;
 }
 
-/*
-int addCommand() {                                      //Modify here
-  int firstOperand = readNumber();
-  int secondOperand = readNumber();
-  return firstOperand + secondOperand;
-}
-
-int subtractCommand() {                                //Modify here
-  int firstOperand = readNumber();
-  int secondOperand = readNumber();
-  return firstOperand - secondOperand;
-}
-*/
+/*-----------------------------------------------------------------------------*
+ * printCommand                                                                *
+ * print received command as a confirmation                                    *
+ *-----------------------------------------------------------------------------*/
 void printCommand(char * token, uint16_t rc) {
 
-  sprintf(hi,"\n%s(%d)\n",token,rc);
+  sprintf(hi,"%s(%05d)\n\r>",token,rc);
   Serial.print(hi);
+  
   return;
+}
+void printMessage(char * token) {
+  sprintf(hi,"%s\n\r>",token);
+  Serial.print(hi);
 }
 /*--------------------------------------------------*
    execCommand
@@ -795,31 +802,33 @@ void printCommand(char * token, uint16_t rc) {
    result (which is always numeric
  *--------------------------------------------------*/
 void execCommand(char * commandLine) {
-  //  print2("\nCommand: ", commandLine);
-  int result;
+//  int result;
 
   char * ptrToCommandName = strtok(commandLine, delimiters);
+  const char * msgSave = "Parameters saved";
+  const char * msgQuit = "Exiting terminal mode";
+  const char * msgReset= "Reset to default values";
 
-if (strcmp(ptrToCommandName, atuToken)         == 0) {printCommand(ptrToCommandName,perform_atuToken());return;}
-if (strcmp(ptrToCommandName, atu_delayToken)   == 0) {printCommand(ptrToCommandName,perform_atu_delayToken());return;}
-if (strcmp(ptrToCommandName, bounce_timeToken) == 0) {printCommand(ptrToCommandName,perform_bounce_timeToken());return;}
-if (strcmp(ptrToCommandName, short_timeToken)  == 0) {printCommand(ptrToCommandName,perform_short_timeToken());return;}
-if (strcmp(ptrToCommandName, vox_maxtryToken)  == 0) {printCommand(ptrToCommandName,perform_vox_maxtryToken());return;}
-if (strcmp(ptrToCommandName, vox_cntmaxToken)  == 0) {printCommand(ptrToCommandName,perform_vox_cntmaxToken());return;}
-if (strcmp(ptrToCommandName, max_blinkToken)   == 0) {printCommand(ptrToCommandName,perform_max_blinkToken());return;}
-if (strcmp(ptrToCommandName, eeprom_toutToken) == 0) {printCommand(ptrToCommandName,perform_eeprom_toutToken());return;}
-if (strcmp(ptrToCommandName, cw_shiftToken)    == 0) {printCommand(ptrToCommandName,perform_cw_shiftToken());return;}
-if (strcmp(ptrToCommandName, cw_stepToken)     == 0) {printCommand(ptrToCommandName,perform_cw_stepToken());return;}
-if (strcmp(ptrToCommandName, quad_band1Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band1Token());return;}
-if (strcmp(ptrToCommandName, quad_band2Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band2Token());return;}
-if (strcmp(ptrToCommandName, quad_band3Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band3Token());return;}
-if (strcmp(ptrToCommandName, quad_band4Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band4Token());return;}
-if (strcmp(ptrToCommandName, wdt_toutToken)    == 0) {printCommand(ptrToCommandName,perform_wdt_toutToken());return;}
-if (strcmp(ptrToCommandName, saveToken)        == 0) {printCommand(ptrToCommandName,perform_saveToken());return;}
-if (strcmp(ptrToCommandName, quitToken)        == 0) {printCommand(ptrToCommandName,perform_quitToken());return;}
-if (strcmp(ptrToCommandName, resetToken)       == 0) {printCommand(ptrToCommandName,perform_resetToken());return;}
+  if (strcmp(ptrToCommandName, atuToken)         == 0) {printCommand(ptrToCommandName,perform_atuToken());return;}
+  if (strcmp(ptrToCommandName, atu_delayToken)   == 0) {printCommand(ptrToCommandName,perform_atu_delayToken());return;}
+  if (strcmp(ptrToCommandName, bounce_timeToken) == 0) {printCommand(ptrToCommandName,perform_bounce_timeToken());return;}
+  if (strcmp(ptrToCommandName, short_timeToken)  == 0) {printCommand(ptrToCommandName,perform_short_timeToken());return;}
+  if (strcmp(ptrToCommandName, vox_maxtryToken)  == 0) {printCommand(ptrToCommandName,perform_vox_maxtryToken());return;}
+  if (strcmp(ptrToCommandName, vox_cntmaxToken)  == 0) {printCommand(ptrToCommandName,perform_vox_cntmaxToken());return;}
+  if (strcmp(ptrToCommandName, max_blinkToken)   == 0) {printCommand(ptrToCommandName,perform_max_blinkToken());return;}
+  if (strcmp(ptrToCommandName, eeprom_toutToken) == 0) {printCommand(ptrToCommandName,perform_eeprom_toutToken());return;}
+  if (strcmp(ptrToCommandName, cw_shiftToken)    == 0) {printCommand(ptrToCommandName,perform_cw_shiftToken());return;}
+  if (strcmp(ptrToCommandName, cw_stepToken)     == 0) {printCommand(ptrToCommandName,perform_cw_stepToken());return;}
+  if (strcmp(ptrToCommandName, quad_band1Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band1Token());return;}
+  if (strcmp(ptrToCommandName, quad_band2Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band2Token());return;}
+  if (strcmp(ptrToCommandName, quad_band3Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band3Token());return;}
+  if (strcmp(ptrToCommandName, quad_band4Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band4Token());return;}
+  if (strcmp(ptrToCommandName, wdt_toutToken)    == 0) {printCommand(ptrToCommandName,perform_wdt_toutToken());return;}
+  if (strcmp(ptrToCommandName, saveToken)        == 0) {perform_saveToken();printMessage(msgSave);return;}
+  if (strcmp(ptrToCommandName, quitToken)        == 0) {perform_quitToken();printMessage(msgQuit);return;}
+  if (strcmp(ptrToCommandName, resetToken)       == 0) {perform_resetToken();printMessage(msgReset);return;}
 
-nullCommand(ptrToCommandName);
+  nullCommand(ptrToCommandName);
 return; 
 }
 #endif //TERMINAL
@@ -835,7 +844,7 @@ void flipATU() {
    tATU=millis();
    
    #ifdef DEBUG
-      _EXCPLIST("%s()\n",__func__);
+      _TRACELIST("%s()\n",__func__);
    #endif //DEBUG    
 }
 #endif //ATUCTL
@@ -864,7 +873,7 @@ void setQUAD(uint16_t LPFslot) {
    delay(100);
   
    #ifdef DEBUG
-      _EXCPLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
+      _TRACELIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
    #endif //DEBUG 
   
 }
@@ -881,7 +890,7 @@ void setupQUAD() {
    Wire.endTransmission();
 
    #ifdef DEBUG
-      _EXCPLIST("%s()\n",__func__);
+      _TRACELIST("%s()\n",__func__);
    #endif //DEBUG
   
 }
@@ -890,8 +899,15 @@ void setupQUAD() {
 #ifdef CAT
 
 
+/*---
+ *  Forward reference prototypes
+ *---*/
+
 void switch_RXTX(bool t);     //advanced definition for compilation purposes (interface only)
 void Mode_assign();           //advanced definition for compilation purposes
+void Freq_assign();
+void Band_assign();
+uint16_t changeBand(uint16_t c);
 
 
 /*---------------------------------------*
@@ -913,7 +929,7 @@ int getBand(uint32_t f) {
    if (f>=28000000 && f<29700000) {b=10;}
 
 #ifdef DEBUG
-   _EXCPLIST("%s() f=%ld band=%d\n",__func__,f,b);
+   _TRACELIST("%s() f=%ld band=%d\n",__func__,f,b);
 #endif //DEBUG
 
    return b;  
@@ -932,7 +948,7 @@ int findSlot(uint16_t band) {
     }
   }
 #ifdef DEBUG
-   _EXCPLIST("%s() band=%d slot=%d\n",__func__,band,s);
+   _TRACELIST("%s() band=%d slot=%d\n",__func__,band,s);
 #endif //DEBUG
 
   return s;
@@ -952,7 +968,7 @@ int setSlot(uint32_t f) {
    int s=findSlot(band);
 
 #ifdef DEBUG
-   _EXCPLIST("%s() f=%ld band=%d slot=%d\n",__func__,f,band,s);
+   _TRACELIST("%s() f=%ld band=%d slot=%d\n",__func__,f,band,s);
 #endif //DEBUG
 
    return s;
@@ -1533,7 +1549,7 @@ void setFreqCAT() {
   #endif //PALPF    
 
    #ifdef DEBUG
-      _EXCPLIST("%s() CAT=%s f=%ld slot=%d\n",__func__,Catbuffer,freq,b);
+      _TRACELIST("%s() CAT=%s f=%ld slot=%d\n",__func__,Catbuffer,freq,b);
    #endif //DEBUG 
 }
 
@@ -1659,7 +1675,7 @@ void Command_BChange(int c) { //Change band up or down
   Band_slot=changeBand(c);
   Band_assign();
   #ifdef DEBUG
-      _EXCPLIST("%s() change=%d Band_slot=%d\n",__func__,c,Band_slot);
+      _TRACELIST("%s() change=%d Band_slot=%d\n",__func__,c,Band_slot);
   #endif //DEBUG 
   
 }
@@ -1807,7 +1823,7 @@ void serialEvent(){
          cat_ptr = 0;            // reset for next CAT command
 
 #ifdef DEBUG
-        _EXCPLIST("%s() cmd(%s)\n",__func__,CATcmd);
+        _TRACELIST("%s() cmd(%s)\n",__func__,CATcmd);
 #endif //DEBUG
 
         analyseCATcmd();
@@ -1877,6 +1893,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
  *-----------------------------------*/
  #ifdef WDT
       if (getWord(TSW,TX_WDT)==HIGH) {
+         
          return;
       }
  #endif //WDT     
@@ -2088,6 +2105,14 @@ void ManualTX(){
 
        #ifdef WDT      
           wdt_reset();
+
+          if ((millis() > (wdt_tout+wdt_max)) && getWord(SSW,TXON) == HIGH) {
+             switch_RXTX(LOW);
+             setWord(&TSW,TX_WDT,HIGH);
+             wdt_tout=millis();
+             break;
+          }   
+          
        #endif //WDT
        buttonTX=getTXSW();
                 
@@ -2287,7 +2312,7 @@ uint16_t save=EEPROM_SAVE;
 uint16_t changeBand(uint16_t c) {
     uint16_t b=(Band_slot+c)%BANDS;
     #ifdef DEBUG
-       _EXCPLIST("%s() change=%d Band_slot=%d b=%d\n",__func__,c,Band_slot,b);
+       _TRACELIST("%s() change=%d Band_slot=%d b=%d\n",__func__,c,Band_slot,b);
     #endif //DEBUG 
     return b;
 }
@@ -2356,7 +2381,7 @@ uint8_t band2Slot(uint16_t b) {
          case  10 : {s=9;break;}
       }
       #ifdef DEBUG
-       _EXCPLIST("%s() band=%d slot=%d\n",__func__,b,s);
+       _TRACELIST("%s() band=%d slot=%d\n",__func__,b,s);
       #endif //DEBUG   
       
       return s;
@@ -2412,7 +2437,7 @@ void Freq_assign(){
     wdt_reset();
 
     #ifdef DEBUG
-       _EXCPLIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
+       _TRACELIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
     #endif //DEBUG   
 }
 
@@ -2430,7 +2455,7 @@ void Band_assign(){
     Mode_assign();
 
     #ifdef DEBUG
-       _EXCPLIST("%s mode(%d) slot(%d) f=%ld\n",__func__,mode,Band_slot,freq);
+       _TRACELIST("%s mode(%d) slot(%d) f=%ld\n",__func__,mode,Band_slot,freq);
     #endif //DEBUG   
   
 }
@@ -2829,7 +2854,7 @@ void setup()
 
    #ifdef DEBUG
       Serial.begin(BAUD);
-      _INFOLIST("%s ADX Firmware V(%s)\n",__func__,VERSION);
+      _TRACELIST("%s: ADX Firmware V(%s)\n",__func__,VERSION);
    #endif //DEBUG
 
 /*-----
@@ -2881,6 +2906,7 @@ void setup()
 
 
 
+
   
 /*--------------------------------------------------------*
  * initialize the timer1 as an analog comparator          *
@@ -2910,6 +2936,52 @@ void setup()
   #ifdef DEBUG
      _INFOLIST("%s completed ok\n",__func__);
   #endif //DEBUG   
+
+
+#ifdef TERMINAL
+/*------------------
+ * if UP switch pressed at bootup then enter Terminal mode
+ */
+   bool     flip=false;
+   uint32_t tflip=millis();
+   if (digitalRead(UP)==LOW) {
+    
+      sprintf(hi,"\n\rADX %s command interpreter\n\r",VERSION);
+      Serial.print(hi);
+      
+      while (digitalRead(UP)==LOW) {
+      
+      #ifdef WDT        
+         wdt_reset();
+      #endif //WDT
+
+      }
+      Serial.println("entering command mode, reboot to finalize\r\n>");
+      switch_RXTX(LOW);
+      
+      while (true) {
+/*
+         if (millis()-tflip > max_blink) {
+            setLED(JS8,flip);
+            setLED(FT4,flip);
+            flip=!flip;
+            tflip=millis();
+         }
+*/
+//*--- TERMINAL serial configuration
+ 
+         if (getCommand(cmdLine)) {
+            execCommand(cmdLine);
+            #ifdef WDT
+               wdt_reset();
+            #endif //WDT   
+         }
+
+      }
+
+   } 
+#endif //TERMINAL   
+  
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
 
@@ -2945,15 +3017,7 @@ void loop()
     }
     #endif //ATUCTL       
 
-#ifdef TERMINAL
-//*--- TERMINAL serial configuration
- 
-    bool rxcmd = getCommand(cmdLine);      
-    if (rxcmd) {
-       execCommand(cmdLine);
-    }
 
-#endif //TERMINAL
 
 
     #ifdef CAT 
@@ -3085,7 +3149,7 @@ uint16_t n = vox_maxtry;
     blinkLED(TX);
  }
     
- if (getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+wdt_max))) {
+ if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+wdt_max))) {
     setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
  }
  
