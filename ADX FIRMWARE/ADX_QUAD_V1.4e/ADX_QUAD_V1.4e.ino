@@ -102,18 +102,20 @@
 #define WDT            1      //Hardware watchdog enabled
 #define EE             1      //User EEPROM for persistence
 #define CAT            1      //Emulates a TS-480 transceiver CAT protocol (reduced footprint)
+#define TS480          1      //CAT Protocol is Kenwood 480
 #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
 #define ATUCTL         1      //Control external ATU device
-#define TS480          1      //CAT Protocol is Kenwood 480
-#define IC746          1      //CAT Protocol is ICOM 746
+
 /*
  * The following definitions are disabled but can be enabled selectively
  */
+//#define IC746        1      //CAT Protocol is ICOM 746
 //#define ONEBAND      1      //Forces a single band operation in order not to mess up because of a wrong final filter
 //#define CW           1      //Enable CW operation
 //#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 //#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
 //#define CAT_FULL     1 //Extend CAT support to the entire CAT command set (valid only for TS480)
+
 /*****************************************************************
  * Consistency rules, solve conflicting directives               *
  *****************************************************************/
