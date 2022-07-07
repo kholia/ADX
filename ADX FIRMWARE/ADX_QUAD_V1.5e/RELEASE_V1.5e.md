@@ -12,11 +12,11 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 -	EEPROM write cycle to reduce wear and tear.
 -	Watchdog reset
 -	CW transceiver
-	- Tunning capability (+/- 20 KHz).
-	- (Somewhat crude) LED tunning indication.
-	- Full break-in support.
-	- CW shift (600 Hz).
-	- CW step +/-500 Hz.
+  - Tunning capability (+/- 20 KHz).
+  - (Somewhat crude) LED tunning indication.
+  - Full break-in support.
+  - CW shift (600 Hz).
+  - CW step +/-500 Hz.
 
 
 ## Mods by LU7DZ (version 1.3e)
@@ -31,25 +31,27 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 ## Mods by LU7DZ (version 1.4e)
 
 -	Support for IC-746 CAT Protocol as suggested by Alan (AG7XS) because of being lighter and faster, TS480 still supported (activated with the **#define IC746 1** statement, default: disabled). 
-	Consistency rules applies, if both TS480 and IC746 are activated then TS480 is disabled.
+  - Consistency rules applies, if both TS480 and IC746 are activated then TS480 is disabled.
 -	Minor memory & code optimizations, bug removal.
 
 
 ## Mods by LU7DZ (version 1.5e)
 
 +	Optimized the band support to include 80,60,40,30,20,17,15,10 mts bands (8 bands) to match the definition of the QUAD filter board.
-++	QUAD control thru I2C: 80(1),60(2),40(4),30(8),20(16),17(32),15(64) and 10(128).
-++  	Bug fixes in the QUAD board activation from the test performed.
+  *	QUAD control thru I2C: 80(1),60(2),40(4),30(8),20(16),17(32),15(64) and 10(128).
+  *  	Bug fixes in the QUAD board activation from the test performed.
 +	An ANTI-VOX feature was added, when the transceiver is set into reception thru a CAT command a forced mute of the VOX mechanism is established in order to prevent that residual noise keep the transceiver in TX mode. (activated thru the **#define ANTIVOX 1** statement, default: enabled).
 +	Changed the support for frequency and band changes when using CAT (both TS480 and IC746 protocols).
-++	When a frequency change is made:
-+++	A band change is performed first, validation the band is supported is performed.
-+++	A mode change is performed based on standard frequencies, the mode is automatically switch to FT8,FT4,JS8 and WSPR based on standard frequency for each band).
-+++	The board LED are changed to reflect mode changes.
-+++	This has no effect if the current mode is CW.
-+++	Now the last WSJT-X mode prior to the switch into CW is stored and recovered when CW is de-activated.
+  *	When a frequency change is made:
+  *	A band change is performed first, validation the band is supported is performed.
+  *	A mode change is performed based on standard frequencies, the mode is automatically switch to FT8,FT4,JS8 and WSPR based on standard frequency for each band).
+  *	The board LED are changed to reflect mode changes.
+  +	This has no effect if the current mode is CW.
+  +	Now the last WSJT-X mode prior to the switch into CW is stored and recovered when CW is de-activated.
 +	Watchdog inhibits TX to be on for more than two consecutive minutes (activated with the **#define WDT 1** statement, default: enabled).
 +       Serial (simple) command line configuration facility (activated with the **#define TERMINAL 1** statement, default: disabled).
+
+```
 	ADX Transceiver Firmware V1.5e
 	>
 	(A) ATU Port(5)
@@ -77,7 +79,7 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 	(R) RESTORE DEFAULTS
 	(?) THIS MENU
 	>
-
+```
 -	Changes in the way to enter calibration mode at the start of the firmware to make it more reliable.
 -	Minor memory & code optimizations, bug removal.
 
