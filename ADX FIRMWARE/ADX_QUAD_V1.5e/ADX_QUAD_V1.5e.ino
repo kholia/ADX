@@ -110,17 +110,18 @@
 #define WDT            1      //Hardware and TX watchdog enabled
 #define EE             1      //User EEPROM for persistence
 #define CAT            1      //Emulates a TS-480 transceiver CAT protocol (reduced footprint)
+#define TS480          1      //CAT Protocol is Kenwood 480
 #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
 #define ATUCTL         1      //Control external ATU device
-#define TS480          1      //CAT Protocol is Kenwood 480
-#define TERMINAL       1      //Serial configuration terminal
+//#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
+
 /*
  * The following definitions are disabled but can be enabled selectively
  */
+//#define TERMINAL       1      //Serial configuration terminal
 //#define IC746        1      //CAT Protocol is ICOM 746
 //#define ONEBAND      1      //Forces a single band operation in order not to mess up because of a wrong final filter
 //#define CW           1      //Enable CW operation
-//#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 //#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
 //#define CAT_FULL     1      //Extend CAT support to the entire CAT command set (valid only for TS480)
 
@@ -147,6 +148,10 @@
 
 #endif //CAT    
 
+#if defined(DEBUG)
+    #define BAUD 115200
+#endif //DEBUG
+    
 #if (defined(QUAD))
     #undef   ONEBAND
 #endif //QUAD, no ONEBAND    
@@ -873,7 +878,7 @@ void setQUAD(uint16_t LPFslot) {
    delay(100);
   
    #ifdef DEBUG
-      _TRACELIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
+      _INFOLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
    #endif //DEBUG 
   
 }
@@ -883,6 +888,10 @@ void setQUAD(uint16_t LPFslot) {
  *-------------------------------------------------------------------*/
 void setupQUAD() {
 
+   #ifdef DEBUG
+      _EXCPLIST("%s() setupQUAD()\n",__func__);
+   #endif //DEBUG 
+
    Wire.begin();                   // wake up I2C bus
    Wire.beginTransmission(0x20);   //I2C device address
    Wire.write(0x00);               // IODIRA register
@@ -890,7 +899,7 @@ void setupQUAD() {
    Wire.endTransmission();
 
    #ifdef DEBUG
-      _TRACELIST("%s()\n",__func__);
+      _EXCP;
    #endif //DEBUG
   
 }
@@ -1862,7 +1871,7 @@ void setup_si5351() {
 long cal = XT_CAL_F;
   
   #ifdef DEBUG
-    _INFO;
+    _TRACELIST("%s Starting\n",__func__);
   #endif //DEBUG
 
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
@@ -1870,7 +1879,11 @@ long cal = XT_CAL_F;
   si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);// SET For Max Power
   si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);// Set for reduced power for RX 
-  
+
+  #ifdef DEBUG
+    _INFO;
+  #endif //DEBUG
+
 }
 
 /*---------------------------------------------------------------------------------------------*
@@ -2819,6 +2832,10 @@ void INIT(){
   Freq_assign();
   Mode_assign();
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
+
+#ifdef DEBUG
+   _INFO;
+#endif //DEBUG      
 }
 /*--------------------------------------------------------------------------*
  * definePinOut
@@ -2854,7 +2871,7 @@ void setup()
 
    #ifdef DEBUG
       Serial.begin(BAUD);
-      _TRACELIST("%s: ADX Firmware V(%s)\n",__func__,VERSION);
+      _EXCPLIST("%s: ADX Firmware V(%s)\n",__func__,VERSION);
    #endif //DEBUG
 
 /*-----
@@ -2870,8 +2887,7 @@ void setup()
       
       }
       Serial.flush();
-      Serial.setTimeout(SERIAL_TOUT);
-      
+      Serial.setTimeout(SERIAL_TOUT);    
    #endif //CAT   
 
    definePinOut();
@@ -2883,21 +2899,35 @@ void setup()
    setWord(&button[INT2],PUSHSTATE,HIGH);
 
    #ifdef DEBUG
-      _INFOLIST("%s INT ok\n",__func__);
+      _EXCPLIST("%s INT ok\n",__func__);
    #endif //DEBUG   
 
    setup_si5351();   
    
+   #ifdef DEBUG
+      _INFOLIST("%s setup_si5351 ok\n",__func__);
+   #endif //DEBUG   
+   
    #ifdef QUAD
      setupQUAD();
+     #ifdef DEBUG
+        _EXCPLIST("%s setupQUAD ok\n",__func__);
+     #endif //DEBUG   
+
      /*---------
       * Initialize the QUAD board with the default band (at slot 0)
       */
      setQUAD(Band_slot);
+     #ifdef DEBUG
+       _EXCPLIST("%s setQUAD(%d) ok\n",__func__,Band_slot);
+     #endif //DEBUG   
+
    #endif //QUAD      
    
    INIT();
-
+   #ifdef DEBUG
+      _INFOLIST("%s INIT ok\n",__func__);
+   #endif //DEBUG   
 
 
    if ( getDOWNSSW() == LOW ) {
@@ -2921,10 +2951,14 @@ void setup()
   pinMode(AIN1, INPUT); //PD7 = AN1 = HiZ, PD6 = AN0 = 0
 
   #ifdef DEBUG
-     _INFOLIST("%s Timer1 set\n",__func__);
+     _INFOLIST("%s Timer1 set Ok\n",__func__);
   #endif //DEBUG   
   
   switch_RXTX(LOW);
+  #ifdef DEBUG
+      _INFOLIST("%s switch_RXTX Low ok\n",__func__);
+  #endif //DEBUG   
+
   Mode_assign(); 
 
   #ifdef WDT
@@ -2942,6 +2976,10 @@ void setup()
 /*------------------
  * if UP switch pressed at bootup then enter Terminal mode
  */
+   #ifdef DEBUG
+      _TRACELIST("%s Checking Terminal\n",__func__);
+   #endif //DEBUG
+      
    bool     flip=false;
    uint32_t tflip=millis();
    if (digitalRead(UP)==LOW) {
