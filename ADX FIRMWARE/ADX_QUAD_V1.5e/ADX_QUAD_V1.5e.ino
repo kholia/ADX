@@ -113,6 +113,7 @@
 #define TS480          1      //CAT Protocol is Kenwood 480
 #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
 #define ATUCTL         1      //Control external ATU device
+#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
 //#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 
 /*
@@ -394,7 +395,7 @@ int cmdLength    = 0;
  *****************************************************************/
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
-   #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 
@@ -454,6 +455,12 @@ int cmdLength    = 0;
    
 #endif //ATUCTL
 
+#ifdef ANTIVOX
+   #define AVOXTIME    2000
+   uint32_t avoxtime =   AVOXTIME;
+   uint32_t tavox    =   0;
+#endif //ANTIVOX   
+
 #define AIN0           6           //(PD6)
 #define AIN1           7           //(PD7)
 
@@ -493,6 +500,9 @@ int cmdLength    = 0;
 #define TX_WDT      0B00100000    //TX Watchdog has been activated
 #endif //WDT
 
+#ifdef ANTIVOX
+#define AVOX        0B01000000    //ANTI-VOX has been activated
+#endif //ANTIVOX
 /*----------------------------------------------------------------*
  * General purpose global define                                  *
  * ---------------------------------------------------------------*/
@@ -546,6 +556,7 @@ int cmdLength    = 0;
    uint16_t cwshift = CWSHIFT;
    uint16_t cwstep  = CWSTEP;
    uint16_t maxshift= MAXSHIFT;
+   uint16_t lastmode=       0;
    
 #endif //CW
 
@@ -572,16 +583,14 @@ uint16_t cal_factor=0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
 unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-const unsigned long slot[MAXBAND][MAXMODE]={{ 1840000, 1840000, 1842000, 1836600, 1810000},   //160m[0]
-                                            { 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [1]
-                                            { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [2] 
-                                            { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [3]
-                                            {10136000,10140000,10130000,10138700,10106000},   //30m [4]
-                                            {14074000,14080000,14078000,14095600,14060000},   //20m [5]
-                                            {18100000,18104000,18104000,18104600,18096000},   //17m [6]
-                                            {21074000,21140000,21078000,21094600,21060000},   //15m [7]  
-                                            {24915000,24915000,24922000,24924600,24906000},   //12m [8]                                                                     
-                                            {28074000,28074000,28078000,28124600,28060000}};  //10m [9]                           
+const unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
+                                            { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
+                                            { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
+                                            {10136000,10140000,10130000,10138700,10106000},   //30m [3]
+                                            {14074000,14080000,14078000,14095600,14060000},   //20m [4]
+                                            {18100000,18104000,18104000,18104600,18096000},   //17m [5]
+                                            {21074000,21140000,21078000,21094600,21060000},   //15m [6]                                                                      
+                                            {28074000,28074000,28078000,28124600,28060000}};  //10m [7]                           
 
                                                       
 unsigned long freq      = f[mode]; 
@@ -592,6 +601,11 @@ const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};
  *-------------------------------------*/
 uint8_t       button[3]   ={0,0,0};
 unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
+
+#ifdef QUAD
+#define QUADMAX         8
+uint16_t quad[QUADMAX] = {80,60,40,30,20,17,15,10};
+#endif //QUAD
 
 #ifdef CW
 unsigned long freqCW      = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
@@ -863,13 +877,9 @@ void flipATU() {
  * Set the QUAD filter with the proper slot [0..3]                   *
  *-------------------------------------------------------------------*/
 void setQUAD(uint16_t LPFslot) {
-
-   if (LPFslot<0  || LPFslot > (BANDS-1)) {
-      return;
-   }
    
    uint8_t s =0;
-   s |= (1<<((quads[LPFslot]) & 0x03));
+   s |= (1<<LPFslot);
    
    Wire.beginTransmission(0x20);   //I2C device address
    Wire.write(0x09);               // address port A
@@ -878,7 +888,7 @@ void setQUAD(uint16_t LPFslot) {
    delay(100);
   
    #ifdef DEBUG
-      _INFOLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
+      _EXCPLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
    #endif //DEBUG 
   
 }
@@ -888,10 +898,6 @@ void setQUAD(uint16_t LPFslot) {
  *-------------------------------------------------------------------*/
 void setupQUAD() {
 
-   #ifdef DEBUG
-      _EXCPLIST("%s() setupQUAD()\n",__func__);
-   #endif //DEBUG 
-
    Wire.begin();                   // wake up I2C bus
    Wire.beginTransmission(0x20);   //I2C device address
    Wire.write(0x00);               // IODIRA register
@@ -899,7 +905,7 @@ void setupQUAD() {
    Wire.endTransmission();
 
    #ifdef DEBUG
-      _EXCP;
+      _INFO;
    #endif //DEBUG
   
 }
@@ -927,7 +933,6 @@ uint16_t changeBand(uint16_t c);
 int getBand(uint32_t f) {
 
    int b=-1;
-   if (f>= 1800000 && f< 1900000) {b=160;}
    if (f>= 3500000 && f< 4000000) {b=80;}
    if (f>= 5350000 && f< 5367000) {b=60;}
    if (f>= 7000000 && f< 7300000) {b=40;}
@@ -938,7 +943,7 @@ int getBand(uint32_t f) {
    if (f>=28000000 && f<29700000) {b=10;}
 
 #ifdef DEBUG
-   _TRACELIST("%s() f=%ld band=%d\n",__func__,f,b);
+   _EXCPLIST("%s() f=%ld band=%d\n",__func__,f,b);
 #endif //DEBUG
 
    return b;  
@@ -957,7 +962,7 @@ int findSlot(uint16_t band) {
     }
   }
 #ifdef DEBUG
-   _TRACELIST("%s() band=%d slot=%d\n",__func__,band,s);
+   _EXCPLIST("%s() band=%d slot=%d\n",__func__,band,s);
 #endif //DEBUG
 
   return s;
@@ -970,11 +975,11 @@ int findSlot(uint16_t band) {
  *-------------------------------------------------------------*/
 int setSlot(uint32_t f) {
 
-   int band=getBand(f);
-   if (band == -1) {
+   int b=getBand(f);
+   if (b == -1) {
        return Band_slot;
    }
-   int s=findSlot(band);
+   int s=findSlot(b);
 
 #ifdef DEBUG
    _TRACELIST("%s() f=%ld band=%d slot=%d\n",__func__,f,band,s);
@@ -983,7 +988,29 @@ int setSlot(uint32_t f) {
    return s;
  
 }
+/*-----------------------------------------------------------------*
+ * getMode                                                         *
+ * given the slot in the slot[][] array and the frequency returns  *
+ * the mode that should be assigned, -1 if none can be identified  *
+ *-----------------------------------------------------------------*/
+int getMode(int s,uint32_t f) {
 
+
+  
+  int m=-1;
+  for (int i=0;i<MAXMODE;i++) {
+    if (slot[s][i]==f) {
+       m=i;
+       break;
+    }
+  }
+  
+  #ifdef DEBUG
+  _EXCPLIST("%s slot=%d f=%ld m=%d\n",__func__,s,f,m);
+  #endif //DEBUG
+  
+  return m;
+}
 
 #ifdef IC746
 
@@ -1207,6 +1234,10 @@ void doPtt() { //PORTED
     } else {
        switch_RXTX(LOW);
        setWord(&SSW,CATTX,false);
+       #ifdef ANTIVOX
+          tavox=millis();
+          setWord(&TSW,AVOX,true);
+       #endif //ANTIVOX   
     }
     sendAck();  // always acknowledge "set" commands
   }
@@ -1245,10 +1276,43 @@ void doSetFreq() { //ADDITIONAL CONTROL FOR LEGAL BAND NEEDED
      Freq_assign();   //Do all the changes if a band change has been requested
      freq=f;
   }
-  
+
+#ifndef CW
+   setWord(&SSW,CWMODE,false);
+#endif //CW  
+  /*---
+   * Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
+   */
+   int i=getBand(freq);
+   if ( i<0 ) {
+      return;
+   }
+   int j=findSlot(i);
+   if (j<0 || j>3) {
+      return;
+   }
+   int k=Bands[j];
+   int q=band2Slot(k);
+   int m=getMode(q,freq);
+
+   #ifdef DEBUG
+     _EXCPLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
+   #endif //DEBUG  
+
+   if (getWord(SSW,CWMODE)==false) {      //If CW is enabled check if CW mode is activated or it's working on WSJT modes before analyze a mode change based on frequency change
+
+      if (mode != m) {
+         mode = m;
+         Mode_assign();
+      }
+   }
+
   #ifdef QUAD  //Set the PA & LPF filter board settings if defined
-     setQUAD(b);
-  #endif //PALPF    
+     uint16_t s=bands[b];
+     uint16_t q=band2Slot(s);
+     setQUAD(q);
+     _INFOLIST("%s bands[%d]=%d quad=%d\n",__func__,b,s,q);
+  #endif //QUAD    
   sendAck();
 }
 /*
@@ -1547,18 +1611,59 @@ void setFreqCAT() {
   }
   
   freq=fx;
-  
+
+ /*--- 
+  * If a band change is detected switch to the new band
+  *---*/
+    
   if (b!=Band_slot) { //band change
      Band_slot=b;
      Freq_assign();
      freq=fx;
   }
+
+  /*---
+   * Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
+   */
+
+#ifndef CW
+  setWord(&SSW,CWMODE,false);
+#endif //CW
+     
+    
+  int i=getBand(freq);
+  if ( i<0 ) {
+     return;
+  }
+  int j=findSlot(i);
+  if (j<0 || j>3) {
+     return;
+  }
+  int k=Bands[j];
+  int q=band2Slot(k);
+  int m=getMode(q,freq);
+
+#ifdef DEBUG
+  _EXCPLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
+#endif //DEBUG  
+
+  if (getWord(SSW,CWMODE)==false) {   
+  
+     if (mode != m) {
+        mode = m;
+        Mode_assign();
+     }
+  }
+/*----
+ * if enabled change filter from the LPF filter bank
+ *----*/
+  
   #ifdef QUAD  //Set the PA & LPF filter board settings if defined
-     setQUAD(b);
+     setQUAD(q);
   #endif //PALPF    
 
    #ifdef DEBUG
-      _TRACELIST("%s() CAT=%s f=%ld slot=%d\n",__func__,Catbuffer,freq,b);
+      _INFOLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d\n",__func__,Catbuffer,freq,b,s,q);
    #endif //DEBUG 
 }
 
@@ -1627,6 +1732,10 @@ void Command_RX()
   switch_RXTX(LOW);
   sprintf(hi,"%s",cRX0);
   Serial.print(hi);
+  #ifdef ANTIVOX
+      tavox=millis();
+      setWord(&TSW,AVOX,true);
+  #endif //ANTIVOX   
 }
 
 //*--- Place transceiver in TX mode
@@ -1870,9 +1979,6 @@ void setup_si5351() {
 
 long cal = XT_CAL_F;
   
-  #ifdef DEBUG
-    _TRACELIST("%s Starting\n",__func__);
-  #endif //DEBUG
 
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
@@ -2024,9 +2130,9 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 }
 
 /*-----
- * LED on callibration mode
+ * LED on calibration mode
  */
-void callibrateLED(){           //Set callibration mode
+void calibrateLED(){           //Set callibration mode
 
    digitalWrite(WSPR, HIGH); 
    digitalWrite(FT8, HIGH);
@@ -2051,7 +2157,7 @@ void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
 
 ISR (PCINT2_vect) {
 
-  long int timerDown=0;
+  uint32_t timerDown=0;
   byte     v=0;
   
   for (byte p=INT0;p<=INT2;p++){ 
@@ -2227,7 +2333,7 @@ void Calibration(){
 
 
   #ifdef DEBUG
-     _TRACE;
+     _EXCP;
   #endif //DEBUG
   
   resetLED();
@@ -2239,7 +2345,7 @@ void Calibration(){
         wdt_reset();
      #endif //WDT
          
-     callibrateLED();
+     calibrateLED();
      n--;
 
      #ifdef WDT
@@ -2250,6 +2356,12 @@ void Calibration(){
      #ifdef EE  
         EEPROM.get(EEPROM_CAL,cal_factor);
      #endif //EEPROM
+
+     while (digitalRead(DOWN)==LOW) { 
+         #ifdef WDT
+         wdt_reset();
+         #endif //WDT
+     }
   
   while (true) {
 
@@ -2288,6 +2400,7 @@ void Calibration(){
         si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK0);
         si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA); // Set for lower power for Calibration
         si5351.set_clock_pwr(SI5351_CLK0, 1); // Enable clock2 
+
      } 
 
   }
@@ -2371,7 +2484,7 @@ void Mode_assign(){
    #endif //EE
 
    #ifdef DEBUG
-      _INFOLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
+      _EXCPLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
    #endif //DEBUG   
 }
 
@@ -2382,19 +2495,17 @@ uint8_t band2Slot(uint16_t b) {
 
       uint8_t s=3;
       switch(b) {
-         case 160 : {s=0;break;}
-         case  80 : {s=1;break;}
-         case  60 : {s=2;break;}
-         case  40 : {s=3;break;}
-         case  30 : {s=4;break;}
-         case  20 : {s=5;break;}
-         case  17 : {s=6;break;}
-         case  15 : {s=7;break;}
-         case  12 : {s=8;break;}
-         case  10 : {s=9;break;}
+         case  80 : {s=0;break;}
+         case  60 : {s=1;break;}
+         case  40 : {s=2;break;}
+         case  30 : {s=3;break;}
+         case  20 : {s=4;break;}
+         case  17 : {s=5;break;}
+         case  15 : {s=6;break;}
+         case  10 : {s=7;break;}
       }
       #ifdef DEBUG
-       _TRACELIST("%s() band=%d slot=%d\n",__func__,b,s);
+       _INFOLIST("%s() band=%d slot=%d\n",__func__,b,s);
       #endif //DEBUG   
       
       return s;
@@ -2423,7 +2534,7 @@ void Freq_assign(){
 /*---------------------------------------*          
  * Update filter selection for QUAD      *
  *---------------------------------------*/
-     setQUAD(Band_slot);
+     setQUAD(b);
 #endif //PA and LPF daughter board defined
 
 #ifdef ATUCTL
@@ -2450,7 +2561,7 @@ void Freq_assign(){
     wdt_reset();
 
     #ifdef DEBUG
-       _TRACELIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
+       _INFOLIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
     #endif //DEBUG   
 }
 
@@ -2468,7 +2579,7 @@ void Band_assign(){
     Mode_assign();
 
     #ifdef DEBUG
-       _TRACELIST("%s mode(%d) slot(%d) f=%ld\n",__func__,mode,Band_slot,freq);
+       _EXCPLIST("%s mode(%d) slot(%d) f=%ld\n",__func__,mode,Band_slot,freq);
     #endif //DEBUG   
   
 }
@@ -2636,6 +2747,7 @@ bool downButtonPL = getSwitchPL(DOWN);
  *--------------------------------*/
   
   if (upButtonPL == LOW && getWord(SSW,CWMODE)==false) {
+     lastmode=mode;
      mode=4;
      Mode_assign();
         
@@ -2650,7 +2762,7 @@ bool downButtonPL = getSwitchPL(DOWN);
  * Exit CW mode                   *
  *--------------------------------*/
   if (downButtonPL == LOW && getWord(SSW,CWMODE)== true) {
-     mode=0;
+     mode=lastmode;
      Mode_assign();
      
      #ifdef DEBUG
@@ -2690,13 +2802,13 @@ bool downButtonPL = getSwitchPL(DOWN);
   if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
 
      #ifdef DEBUG
-        _INFOLIST("%s TX+\n",__func__);
+        _EXCPLIST("%s TX+\n",__func__);
      #endif //DEBUG
         
      ManualTX(); 
      
      #ifdef DEBUG
-        _INFOLIST("%s TX-\n",__func__);
+        _EXCPLIST("%s TX-\n",__func__);
      #endif //DEBUG   
   }
 
@@ -2727,7 +2839,7 @@ bool downButtonPL = getSwitchPL(DOWN);
       mode=(mode-1)%4;
       
       #ifdef DEBUG
-         _TRACELIST("%s m+(%d)\n",__func__,mode);
+         _EXCPLIST("%s m+(%d)\n",__func__,mode);
       #endif //DEBUG
       
       #ifdef EE
@@ -2744,7 +2856,7 @@ bool downButtonPL = getSwitchPL(DOWN);
       mode=(mode+1)%4;
       
       #ifdef DEBUG
-         _TRACELIST("%s m-(%d)\n",__func__,mode);
+         _EXCPLIST("%s m-(%d)\n",__func__,mode);
       #endif //DEBUG   
 
       #ifdef EE
@@ -2799,7 +2911,7 @@ void INIT(){
     updateEEPROM();
     
     #ifdef DEBUG
-       _TRACELIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+       _INFOLIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     #endif //DEBUG
     
  } else {
@@ -2822,7 +2934,7 @@ void INIT(){
   EEPROM.get(EEPROM_BAND,Band_slot);
   
   #ifdef DEBUG
-     _TRACELIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+     _INFOLIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
   #endif //DEBUG   
 }  
 
@@ -2834,7 +2946,7 @@ void INIT(){
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
 
 #ifdef DEBUG
-   _INFO;
+   _EXCP;
 #endif //DEBUG      
 }
 /*--------------------------------------------------------------------------*
@@ -2862,7 +2974,7 @@ void definePinOut() {
 #endif //ATUCTL      
 
 #ifdef DEBUG
-   _INFO;
+   _EXCP;
 #endif //DEBUG      
 }
 //*************************************[ SETUP FUNCTION ]************************************** 
@@ -2899,7 +3011,7 @@ void setup()
    setWord(&button[INT2],PUSHSTATE,HIGH);
 
    #ifdef DEBUG
-      _EXCPLIST("%s INT ok\n",__func__);
+      _INFOLIST("%s INT ok\n",__func__);
    #endif //DEBUG   
 
    setup_si5351();   
@@ -2911,15 +3023,18 @@ void setup()
    #ifdef QUAD
      setupQUAD();
      #ifdef DEBUG
-        _EXCPLIST("%s setupQUAD ok\n",__func__);
+        _INFOLIST("%s setupQUAD ok\n",__func__);
      #endif //DEBUG   
 
      /*---------
       * Initialize the QUAD board with the default band (at slot 0)
+      * 
       */
-     setQUAD(Band_slot);
+     uint16_t s=Bands[Band_slot];
+     uint16_t b=band2Slot(s);
+     setQUAD(b);
      #ifdef DEBUG
-       _EXCPLIST("%s setQUAD(%d) ok\n",__func__,Band_slot);
+       _EXCPLIST("%s Bands[%d]=%d band2slot=%d\n",__func__,Band_slot,s,b);
      #endif //DEBUG   
 
    #endif //QUAD      
@@ -2930,8 +3045,12 @@ void setup()
    #endif //DEBUG   
 
 
-   if ( getDOWNSSW() == LOW ) {
-      Calibration();
+   uint32_t tdown=millis();
+   if ( digitalRead(DOWN)==LOW ) {
+      while (millis()-tdown < 200) {}
+      if (digitalRead(DOWN)==LOW){
+         Calibration();
+      }
    }
 
 
@@ -2968,7 +3087,7 @@ void setup()
   #endif //WDT
 
   #ifdef DEBUG
-     _INFOLIST("%s completed ok\n",__func__);
+     _EXCP;
   #endif //DEBUG   
 
 
@@ -2977,7 +3096,7 @@ void setup()
  * if UP switch pressed at bootup then enter Terminal mode
  */
    #ifdef DEBUG
-      _TRACELIST("%s Checking Terminal\n",__func__);
+      _EXCPLIST("%s Checking Terminal\n",__func__);
    #endif //DEBUG
       
    bool     flip=false;
@@ -3036,6 +3155,19 @@ void loop()
 //*--- changes in mode, band, frequency and operational status
     checkMode();
 
+
+//*--- Manage anti-VOX timeout after avoxtime (mSec) the anti-vox condition is cleared
+
+    #ifdef ANTIVOX
+    
+    if (getWord(TSW,AVOX)==true) {
+       if (millis()-tavox > avoxtime) {
+          setWord(&TSW,AVOX,false);
+          tavox=0;
+       }
+    }
+
+    #endif //ANTIVOX
 
     #ifdef EE
 //*--- if EEPROM enabled check if timeout to write has been elapsed
@@ -3140,14 +3272,20 @@ uint16_t n = vox_maxtry;
        unsigned long codefreq = CPU_CLOCK/(d2-d1);
 
        if ((codefreq < FRQ_MAX) && (codefreq > 0)){
-        
-          if (getWord(SSW,VOX) == false){
-              switch_RXTX(HIGH);                 
+
+          if (getWord(TSW,AVOX)==false) {
+             if (getWord(SSW,VOX) == false){
+                 switch_RXTX(HIGH);                 
+             }
+
+             si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
+             setWord(&SSW,VOX,true);
+          } else {
+            if (millis()-tavox > avoxtime) {
+               setWord(&TSW,AVOX,false);
+               tavox=0;
+            }
           }
-
-       si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
-       setWord(&SSW,VOX,true);
-
        #ifdef WDT
           wdt_reset();
        #endif //WDT
