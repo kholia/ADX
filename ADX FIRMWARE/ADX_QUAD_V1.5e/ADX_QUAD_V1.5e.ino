@@ -506,8 +506,8 @@ int cmdLength    = 0;
 /*----------------------------------------------------------------*
  * General purpose global define                                  *
  * ---------------------------------------------------------------*/
-#define BOUNCE_TIME 20          //mSec minimum to debounce
-#define SHORT_TIME  500         //mSec minimum to consider long push
+#define BOUNCE_TIME 40          //mSec minimum to debounce
+#define SHORT_TIME  1000        //mSec minimum to consider long push
 #define SI5351_REF  25000000UL  //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
 #define CPU_CLOCK   16000000UL  //Processor clock
 #define VOX_MAXTRY  10          //Max number of attempts to detect an audio incoming signal
@@ -2237,6 +2237,11 @@ void ManualTX(){
                 
     }
     switch_RXTX(LOW);
+    
+    #ifdef ANTIVOX
+      tavox=millis();
+      setWord(&TSW,AVOX,true);
+    #endif //ANTIVOX   
 }
 
 /*---------------------------------------------------------------------*
@@ -2606,7 +2611,7 @@ void Band_Select(){
    bool downButton = getDOWNSSW();
    bool txButton   = getTXSW();
           
-   if ((upButton == LOW) && (downButton == HIGH)) {
+   if ((upButton == HIGH) && (downButton == LOW)) {
          
        Band_slot=changeBand(-1);
        setLED(LED[3-Band_slot],true);
@@ -2616,7 +2621,7 @@ void Band_Select(){
        #endif //DEBUG   
    } 
    
-   if ((upButton == HIGH) && (downButton == LOW)) {
+   if ((upButton == LOW) && (downButton == HIGH)) {
       Band_slot=changeBand(+1);
       setLED(LED[3-Band_slot],true);
 
@@ -2834,7 +2839,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      #endif //DEBUG 
   }
 
-  if ((upButton == LOW)&&(downButton == HIGH)&&(getWord(SSW,TXON)==false)) {
+  if ((upButton == HIGH)&&(downButton == LOW)&&(getWord(SSW,TXON)==false)) {
 
       mode=(mode-1)%4;
       
@@ -2851,7 +2856,7 @@ bool downButtonPL = getSwitchPL(DOWN);
   } 
    
 
-  if ((upButton == HIGH) && (downButton == LOW)&&(getWord(SSW,TXON)==false)) {
+  if ((upButton == LOW) && (downButton == HIGH)&&(getWord(SSW,TXON)==false)) {
       
       mode=(mode+1)%4;
       
