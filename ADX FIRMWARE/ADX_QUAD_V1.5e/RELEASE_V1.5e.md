@@ -21,18 +21,18 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 
 ## Mods by LU7DZ (version 1.3e)
 
--	Support for QUAD (4 bands) switching scheme (activaded with **#define QUAD 1** sentence, default: enabled).
--	Support for external ATU initialization/reset, line D5 would briefly (200 mSecs) flash a high on band changes (activated with the **define ATU 1** sentence, default: enabled)..
--       Improved CAT support for WSJT-X (TS-480 emulation), overall stability improved.
--	Minor memory & code optimizations, bug removal.
--	6 meters band removed from slot[][] options as it's unlikely the receiver can be moved that high, 10m works fine though
+- Support for QUAD (4 bands) switching scheme (activaded with **#define QUAD 1** sentence, default: enabled).
+- Support for external ATU initialization/reset, line D5 would briefly (200 mSecs) flash a high on band changes (activated with the **define ATU 1** sentence, default: enabled).
+- Improved CAT support for WSJT-X (TS-480 emulation), overall stability improved.
+- Minor memory & code optimizations, bug removal.
+- 6 meters band removed from slot[][] options as it's unlikely the receiver can be moved that high, 10m works fine though
 
 
 ## Mods by LU7DZ (version 1.4e)
 
--	Support for IC-746 CAT Protocol as suggested by Alan (AG7XS) because of being lighter and faster, TS480 still supported (activated with the **#define IC746 1** statement, default: disabled). 
+- Support for IC-746 CAT Protocol as suggested by Alan (AG7XS) because of being lighter and faster, TS480 still supported (activated with the **#define IC746 1** statement, default: disabled). 
 	- Consistency rules applies, if both TS480 and IC746 are activated then TS480 is disabled.
--	Minor memory & code optimizations, bug removal.
+- Minor memory & code optimizations, bug removal.
 
 
 ## Mods by LU7DZ (version 1.5e)
