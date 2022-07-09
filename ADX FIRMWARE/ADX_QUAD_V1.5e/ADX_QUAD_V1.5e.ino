@@ -104,6 +104,7 @@
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
+void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc(); to reboot
 /*****************************************************************
  * CONFIGURATION Properties                                      *
  *****************************************************************/
@@ -189,25 +190,27 @@ const char *delimiters            = ", \n";                  //commands can be s
 /*----------------------------------------------------------*
  * Serial configuration terminal commands                   *
  *----------------------------------------------------------*/
-const char *atuToken        = "atu";     
-const char *atu_delayToken  = "atd"; 
-const char *bounce_timeToken= "bt"; 
-const char *short_timeToken = "st"; 
-const char *vox_maxtryToken = "vxm"; 
-const char *vox_cntmaxToken = "vxc"; 
-const char *max_blinkToken  = "mbl"; 
-const char *eeprom_toutToken= "eet"; 
-const char *cw_shiftToken   = "cws"; 
-const char *cw_stepToken    = "cwt"; 
-const char *wdt_toutToken   = "wdt";
-const char *quad_band1Token = "qb1"; 
-const char *quad_band2Token = "qb2"; 
-const char *quad_band3Token = "qb3"; 
-const char *quad_band4Token = "qb4"; 
-const char *saveToken       = "save"; 
-const char *quitToken       = "quit";
-const char *resetToken      = "reset";
-    
+const char *atuToken        = "*atu"; 
+const char *atu_delayToken  = "*atd"; 
+const char *bounce_timeToken= "*bt";
+const char *short_timeToken = "*st";
+const char *vox_maxtryToken = "*vxm";
+const char *vox_cntmaxToken = "*vxc";
+const char *max_blinkToken  = "*mbl";
+const char *eeprom_toutToken= "*eet";
+const char *cw_shiftToken   = "*cws";
+const char *cw_stepToken    = "*cwt";
+const char *wdt_maxToken    = "*wdt";
+const char *quad_band1Token = "*qb1";
+const char *quad_band2Token = "*qb2";
+const char *quad_band3Token = "*qb3";
+const char *quad_band4Token = "*qb4";
+const char *saveToken       = "*save"; 
+const char *quitToken       = "*quit";
+const char *resetToken      = "*reset";
+const char *helpToken       = "*help";
+const char *endList         = "XXX";    
+
 
 #endif //TERMINAL
 
@@ -506,20 +509,20 @@ int cmdLength    = 0;
 /*----------------------------------------------------------------*
  * General purpose global define                                  *
  * ---------------------------------------------------------------*/
-#define BOUNCE_TIME 40          //mSec minimum to debounce
-#define SHORT_TIME  1000        //mSec minimum to consider long push
-#define SI5351_REF  25000000UL  //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
-#define CPU_CLOCK   16000000UL  //Processor clock
-#define VOX_MAXTRY  10          //Max number of attempts to detect an audio incoming signal
-#define CNT_MAX     65000       //Max count of timer1
-#define FRQ_MAX     30000       //Max divisor for frequency allowed
-#define BDLY        200         //Delay when blinking LED
-#define DELAY_WAIT  BDLY*2      //Double Delay
+#define BOUNCE_TIME 200           //mSec minimum to debounce
+#define SHORT_TIME  2*BOUNCE_TIME //mSec minimum to consider long push
+#define SI5351_REF  25000000UL   //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
+#define CPU_CLOCK   16000000UL   //Processor clock
+#define VOX_MAXTRY  10           //Max number of attempts to detect an audio incoming signal
+#define CNT_MAX     65000        //Max count of timer1
+#define FRQ_MAX     30000        //Max divisor for frequency allowed
+#define BDLY        200          //Delay when blinking LED
+#define DELAY_WAIT  BDLY*2       //Double Delay
 #define DELAY_CAL   DELAY_WAIT/10
-#define MAXMODE     5           //Max number of digital modes
-#define MAX_BLINK   4           //Max number of blinks
-#define BANDS       4           //Max number of bands allowed
-#define MAXBAND    10           //Max number of bands defined (actually uses BANDS out of MAXBAND)
+#define MAXMODE     5            //Max number of digital modes
+#define MAX_BLINK   4            //Max number of blinks
+#define BANDS       4            //Max number of bands allowed
+#define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
 #define XT_CAL_F   33000 
 
 
@@ -532,10 +535,24 @@ int cmdLength    = 0;
  * no EEPROM support is provided                                          *
  *------------------------------------------------------------------------*/
 #ifdef EE
-   #define EEPROM_CAL  10
-   #define EEPROM_TEMP 30
-   #define EEPROM_MODE 40
-   #define EEPROM_BAND 50
+   #define EEPROM_CAL          10
+   #define EEPROM_TEMP         30
+   #define EEPROM_MODE         40
+   #define EEPROM_BAND         50
+
+#ifdef TERMINAL
+   #define EEPROM_ATU          60
+   #define EEPROM_ATU_DELAY    70
+   #define EEPROM_BOUNCE_TIME  80
+   #define EEPROM_SHORT_TIME   90
+   #define EEPROM_VOX_MAXTRY  100 
+   #define EEPROM_VOX_CNTMAX  110
+   #define EEPROM_MAX_BLINK   120
+   #define EEPROM_EEPROM_TOUT 130
+   #define EEPROM_CW_SHIFT    140
+   #define EEPROM_CW_STEP     150
+   #define EEPROM_WDT_MAX     160
+#endif //TERMINAL
 
    uint32_t tout=0;
 
@@ -660,197 +677,6 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
   }
 }
 
-#ifdef TERMINAL
-/*====================================================================================================*/
-/*                                     Command Line Terminal                                          */
-/*====================================================================================================*/
-/*----------------------------------------------------------------------------------------------------*
- * Simple Serial Command Interpreter
- * Code excerpts taken from Mike Farr (arduino.cc)
- * 
- *---------------------------------------------------------------------------------------------------*/
-
-bool getCommand(char * commandLine)
-{
-  static uint8_t charsRead = 0;                      //note: COMAND_BUFFER_LENGTH must be less than 255 chars long
-  //read asynchronously until full command input
-
-  /*------------------------------------------*
-   * Read till the serial buffer is exhausted *
-   *------------------------------------------*/
-  while (Serial.available()) {
-    char c = tolower(Serial.read());
-    switch (c) {
-      case CR:      //likely have full command in buffer now, commands are terminated by CR and/or LS
-      case LF:
-        commandLine[charsRead] = NULLCHAR;       //null terminate our command char array
-        if (charsRead > 0)  {
-          charsRead = 0;                           //charsRead is static, so have to reset
-          Serial.println(commandLine);
-          return true;
-        }
-        break;
-      case BS:                                            // handle backspace in input: put a space in last char
-        if (charsRead > 0) {                              //and adjust commandLine and charsRead
-          commandLine[--charsRead] = NULLCHAR;
-          sprintf(hi,"%c%c%c",BS,SPACE,BS);
-          Serial.print(hi);
-        }
-        break;
-      default:
-        // c = tolower(c);
-        if (charsRead < COMMAND_BUFFER_LENGTH) {
-          commandLine[charsRead++] = c;
-        }
-        commandLine[charsRead] = NULLCHAR;     //just in case
-        break;
-    }
-  }
-  return false;
-}
-
-/*----------------------------------------------------------------------------------*
- * readNumber                                                                       *
- * Reads either a 8 or 16 bit number                                                *
- *----------------------------------------------------------------------------------*/
-uint16_t readNumber () {
-  char * numTextPtr = strtok(NULL, delimiters);         //K&R string.h  pg. 250
-  return atoi(numTextPtr);                              //K&R string.h  pg. 251
-}
-/*----------------------------------------------------------------------------------*
- * readWord
- * Reads a string of characters
- */
-char * readWord() {
-  char * word = strtok(NULL, delimiters);               //K&R string.h  pg. 250
-  return word;
-}
-/*----------------------------------------------------------------------------------*
- * nullCommand  
- * Handle a command that hasn't been identified
- */
-void nullCommand(char * ptrToCommandName) {
-  sprintf(hi,"Command not found <%s>\r\n",ptrToCommandName);
-  Serial.print(hi);
-  }
-
-/*----------------------------------------------------------------------------------*
- * Command processor
- */
-
-int perform_atuToken () { 
-    int v=readNumber();
-    if (v==0) {
-       return atu;
-    }
-    
-    return v;
-}
-int perform_atu_delayToken () { 
-    return 0;
-}
-int perform_bounce_timeToken () { 
-    return 0;
-}
-int perform_short_timeToken () { 
-    return 0;
-}
-int perform_vox_maxtryToken () { 
-    return 0;
-}
-int perform_vox_cntmaxToken () { 
-    return 0;
-}
-int perform_max_blinkToken () { 
-    return 0;
-}
-int perform_eeprom_toutToken () { 
-    return 0;
-}
-
-int perform_cw_shiftToken () { 
-    return 0;
-}
-int perform_wdt_toutToken () { 
-    return 0;
-}
-
-int perform_cw_stepToken () { 
-    return 0;
-}
-int perform_quad_band1Token () { 
-    return 0;
-}
-int perform_quad_band2Token () { 
-    return 0;
-}
-int perform_quad_band3Token () { 
-    return 0;
-}
-int perform_quad_band4Token () { 
-    return 0;
-}
-int perform_saveToken () { 
-    return 0;
-}
-int perform_quitToken () { 
-    return 0;
-}
-int perform_resetToken () { 
-    return 0;
-}
-
-/*-----------------------------------------------------------------------------*
- * printCommand                                                                *
- * print received command as a confirmation                                    *
- *-----------------------------------------------------------------------------*/
-void printCommand(char * token, uint16_t rc) {
-
-  sprintf(hi,"%s(%05d)\n\r>",token,rc);
-  Serial.print(hi);
-  
-  return;
-}
-void printMessage(char * token) {
-  sprintf(hi,"%s\n\r>",token);
-  Serial.print(hi);
-}
-/*--------------------------------------------------*
-   execCommand
-   parse command and process recognized tokens return
-   result (which is always numeric
- *--------------------------------------------------*/
-void execCommand(char * commandLine) {
-//  int result;
-
-  char * ptrToCommandName = strtok(commandLine, delimiters);
-  const char * msgSave = "Parameters saved";
-  const char * msgQuit = "Exiting terminal mode";
-  const char * msgReset= "Reset to default values";
-
-  if (strcmp(ptrToCommandName, atuToken)         == 0) {printCommand(ptrToCommandName,perform_atuToken());return;}
-  if (strcmp(ptrToCommandName, atu_delayToken)   == 0) {printCommand(ptrToCommandName,perform_atu_delayToken());return;}
-  if (strcmp(ptrToCommandName, bounce_timeToken) == 0) {printCommand(ptrToCommandName,perform_bounce_timeToken());return;}
-  if (strcmp(ptrToCommandName, short_timeToken)  == 0) {printCommand(ptrToCommandName,perform_short_timeToken());return;}
-  if (strcmp(ptrToCommandName, vox_maxtryToken)  == 0) {printCommand(ptrToCommandName,perform_vox_maxtryToken());return;}
-  if (strcmp(ptrToCommandName, vox_cntmaxToken)  == 0) {printCommand(ptrToCommandName,perform_vox_cntmaxToken());return;}
-  if (strcmp(ptrToCommandName, max_blinkToken)   == 0) {printCommand(ptrToCommandName,perform_max_blinkToken());return;}
-  if (strcmp(ptrToCommandName, eeprom_toutToken) == 0) {printCommand(ptrToCommandName,perform_eeprom_toutToken());return;}
-  if (strcmp(ptrToCommandName, cw_shiftToken)    == 0) {printCommand(ptrToCommandName,perform_cw_shiftToken());return;}
-  if (strcmp(ptrToCommandName, cw_stepToken)     == 0) {printCommand(ptrToCommandName,perform_cw_stepToken());return;}
-  if (strcmp(ptrToCommandName, quad_band1Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band1Token());return;}
-  if (strcmp(ptrToCommandName, quad_band2Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band2Token());return;}
-  if (strcmp(ptrToCommandName, quad_band3Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band3Token());return;}
-  if (strcmp(ptrToCommandName, quad_band4Token)  == 0) {printCommand(ptrToCommandName,perform_quad_band4Token());return;}
-  if (strcmp(ptrToCommandName, wdt_toutToken)    == 0) {printCommand(ptrToCommandName,perform_wdt_toutToken());return;}
-  if (strcmp(ptrToCommandName, saveToken)        == 0) {perform_saveToken();printMessage(msgSave);return;}
-  if (strcmp(ptrToCommandName, quitToken)        == 0) {perform_quitToken();printMessage(msgQuit);return;}
-  if (strcmp(ptrToCommandName, resetToken)       == 0) {perform_resetToken();printMessage(msgReset);return;}
-
-  nullCommand(ptrToCommandName);
-return; 
-}
-#endif //TERMINAL
 
 #ifdef ATUCTL
 /*====================================================================================================*/
@@ -2343,6 +2169,17 @@ void Calibration(){
   
   resetLED();
   uint8_t  n=4;
+
+  switch_RXTX(LOW);
+  
+  si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA); // Set for lower power for calibration
+  si5351.set_clock_pwr(SI5351_CLK0, 0); // Enable the clock for calibration
+  
+  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA); // Set for lower power for calibration
+  si5351.set_clock_pwr(SI5351_CLK1, 0); // Enable the clock for calibration
+  
+  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
+  si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
    
   while (n>0) {
 
@@ -2385,9 +2222,9 @@ void Calibration(){
     
   // Set Calibration CLK output
   
-        si5351.set_freq(Cal_freq * 100, SI5351_CLK0);
-        si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA); // Set for lower power for calibration
-        si5351.set_clock_pwr(SI5351_CLK0, 1); // Enable the clock for calibration
+        si5351.set_freq(Cal_freq * 100, SI5351_CLK2);
+        si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
+        si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
      } 
    
 
@@ -2402,9 +2239,9 @@ void Calibration(){
 
  // Set Calbration Clock output
            
-        si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK0);
-        si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA); // Set for lower power for Calibration
-        si5351.set_clock_pwr(SI5351_CLK0, 1); // Enable clock2 
+        si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
+        si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
+        si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable clock2 
 
      } 
 
@@ -2425,6 +2262,30 @@ uint16_t save=EEPROM_SAVE;
    EEPROM.put(EEPROM_MODE,mode);
    EEPROM.put(EEPROM_BAND,Band_slot);
 
+#ifdef TERMINAL
+
+#ifdef ATUCTL
+   EEPROM.put(EEPROM_ATU,atu);
+   EEPROM.put(EEPROM_ATU_DELAY,atu_delay);
+#endif //ATUCTL
+   
+   EEPROM.put(EEPROM_BOUNCE_TIME,bounce_time);
+   EEPROM.put(EEPROM_SHORT_TIME,short_time);
+   EEPROM.put(EEPROM_VOX_MAXTRY,vox_maxtry);
+   EEPROM.put(EEPROM_VOX_CNTMAX,cnt_max);
+   EEPROM.put(EEPROM_MAX_BLINK,max_blink);
+   EEPROM.put(EEPROM_EEPROM_TOUT,eeprom_tout);
+#ifdef CW
+   EEPROM.put(EEPROM_CW_SHIFT,cw_shift);
+   EEPROM.put(EEPROM_CW_STEP,cw_step);
+#endif //CW
+
+#ifdef WDT
+   EEPROM.put(EEPROM_WDT_MAX,wdt_max);
+#endif //WDT
+   
+#endif //TERMINAL
+
    #ifdef DEBUG
       _TRACELIST("%s save(%d) cal(%d) m(%d) slot(%d)\n",__func__,save,cal_factor,mode,Band_slot);
    #endif //DEBUG
@@ -2432,8 +2293,46 @@ uint16_t save=EEPROM_SAVE;
     setWord(&SSW,SAVEEE,false);
 
 }
-#endif //EE
+/*------------------------------------------------------------------------------*
+ * resetEEPROM                                                                  *
+ * reset to pinche defaults                                                     *
+ *------------------------------------------------------------------------------*/
+void resetEEPROM() {
 
+uint16_t save=EEPROM_SAVE;
+
+   mode=0;
+   Band_slot=0;
+   cal_factor=0;
+
+#ifdef TERMINAL
+
+#ifdef ATUCTL
+   atu        = ATU;
+   atu_delay  = ATU_DELAY;
+#endif //ATUCTL
+   
+   bounce_time= BOUNCE_TIME;
+   short_time = SHORT_TIME;
+   vox_maxtry = VOX_MAXTRY;
+   cnt_max    = CNT_MAX;
+   max_blink  = MAX_BLINK;
+   eeprom_tout= EEPROM_TOUT;
+
+#ifdef CW   
+   cw_shift   = CW_SHIFT;
+   cw_step    = CW_STEP;
+#endif //CW
+
+#ifdef WDT
+   wdt_max   = WDT_MAX;
+#endif //WDT   
+
+#endif //TERMINAL
+
+   updateEEPROM();
+}
+#endif //EE
 /**********************************************************************************************/
 /*                               Operational state management                                 */
 /**********************************************************************************************/
@@ -2937,6 +2836,31 @@ void INIT(){
    
   EEPROM.get(EEPROM_MODE,mode);
   EEPROM.get(EEPROM_BAND,Band_slot);
+
+#ifdef TERMINAL
+
+#ifdef ATUCTL
+   EEPROM.get(EEPROM_ATU,atu);
+   EEPROM.get(EEPROM_ATU_DELAY,atu_delay);
+#endif //ATUCTL
+   
+   EEPROM.get(EEPROM_BOUNCE_TIME,bounce_time);
+   EEPROM.get(EEPROM_SHORT_TIME,short_time);
+   EEPROM.get(EEPROM_VOX_MAXTRY,vox_maxtry);
+   EEPROM.get(EEPROM_VOX_CNTMAX,cnt_max);
+   EEPROM.get(EEPROM_MAX_BLINK,max_blink);
+   EEPROM.get(EEPROM_EEPROM_TOUT,eeprom_tout);
+#ifdef CW
+   EEPROM.get(EEPROM_CW_SHIFT,cw_shift);
+   EEPROM.get(EEPROM_CW_STEP,cw_step);
+#endif //CW
+
+#ifdef WDT
+   EEPROM.get(EEPROM_WDT_MAX,wdt_max);
+#endif //WDT
+   
+#endif //TERMINAL
+ 
   
   #ifdef DEBUG
      _INFOLIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
@@ -2982,6 +2906,281 @@ void definePinOut() {
    _EXCP;
 #endif //DEBUG      
 }
+
+/*-----------------------------------------------------------------------------*
+ * detectKey                                                                   *
+ * detect if a push button is pressed                                          *
+ *-----------------------------------------------------------------------------*/
+bool detectKey(uint8_t k) {
+   uint32_t tdown=millis();
+   if ( digitalRead(k)==LOW ) {
+      while (millis()-tdown < 200) {}
+      if (digitalRead(k)==LOW){
+         return true;
+      }
+   }
+   return false;
+}
+#ifdef TERMINAL
+/*====================================================================================================*/
+/*                                     Command Line Terminal                                          */
+/*====================================================================================================*/
+/*----------------------------------------------------------------------------------------------------*
+ * Simple Serial Command Interpreter
+ * Code excerpts taken from Mike Farr (arduino.cc)
+ * 
+ *---------------------------------------------------------------------------------------------------*/
+
+bool getCommand(char * commandLine)
+{
+  static uint8_t charsRead = 0;                      //note: COMAND_BUFFER_LENGTH must be less than 255 chars long
+  //read asynchronously until full command input
+
+  /*------------------------------------------*
+   * Read till the serial buffer is exhausted *
+   *------------------------------------------*/
+  while (Serial.available()) {
+    char c = tolower(Serial.read());
+    switch (c) {
+      case CR:      //likely have full command in buffer now, commands are terminated by CR and/or LS
+      case LF:
+        commandLine[charsRead] = NULLCHAR;       //null terminate our command char array
+        if (charsRead > 0)  {
+          charsRead = 0;                           //charsRead is static, so have to reset
+          Serial.println(commandLine);
+          return true;
+        }
+        break;
+      case BS:                                            // handle backspace in input: put a space in last char
+        if (charsRead > 0) {                              //and adjust commandLine and charsRead
+          commandLine[--charsRead] = NULLCHAR;
+          sprintf(hi,"%c%c%c",BS,SPACE,BS);
+          Serial.print(hi);
+        }
+        break;
+      default:
+        // c = tolower(c);
+        if (charsRead < COMMAND_BUFFER_LENGTH) {
+          commandLine[charsRead++] = c;
+        }
+        commandLine[charsRead] = NULLCHAR;     //just in case
+        break;
+    }
+  }
+  return false;
+}
+
+/*----------------------------------------------------------------------------------*
+ * readNumber                                                                       *
+ * Reads either a 8 or 16 bit number                                                *
+ *----------------------------------------------------------------------------------*/
+uint16_t readNumber () {
+  char * numTextPtr = strtok(NULL, delimiters);         //K&R string.h  pg. 250
+  return atoi(numTextPtr);                              //K&R string.h  pg. 251
+}
+/*----------------------------------------------------------------------------------*
+ * readWord
+ * Reads a string of characters
+ */
+char * readWord() {
+  char * word = strtok(NULL, delimiters);               //K&R string.h  pg. 250
+  return word;
+}
+/*----------------------------------------------------------------------------------*
+ * nullCommand  
+ * Handle a command that hasn't been identified
+ */
+void nullCommand(char * ptrToCommandName) {
+  sprintf(hi,"Command not found <%s>\r\n",ptrToCommandName);
+  Serial.print(hi);
+  }
+
+/*----------------------------------------------------------------------------------*
+ * Command processor
+ */
+
+int perform_atuToken () { 
+    int v=readNumber();
+    if (v==0) {
+       return atu;
+    }
+    
+    return v;
+}
+int perform_atu_delayToken () { 
+    return 0;
+}
+int perform_bounce_timeToken () { 
+    return 0;
+}
+int perform_short_timeToken () { 
+    return 0;
+}
+int perform_vox_maxtryToken () { 
+    return 0;
+}
+int perform_vox_cntmaxToken () { 
+    return 0;
+}
+int perform_max_blinkToken () { 
+    return 0;
+}
+int perform_eeprom_toutToken () { 
+    return 0;
+}
+
+int perform_cw_shiftToken () { 
+    return 0;
+}
+int perform_wdt_maxToken () { 
+    return 0;
+}
+
+int perform_cw_stepToken () { 
+    return 0;
+}
+int perform_quad_band1Token () { 
+    return 0;
+}
+int perform_quad_band2Token () { 
+    return 0;
+}
+int perform_quad_band3Token () { 
+    return 0;
+}
+int perform_quad_band4Token () { 
+    return 0;
+}
+int perform_saveToken () { 
+    return 0;
+}
+int perform_resetToken () { 
+    return 0;
+}
+int perform_quitToken () {
+const char * msgQuit = "Exiting terminal mode";
+    printMessage(msgQuit);
+    delay(200);
+    resetFunc(); 
+    return 0;
+}
+int perform_helpToken(){
+ char * p = atuToken;
+
+ while (strcmp(p,"XXX")!=0) {
+    #ifdef WDT
+       wdt_reset();
+    #endif
+    if (strlen(p)>=2 && strlen(p)<=5 && p[0]=='*') {
+       sprintf(hi,"%s, ",p+1);
+       Serial.print(hi);
+    }   
+    p=p+strlen(p)+1;   
+  }
+  Serial.print("\r\n>");
+  
+}
+/*-----------------------------------------------------------------------------*
+ * printCommand                                                                *
+ * print received command as a confirmation                                    *
+ *-----------------------------------------------------------------------------*/
+void printCommand(char * token, uint16_t rc) {
+
+  sprintf(hi,"%s(%05d)\n\r>",token,rc);
+  Serial.print(hi);
+  
+  return;
+}
+void printMessage(char * token) {
+  sprintf(hi,"%s\n\r>",token);
+  Serial.print(hi);
+}
+/*--------------------------------------------------*
+   execCommand
+   parse command and process recognized tokens return
+   result (which is always numeric
+ *--------------------------------------------------*/
+void execCommand(char * commandLine) {
+//  int result;
+
+  char * ptrToCommandName = strtok(commandLine, delimiters);
+  const char * msgSave = "Parameters saved";
+  const char * msgReset= "Reset to default values";
+
+  if (strcmp(ptrToCommandName, atuToken+1)         == 0) {printCommand(ptrToCommandName,perform_atuToken());return;}
+  if (strcmp(ptrToCommandName, atu_delayToken+1)   == 0) {printCommand(ptrToCommandName,perform_atu_delayToken());return;}
+  if (strcmp(ptrToCommandName, bounce_timeToken+1) == 0) {printCommand(ptrToCommandName,perform_bounce_timeToken());return;}
+  if (strcmp(ptrToCommandName, short_timeToken+1)  == 0) {printCommand(ptrToCommandName,perform_short_timeToken());return;}
+  if (strcmp(ptrToCommandName, vox_maxtryToken+1)  == 0) {printCommand(ptrToCommandName,perform_vox_maxtryToken());return;}
+  if (strcmp(ptrToCommandName, vox_cntmaxToken+1)  == 0) {printCommand(ptrToCommandName,perform_vox_cntmaxToken());return;}
+  if (strcmp(ptrToCommandName, max_blinkToken+1)   == 0) {printCommand(ptrToCommandName,perform_max_blinkToken());return;}
+  if (strcmp(ptrToCommandName, eeprom_toutToken+1) == 0) {printCommand(ptrToCommandName,perform_eeprom_toutToken());return;}
+  if (strcmp(ptrToCommandName, cw_shiftToken+1)    == 0) {printCommand(ptrToCommandName,perform_cw_shiftToken());return;}
+  if (strcmp(ptrToCommandName, cw_stepToken+1)     == 0) {printCommand(ptrToCommandName,perform_cw_stepToken());return;}
+  if (strcmp(ptrToCommandName, quad_band1Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band1Token());return;}
+  if (strcmp(ptrToCommandName, quad_band2Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band2Token());return;}
+  if (strcmp(ptrToCommandName, quad_band3Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band3Token());return;}
+  if (strcmp(ptrToCommandName, quad_band4Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band4Token());return;}
+  if (strcmp(ptrToCommandName, wdt_maxToken+1)    == 0)  {printCommand(ptrToCommandName,perform_wdt_maxToken());return;}
+  if (strcmp(ptrToCommandName, saveToken+1)        == 0) {perform_saveToken();printMessage(msgSave);return;}
+  if (strcmp(ptrToCommandName, quitToken+1)        == 0) {perform_quitToken();return;}
+  if (strcmp(ptrToCommandName, resetToken+1)       == 0) {perform_resetToken();printMessage(msgReset);return;}
+  if (strcmp(ptrToCommandName, helpToken+1)        == 0) {perform_helpToken();return;}
+
+  nullCommand(ptrToCommandName);
+return; 
+}
+/*-----------------------------------------------------------------------------*
+ * execTerminal                                                                *
+ * executes the terminal processor if enabled                                  *                                          *
+ *-----------------------------------------------------------------------------*/
+void execTerminal() {
+  
+   sprintf(hi,"\n\rADX %s command interpreter\n\r",VERSION);
+   Serial.print(hi);
+
+   uint8_t n=3;
+   while (n>0) {
+      resetLED();
+      delay(200);
+      setLED(FT8,false);
+      setLED(FT4,false);
+      setLED(WSPR,false);
+      setLED(JS8,false);
+      delay(200);
+      n--;
+      #ifdef WDT
+         wdt_reset();
+      #endif //WDT   
+   }
+   while (digitalRead(UP)==LOW) {
+      #ifdef WDT
+         wdt_reset();
+      #endif //WDT
+   }
+   Serial.println("entering command mode, <quit> to finalize <help> for help\r\n>");
+   switch_RXTX(LOW);
+      
+   while (true) {
+
+//*--- TERMINAL serial configuration
+ 
+       if (getCommand(cmdLine)) {
+           execCommand(cmdLine);
+           #ifdef WDT
+              wdt_reset();
+           #endif //WDT   
+       } else {
+           #ifdef WDT
+              wdt_reset();
+           #endif //WDT
+       }
+
+   }
+ 
+}
+#endif //TERMINAL
+   
 //*************************************[ SETUP FUNCTION ]************************************** 
 void setup()
 {
@@ -3049,18 +3248,10 @@ void setup()
       _INFOLIST("%s INIT ok\n",__func__);
    #endif //DEBUG   
 
-
-   uint32_t tdown=millis();
-   if ( digitalRead(DOWN)==LOW ) {
-      while (millis()-tdown < 200) {}
-      if (digitalRead(DOWN)==LOW){
-         Calibration();
-      }
-   }
-
-
-
-
+/*------
+ * Check if calibration is needed
+ */
+   if (detectKey(DOWN)) {Calibration();}
   
 /*--------------------------------------------------------*
  * initialize the timer1 as an analog comparator          *
@@ -3100,48 +3291,9 @@ void setup()
 /*------------------
  * if UP switch pressed at bootup then enter Terminal mode
  */
-   #ifdef DEBUG
-      _EXCPLIST("%s Checking Terminal\n",__func__);
-   #endif //DEBUG
-      
-   bool     flip=false;
-   uint32_t tflip=millis();
-   if (digitalRead(UP)==LOW) {
-    
-      sprintf(hi,"\n\rADX %s command interpreter\n\r",VERSION);
-      Serial.print(hi);
-      
-      while (digitalRead(UP)==LOW) {
-      
-      #ifdef WDT        
-         wdt_reset();
-      #endif //WDT
-
-      }
-      Serial.println("entering command mode, reboot to finalize\r\n>");
-      switch_RXTX(LOW);
-      
-      while (true) {
-/*
-         if (millis()-tflip > max_blink) {
-            setLED(JS8,flip);
-            setLED(FT4,flip);
-            flip=!flip;
-            tflip=millis();
-         }
-*/
-//*--- TERMINAL serial configuration
- 
-         if (getCommand(cmdLine)) {
-            execCommand(cmdLine);
-            #ifdef WDT
-               wdt_reset();
-            #endif //WDT   
-         }
-
-      }
-
-   } 
+   if (detectKey(UP)) { 
+      execTerminal();      
+   }  
 #endif //TERMINAL   
   
 }
