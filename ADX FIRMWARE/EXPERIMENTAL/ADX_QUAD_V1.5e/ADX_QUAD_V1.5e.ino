@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          103
+#define BUILD          104
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
