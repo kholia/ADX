@@ -432,8 +432,6 @@ int cmdLength    = 0;
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
-
-
 /*-------------------------------------------------------------------------*
  * Define Info,Exception and Trace macros (replaced by NOP if not enabled) *
  *-------------------------------------------------------------------------*/
@@ -619,12 +617,6 @@ int      cnt_max    =CNT_MAX;
 uint16_t max_blink  =MAX_BLINK;
 uint16_t eeprom_tout=EEPROM_TOUT;
 
-#ifdef QUAD
-
-uint8_t quads[BANDS]={0,1,2,3};
-
-#endif //QUAD
-
 
 uint8_t  SSW=0;               //System SSW variable (to be used with getWord/setWord)
 uint16_t mode=0;              //Default to mode=0 (FT8)
@@ -653,10 +645,6 @@ const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};
 uint8_t       button[3]   ={0,0,0};
 unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
 
-#ifdef QUAD
-#define QUADMAX         8
-uint16_t quad[QUADMAX] = {80,60,40,30,20,17,15,10};
-#endif //QUAD
 
 #ifdef CW
 unsigned long freqCW      = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
@@ -689,6 +677,29 @@ uint32_t      wdt_tout    = 0;
 #else
    const uint16_t Bands[BANDS]={40,30,20,17};             //Band1,Band2,Band3,Band4 (initial setup)
 #endif //ONEBAND
+
+/*-----------------------------------------------------------------------------------------------------*
+ * This is the definition of the QUAD filter board switching, this board carries 4 filters and can
+ * decode up to 4 bands, so by wiring each of the 4 selectors enable any 4 band group, in the standard
+ * configuration bands are encoded as:
+ *             80 -- 0 --  1
+ *             60 -- 1 --  2
+ *             40 -- 2 --  4
+ *             30 -- 3 --  8
+ *             20 -- 4 -- 16
+ *             17 -- 5 -- 32
+ *             15 -- 6 -- 64
+ *             10 -- 7 --128             
+ * This position matches the position in the slot[][] array and no change is needed, a future expansion            
+ * will allow for all HF bands + 6 meters to be coded but the QUAD board will still be able to decode 
+ * only 8 positions so an indirection can be made. Meanwhile it's better not to touch the quads[] defs
+ *             
+ */
+#ifdef QUAD
+#define QUADMAX         8
+  const uint16_t quads[QUADMAX] = {80,60,40,30,20,17,15,10};
+#endif //QUAD
+
 /****************************************************************************************************************************************/
 /*                                                     CODE INFRAESTRUCTURE                                                             */
 /****************************************************************************************************************************************/
@@ -733,10 +744,28 @@ void flipATU() {
 /*                                     QUAD Board management                                          */
 /*====================================================================================================*/
 /*-------------------------------------------------------------------*
+ * band2QUAD                                                         *
+ * Transform a band [80..10] into the QUAD number to activate a LPF  *
+ *-------------------------------------------------------------------*/
+ int band2QUAD(uint16_t b) {
+
+  int q=-1;
+  for (int i=0;i<QUADMAX;i++) {
+    if (quads[i]==b) {
+       q=i;
+       break;
+    }
+  }
+  #ifdef DEBUG
+  _EXCPLIST("%s band=%d quad=%d\n",__func__,b,q);
+  #endif //DEBUG
+  return q;
+ }
+/*-------------------------------------------------------------------*
  * setQUAD                                                           *
  * Set the QUAD filter with the proper slot [0..3]                   *
  *-------------------------------------------------------------------*/
-void setQUAD(uint16_t LPFslot) {
+void setQUAD(int LPFslot) {
    
    uint8_t s =0;
    s |= (1<<LPFslot);
@@ -803,7 +832,7 @@ int getBand(uint32_t f) {
    if (f>=28000000 && f<29700000) {b=10;}
 
 #ifdef DEBUG
-   _EXCPLIST("%s() f=%ld band=%d\n",__func__,f,b);
+   _INFOLIST("%s() f=%ld band=%d\n",__func__,f,b);
 #endif //DEBUG
 
    return b;  
@@ -822,7 +851,7 @@ int findSlot(uint16_t band) {
     }
   }
 #ifdef DEBUG
-   _EXCPLIST("%s() band=%d slot=%d\n",__func__,band,s);
+   _INFOLIST("%s() band=%d slot=%d\n",__func__,band,s);
 #endif //DEBUG
 
   return s;
@@ -866,7 +895,7 @@ int getMode(int s,uint32_t f) {
   }
   
   #ifdef DEBUG
-  _EXCPLIST("%s slot=%d f=%ld m=%d\n",__func__,s,f,m);
+  _INFOLIST("%s slot=%d f=%ld m=%d\n",__func__,s,f,m);
   #endif //DEBUG
   
   return m;
@@ -1156,7 +1185,7 @@ void doSetFreq() { //ADDITIONAL CONTROL FOR LEGAL BAND NEEDED
    int m=getMode(q,freq);
 
    #ifdef DEBUG
-     _EXCPLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
+     _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
    #endif //DEBUG  
 
    if (getWord(SSW,CWMODE)==false) {      //If CW is enabled check if CW mode is activated or it's working on WSJT modes before analyze a mode change based on frequency change
@@ -1169,9 +1198,14 @@ void doSetFreq() { //ADDITIONAL CONTROL FOR LEGAL BAND NEEDED
 
   #ifdef QUAD  //Set the PA & LPF filter board settings if defined
      uint16_t s=bands[b];
-     uint16_t q=band2Slot(s);
-     setQUAD(q);
-     _INFOLIST("%s bands[%d]=%d quad=%d\n",__func__,b,s,q);
+     int q=band2QUAD(s);
+     if (q != -1) { 
+        setQUAD(q);
+     }   
+     #ifdef DEBUG
+        _EXCPLIST("%s bands[%d]=%d quad=%d\n",__func__,b,s,q);
+     #endif //DEBUG
+     
   #endif //QUAD    
   sendAck();
 }
@@ -1504,7 +1538,7 @@ void setFreqCAT() {
   int m=getMode(q,freq);
 
 #ifdef DEBUG
-  _EXCPLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
+  _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
 #endif //DEBUG  
 
   if (getWord(SSW,CWMODE)==false) {   
@@ -1519,11 +1553,14 @@ void setFreqCAT() {
  *----*/
   
   #ifdef QUAD  //Set the PA & LPF filter board settings if defined
-     setQUAD(q);
+     int x=band2QUAD(k);
+     if (x != -1) {
+        setQUAD(x);
+     }   
   #endif //PALPF    
 
    #ifdef DEBUG
-      _INFOLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d\n",__func__,Catbuffer,freq,b,s,q);
+      _EXCPLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n",__func__,Catbuffer,freq,b,k,q,x);
    #endif //DEBUG 
 }
 
@@ -2198,7 +2235,7 @@ void Calibration(){
 
 
   #ifdef DEBUG
-     _EXCP;
+     _INFO;
   #endif //DEBUG
   
   resetLED();
@@ -2450,7 +2487,7 @@ void Mode_assign(){
    #endif //EE
 
    #ifdef DEBUG
-      _EXCPLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
+      _INFOLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
    #endif //DEBUG   
 }
 
@@ -2500,7 +2537,13 @@ void Freq_assign(){
 /*---------------------------------------*          
  * Update filter selection for QUAD      *
  *---------------------------------------*/
-     setQUAD(b);
+     int q=band2QUAD(Band);
+     if (q!=-1) {
+        setQUAD(b);
+     }
+     #ifdef DEBUG
+        _EXCPLIST("%s Band=%d slot=%d quad=%d f=%ld\n",__func__,Band,b,q,freq);   
+     #endif
 #endif //PA and LPF daughter board defined
 
 #ifdef ATUCTL
@@ -2545,7 +2588,7 @@ void Band_assign(){
     Mode_assign();
 
     #ifdef DEBUG
-       _EXCPLIST("%s mode(%d) slot(%d) f=%ld\n",__func__,mode,Band_slot,freq);
+       _INFOLIST("%s mode(%d) slot(%d) f=%ld\n",__func__,mode,Band_slot,freq);
     #endif //DEBUG   
   
 }
@@ -2768,13 +2811,13 @@ bool downButtonPL = getSwitchPL(DOWN);
   if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
 
      #ifdef DEBUG
-        _EXCPLIST("%s TX+\n",__func__);
+        _INFOLIST("%s TX+\n",__func__);
      #endif //DEBUG
         
      ManualTX(); 
      
      #ifdef DEBUG
-        _EXCPLIST("%s TX-\n",__func__);
+        _INFOLIST("%s TX-\n",__func__);
      #endif //DEBUG   
   }
 
@@ -2805,7 +2848,7 @@ bool downButtonPL = getSwitchPL(DOWN);
       mode=(mode-1)%4;
       
       #ifdef DEBUG
-         _EXCPLIST("%s m+(%d)\n",__func__,mode);
+         _INFOLIST("%s m+(%d)\n",__func__,mode);
       #endif //DEBUG
       
       #ifdef EE
@@ -2822,7 +2865,7 @@ bool downButtonPL = getSwitchPL(DOWN);
       mode=(mode+1)%4;
       
       #ifdef DEBUG
-         _EXCPLIST("%s m-(%d)\n",__func__,mode);
+         _INFOLIST("%s m-(%d)\n",__func__,mode);
       #endif //DEBUG   
 
       #ifdef EE
@@ -2949,7 +2992,7 @@ void INIT(){
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
 
 #ifdef DEBUG
-   _EXCP;
+   _INFO;
 #endif //DEBUG      
 }
 /*--------------------------------------------------------------------------*
@@ -2977,7 +3020,7 @@ void definePinOut() {
 #endif //ATUCTL      
 
 #ifdef DEBUG
-   _EXCP;
+   _INFO;
 #endif //DEBUG      
 }
 
@@ -3302,7 +3345,7 @@ void setup()
 
    #ifdef DEBUG
       Serial.begin(BAUD);
-      _EXCPLIST("%s: ADX Firmware V(%s)\n",__func__,VERSION);
+      _EXCPLIST("%s: ADX Firmware V(%s) build(%d)\n",__func__,VERSION,BUILD);
    #endif //DEBUG
 
 /*-----
@@ -3350,10 +3393,12 @@ void setup()
       * 
       */
      uint16_t s=Bands[Band_slot];
-     uint16_t b=band2Slot(s);
-     setQUAD(b);
+     int q=band2QUAD(s);
+     if (q != -1) {
+        setQUAD(q);
+     }   
      #ifdef DEBUG
-       _EXCPLIST("%s Bands[%d]=%d band2slot=%d\n",__func__,Band_slot,s,b);
+        _EXCPLIST("%s Bands[%d]=%d quad=%d\n",__func__,Band_slot,s,q);
      #endif //DEBUG   
 
    #endif //QUAD      
@@ -3398,7 +3443,7 @@ void setup()
   #endif //WDT
 
   #ifdef DEBUG
-     _EXCP;
+     _INFO;
   #endif //DEBUG   
 
 

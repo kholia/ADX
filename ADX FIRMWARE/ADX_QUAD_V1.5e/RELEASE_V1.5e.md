@@ -50,36 +50,55 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 - Now the last WSJT-X mode prior to the switch into CW is stored and recovered when CW is de-activated.
 - Watchdog inhibits TX to be on for more than two consecutive minutes (activated with the **#define WDT 1** statement, default: enabled).
 - Serial (simple) command line configuration facility (activated with the **#define TERMINAL 1** statement, default: disabled).
+	- Enter the terminal mode by held the UP key pressed while booting the board.
+		- Terminal parameters are 115200 8N2.
+	- Commands without arguments display the current value.
+	- Commands with one argument set the parameter to that value (no commitment to EEPROM is made).
+	- Exit the command terminal with "quit".
 
 ```
-	ADX Transceiver Firmware V1.5e
+	ADX Transceiver Firmware V1.5e Build(nnn)
 	>
-	(A) ATU Port(5)
-	(B) ATU Delay(200)
-	(C) BOUNCE(20)
-	(D) SHORT(500)
-	(E) VOX MAXTRY(10)
-	(F) VOX CNT(65000)
-	(G) VOX FRQMAX(30000)
-	(H) BLINK(200)
-	(I) EEPROM TOUT(500)
-	(J) CW SHIFT(600)
-	(K) CW STEP(500)
-	(L) CW RITMAX(15000)
-	(M) QUAD BAND1(1)
-	(N) QUAD BAND2(2)
-	(O) QUAD BAND3(3)
-	(P) QUAD BAND4(4)
-	(R) BAND1(40)
-	(T) BAND2(30)
-	(U) BAND3(20)
-	(V) BAND4(17)
-	(S) SAVE
-	(Q) QUIT
-	(R) RESTORE DEFAULTS
-	(?) THIS MENU
 	>
+
+        Available commands are
+		bt		debouncing delay in mSecs
+		st		time to consider the pulse a long one in mSecs
+		vxm		VOX max try (TX detection).
+		vxc		VOX count max (TX detection)
+		mbl		Blink interval in mSecs		
+
+		save		Save current values into EEPROM
+		reset		Reset EEPROM values to default
+		quit		End session and reboot
+		help		List all available commands
+		
+		** only if ATUCTL is defined **
+		atu		pin for ATU pulse
+		atd		duration of ATU reset pulse in mSecs
+
+
+		** only if ANTIVOX is defined **
+		vxt		Anti-VOX delay in mSecs
+
+
+		** only if EEPROM support is defined **		
+		eet		EEPROM save timeout in mSecs
+		list		List EEPROM contents
+
+		** only if CW is defined **
+		cws		CW Shift in Hz
+		cwt		CW Step in Hz
+
+
+		** only if WDT is defined **
+		wdt		Max allowed TX time in mSecs
+
 ```
+- (fix) Calibration, proper handling of the DOWN key at bootup to enter calibration, then CLK2 is the output with 1 MHz
+- (fix) General fixes related to the QUAD filter selection and how changes in frequency are shown in the band/mode LED.
+- Build number is added to the firmware (#define BUILD xxx), when the build number set differs from the one stored in EEPROM values are reset to default.
+- Changes in the EEPROM management, all values supported by the configuration terminal are now stored in EEPROM.
 - Changes in the way to enter calibration mode at the start of the firmware to make it more reliable.
 - Minor memory & code optimizations, bug removal.
 
