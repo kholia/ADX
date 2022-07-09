@@ -101,6 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
+#define BUILD          103
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -115,12 +116,12 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
 #define ATUCTL         1      //Control external ATU device
 #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
-//#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 
 /*
  * The following definitions are disabled but can be enabled selectively
  */
-//#define TERMINAL       1      //Serial configuration terminal
+//#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
+//#define TERMINAL     1      //Serial configuration terminal
 //#define IC746        1      //CAT Protocol is ICOM 746
 //#define ONEBAND      1      //Forces a single band operation in order not to mess up because of a wrong final filter
 //#define CW           1      //Enable CW operation
@@ -172,6 +173,9 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
    #undef TS480
 #endif   
 
+/*--------------------------------------------------------*
+ * Terminal related areas, commands and definitions       *
+ *--------------------------------------------------------*/
 #ifdef TERMINAL
 
 #include <string.h>
@@ -190,30 +194,54 @@ const char *delimiters            = ", \n";                  //commands can be s
 /*----------------------------------------------------------*
  * Serial configuration terminal commands                   *
  *----------------------------------------------------------*/
+#ifdef ATUCTL 
 const char *atuToken        = "*atu"; 
 const char *atu_delayToken  = "*atd"; 
+#endif //ATUCTL
+
 const char *bounce_timeToken= "*bt";
 const char *short_timeToken = "*st";
 const char *vox_maxtryToken = "*vxm";
 const char *vox_cntmaxToken = "*vxc";
 const char *max_blinkToken  = "*mbl";
+
+#ifdef ANTIVOX
+const char *avoxtime_Token  = "*vxt";
+#endif //ANTIVOX
+
+#ifdef EE
 const char *eeprom_toutToken= "*eet";
+const char *eeprom_listToken= "*list";
+#endif //EE
+
+#ifdef CW
 const char *cw_shiftToken   = "*cws";
 const char *cw_stepToken    = "*cwt";
+#endif //CW
+
+#ifdef WDT
 const char *wdt_maxToken    = "*wdt";
+#endif //WDT
+
+#ifdef QUAD
 const char *quad_band1Token = "*qb1";
 const char *quad_band2Token = "*qb2";
 const char *quad_band3Token = "*qb3";
 const char *quad_band4Token = "*qb4";
+#endif //QUAD
+
 const char *saveToken       = "*save"; 
 const char *quitToken       = "*quit";
 const char *resetToken      = "*reset";
 const char *helpToken       = "*help";
 const char *endList         = "XXX";    
 
-
 #endif //TERMINAL
 
+/*-----------------------------------------------------------------*
+ * TS480 CAT Protocol                                              *
+ *                                                                 *
+ *-----------------------------------------------------------------*/
 #ifdef TS480
 
    #define CATCMD_SIZE          18
@@ -223,7 +251,10 @@ const char *endList         = "XXX";
    char             buf[BUFFER_SIZE];
 
 #endif
-
+/*-----------------------------------------------------------------*
+ * IC746 CAT Protocol                                              *
+ *                                                                 *
+ *-----------------------------------------------------------------*/
 #ifdef IC746
 
 /*---
@@ -394,7 +425,7 @@ int cmdLength    = 0;
 #endif
 
 /*****************************************************************
- * Trace and debugging macros                                    *
+ * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
@@ -452,7 +483,7 @@ int cmdLength    = 0;
    #define ATU            5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
    #define ATU_DELAY    200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
 
-   uint8_t  atu       =  ATU;
+   uint16_t atu       =  ATU;
    uint16_t atu_delay =  ATU_DELAY;
    uint32_t tATU=0;
    
@@ -460,7 +491,7 @@ int cmdLength    = 0;
 
 #ifdef ANTIVOX
    #define AVOXTIME    2000
-   uint32_t avoxtime =   AVOXTIME;
+   uint16_t avoxtime =   AVOXTIME;
    uint32_t tavox    =   0;
 #endif //ANTIVOX   
 
@@ -510,7 +541,7 @@ int cmdLength    = 0;
  * General purpose global define                                  *
  * ---------------------------------------------------------------*/
 #define BOUNCE_TIME 200           //mSec minimum to debounce
-#define SHORT_TIME  2*BOUNCE_TIME //mSec minimum to consider long push
+#define SHORT_TIME  10*BOUNCE_TIME //mSec minimum to consider long push
 #define SI5351_REF  25000000UL   //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
 #define CPU_CLOCK   16000000UL   //Processor clock
 #define VOX_MAXTRY  10           //Max number of attempts to detect an audio incoming signal
@@ -536,6 +567,7 @@ int cmdLength    = 0;
  *------------------------------------------------------------------------*/
 #ifdef EE
    #define EEPROM_CAL          10
+   #define EEPROM_BUILD        20
    #define EEPROM_TEMP         30
    #define EEPROM_MODE         40
    #define EEPROM_BAND         50
@@ -552,13 +584,15 @@ int cmdLength    = 0;
    #define EEPROM_CW_SHIFT    140
    #define EEPROM_CW_STEP     150
    #define EEPROM_WDT_MAX     160
+   #define EEPROM_AVOXTIME    170
+   #define EEPROM_END         200
 #endif //TERMINAL
 
    uint32_t tout=0;
 
-   #define EEPROM_CLR    1   //Initialize EEPROM (only to be used to initialize contents)
-   #define EEPROM_SAVE 100     //Signature of EEPROM being updated at least once
-   #define EEPROM_TOUT 500     //Timeout in mSecs to wait till commit to EEPROM any change
+   //#define EEPROM_CLR     1   //Initialize EEPROM (only to be used to initialize contents)
+   #define EEPROM_SAVED 100     //Signature of EEPROM being updated at least once
+   #define EEPROM_TOUT  500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
 
 /*-------------------------------------------------------------------------*
@@ -582,7 +616,7 @@ uint16_t bounce_time=BOUNCE_TIME;
 uint16_t short_time =SHORT_TIME;
 uint16_t vox_maxtry =VOX_MAXTRY;
 int      cnt_max    =CNT_MAX;
-uint8_t  max_blink  =MAX_BLINK;
+uint16_t max_blink  =MAX_BLINK;
 uint16_t eeprom_tout=EEPROM_TOUT;
 
 #ifdef QUAD
@@ -633,8 +667,8 @@ uint8_t  TSW=0;               //System timer variable (to be used with getWord/s
 #endif //Either ATU or WDT has been defined
 
 #ifdef WDT
-#define       WDT_MAX    15000
-uint32_t      wdt_max     = WDT_MAX;
+#define       WDT_MAX     15000
+uint16_t      wdt_max     = WDT_MAX;
 uint32_t      wdt_tout    = 0;
 #endif //WDT
 //**********************************[ BAND SELECT ]************************************************
@@ -2051,7 +2085,7 @@ void ManualTX(){
        #ifdef WDT      
           wdt_reset();
 
-          if ((millis() > (wdt_tout+wdt_max)) && getWord(SSW,TXON) == HIGH) {
+          if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
              switch_RXTX(LOW);
              setWord(&TSW,TX_WDT,HIGH);
              wdt_tout=millis();
@@ -2248,6 +2282,7 @@ void Calibration(){
   }
 
 }
+
 #ifdef EE
 /*------------------------------------------------------------------------------*
  * updateEEPROM                                                                 *
@@ -2255,9 +2290,11 @@ void Calibration(){
  *------------------------------------------------------------------------------*/
 void updateEEPROM() {
 
-uint16_t save=EEPROM_SAVE;
+uint16_t save=EEPROM_SAVED;
+uint16_t build=BUILD;
 
    EEPROM.put(EEPROM_TEMP,save);
+   EEPROM.put(EEPROM_BUILD,build);
    EEPROM.put(EEPROM_CAL,cal_factor);
    EEPROM.put(EEPROM_MODE,mode);
    EEPROM.put(EEPROM_BAND,Band_slot);
@@ -2275,6 +2312,11 @@ uint16_t save=EEPROM_SAVE;
    EEPROM.put(EEPROM_VOX_CNTMAX,cnt_max);
    EEPROM.put(EEPROM_MAX_BLINK,max_blink);
    EEPROM.put(EEPROM_EEPROM_TOUT,eeprom_tout);
+
+#ifdef ANTIVOX
+   EEPROM.put(EEPROM_AVOXTIME,avoxtime);
+#endif //ANTIVOX
+
 #ifdef CW
    EEPROM.put(EEPROM_CW_SHIFT,cw_shift);
    EEPROM.put(EEPROM_CW_STEP,cw_step);
@@ -2286,11 +2328,13 @@ uint16_t save=EEPROM_SAVE;
    
 #endif //TERMINAL
 
+   setWord(&SSW,SAVEEE,false);
+
    #ifdef DEBUG
       _TRACELIST("%s save(%d) cal(%d) m(%d) slot(%d)\n",__func__,save,cal_factor,mode,Band_slot);
    #endif //DEBUG
+   
 
-    setWord(&SSW,SAVEEE,false);
 
 }
 /*------------------------------------------------------------------------------*
@@ -2299,7 +2343,8 @@ uint16_t save=EEPROM_SAVE;
  *------------------------------------------------------------------------------*/
 void resetEEPROM() {
 
-uint16_t save=EEPROM_SAVE;
+uint16_t save=EEPROM_SAVED;
+uint16_t build=BUILD;
 
    mode=0;
    Band_slot=0;
@@ -2319,6 +2364,11 @@ uint16_t save=EEPROM_SAVE;
    max_blink  = MAX_BLINK;
    eeprom_tout= EEPROM_TOUT;
 
+
+#ifdef ANTIVOX
+   avoxtime   = AVOXTIME;
+#endif //ANTIVOX
+
 #ifdef CW   
    cw_shift   = CW_SHIFT;
    cw_step    = CW_STEP;
@@ -2332,6 +2382,18 @@ uint16_t save=EEPROM_SAVE;
 
    updateEEPROM();
 }
+/*------
+ * checkEEPROM
+ * check if there is a pending EEPROM save that needs to be committed
+ */
+void checkEEPROM() {
+    
+    if((millis()-tout)>eeprom_tout && getWord(SSW,SAVEEE)==true ) {
+       updateEEPROM();
+    }
+  
+}
+
 #endif //EE
 /**********************************************************************************************/
 /*                               Operational state management                                 */
@@ -2800,15 +2862,22 @@ void INIT(){
 
 #ifdef EE
 
- uint16_t temp;
- uint16_t save=EEPROM_SAVE;
+ uint16_t temp=0;
+ uint16_t save=EEPROM_SAVED;
+ uint16_t build=0;
 
  
  EEPROM.get(EEPROM_TEMP,temp);
+ EEPROM.get(EEPROM_BUILD,build);
  
  #ifdef EEPROM_CLR
     temp=-1;
  #endif //EEPROM_CLR  
+
+ 
+ if (build != uint16_t(BUILD)) {
+    resetEEPROM();
+ }
  
  if (temp != save){
 
@@ -2850,6 +2919,11 @@ void INIT(){
    EEPROM.get(EEPROM_VOX_CNTMAX,cnt_max);
    EEPROM.get(EEPROM_MAX_BLINK,max_blink);
    EEPROM.get(EEPROM_EEPROM_TOUT,eeprom_tout);
+
+#ifdef ANTIVOX
+   EEPROM.get(EEPROM_AVOXTIME,avoxtime);
+#endif //ANTIVOX   
+
 #ifdef CW
    EEPROM.get(EEPROM_CW_SHIFT,cw_shift);
    EEPROM.get(EEPROM_CW_STEP,cw_step);
@@ -2898,7 +2972,7 @@ void definePinOut() {
    pinMode(AIN1, INPUT);  //PD7=AN1=HiZ
 
 #ifdef ATUCTL
-   pinMode(atu,  OUTPUT);
+   pinMode(uint8_t(atu),  OUTPUT);
    flipATU();
 #endif //ATUCTL      
 
@@ -2999,72 +3073,93 @@ void nullCommand(char * ptrToCommandName) {
  * Command processor
  */
 
-int perform_atuToken () { 
+/*---
+ * generic parameter update
+ */
+int updateWord(uint16_t *parm) {
     int v=readNumber();
     if (v==0) {
-       return atu;
+       return (*parm);
     }
-    
+    (*parm)=v;
     return v;
 }
-int perform_atu_delayToken () { 
-    return 0;
+/*
+ * ---
+ * save command
+ */
+void perform_saveToken () { 
+#ifdef EE
+    updateEEPROM();
+    Serial.println();
+    Serial.print("EEPROM values saved\r\n>");
+#endif //EE
+    return;
 }
-int perform_bounce_timeToken () { 
-    return 0;
-}
-int perform_short_timeToken () { 
-    return 0;
-}
-int perform_vox_maxtryToken () { 
-    return 0;
-}
-int perform_vox_cntmaxToken () { 
-    return 0;
-}
-int perform_max_blinkToken () { 
-    return 0;
-}
-int perform_eeprom_toutToken () { 
-    return 0;
+/*---
+ * reset command
+ * all operational values are reset to default values and then saved on EEPROM
+ */
+void perform_resetToken () {
+
+#ifdef EE
+    resetEEPROM();   
+    Serial.println();
+    Serial.print("EEPROM reset to default values\r\n>");
+#endif //EE
+
+    return;
+
 }
 
-int perform_cw_shiftToken () { 
-    return 0;
+#ifdef EE
+/*---
+ * list command
+ * List EEPROM content
+ */
+void perform_listToken () {
+  
+    Serial.println();
+    Serial.println("EEPROM list");
+    int i=EEPROM_CAL;
+    while(i<EEPROM_END) {
+      sprintf(hi,"%05d -- ",i);
+      Serial.print(hi);
+      for (int j=0;j<10;j++) {
+        uint8_t b=EEPROM.read(i+j);
+        sprintf(hi,"%02x ",b);
+        Serial.print(hi);      
+      }
+      Serial.println();
+      i=i+10;
+    }
+    Serial.print(">");
+     
+    return;
 }
-int perform_wdt_maxToken () { 
-    return 0;
-}
-
-int perform_cw_stepToken () { 
-    return 0;
-}
-int perform_quad_band1Token () { 
-    return 0;
-}
-int perform_quad_band2Token () { 
-    return 0;
-}
-int perform_quad_band3Token () { 
-    return 0;
-}
-int perform_quad_band4Token () { 
-    return 0;
-}
-int perform_saveToken () { 
-    return 0;
-}
-int perform_resetToken () { 
-    return 0;
-}
-int perform_quitToken () {
+#endif //EE
+/*---
+ * quit command
+ */
+void perform_quitToken () {
 const char * msgQuit = "Exiting terminal mode";
     printMessage(msgQuit);
     delay(200);
     resetFunc(); 
     return 0;
 }
-int perform_helpToken(){
+/*---
+ * help command
+ * This is a spartan and limited yet efficient way to list all commands available.
+ * All commands are defined contiguosly as pointers to text, therefore a pointer is initialized
+ * with the first command in the list and all pointers are explored sequentially till a text with XXX
+ * (which must be placed at the end of the list as a marker) is found.
+ * However, the compiler for it's own superior reasons might alter the sequence of commands in memory
+ * and even put other things which are unrelated to them, therefore only strings starting with '*' and
+ * between 2 and 5 in size are eligible of being a command. The initial '*' is ignored from the listing and
+ * from the command parsing by taken the pointer to the string + 1.
+ */
+void perform_helpToken(){
  char * p = atuToken;
 
  while (strcmp(p,"XXX")!=0) {
@@ -3107,24 +3202,43 @@ void execCommand(char * commandLine) {
   const char * msgSave = "Parameters saved";
   const char * msgReset= "Reset to default values";
 
-  if (strcmp(ptrToCommandName, atuToken+1)         == 0) {printCommand(ptrToCommandName,perform_atuToken());return;}
-  if (strcmp(ptrToCommandName, atu_delayToken+1)   == 0) {printCommand(ptrToCommandName,perform_atu_delayToken());return;}
-  if (strcmp(ptrToCommandName, bounce_timeToken+1) == 0) {printCommand(ptrToCommandName,perform_bounce_timeToken());return;}
-  if (strcmp(ptrToCommandName, short_timeToken+1)  == 0) {printCommand(ptrToCommandName,perform_short_timeToken());return;}
-  if (strcmp(ptrToCommandName, vox_maxtryToken+1)  == 0) {printCommand(ptrToCommandName,perform_vox_maxtryToken());return;}
-  if (strcmp(ptrToCommandName, vox_cntmaxToken+1)  == 0) {printCommand(ptrToCommandName,perform_vox_cntmaxToken());return;}
-  if (strcmp(ptrToCommandName, max_blinkToken+1)   == 0) {printCommand(ptrToCommandName,perform_max_blinkToken());return;}
-  if (strcmp(ptrToCommandName, eeprom_toutToken+1) == 0) {printCommand(ptrToCommandName,perform_eeprom_toutToken());return;}
-  if (strcmp(ptrToCommandName, cw_shiftToken+1)    == 0) {printCommand(ptrToCommandName,perform_cw_shiftToken());return;}
-  if (strcmp(ptrToCommandName, cw_stepToken+1)     == 0) {printCommand(ptrToCommandName,perform_cw_stepToken());return;}
+#ifdef ATUCTL
+  if (strcmp(ptrToCommandName, atuToken+1)         == 0) {printCommand(ptrToCommandName,updateWord(&atu));return;}
+  if (strcmp(ptrToCommandName, atu_delayToken+1)   == 0) {printCommand(ptrToCommandName,updateWord(&atu_delay));return;}
+#endif //ATUCTL
+  
+  if (strcmp(ptrToCommandName, bounce_timeToken+1) == 0) {printCommand(ptrToCommandName,updateWord(&bounce_time));return;}
+  if (strcmp(ptrToCommandName, short_timeToken+1)  == 0) {printCommand(ptrToCommandName,updateWord(&short_time));return;}
+  if (strcmp(ptrToCommandName, vox_maxtryToken+1)  == 0) {printCommand(ptrToCommandName,updateWord(&vox_maxtry));return;}
+  if (strcmp(ptrToCommandName, vox_cntmaxToken+1)  == 0) {printCommand(ptrToCommandName,updateWord(&cnt_max));return;}
+  if (strcmp(ptrToCommandName, max_blinkToken+1)   == 0) {printCommand(ptrToCommandName,updateWord(&max_blink));return;}
+
+#ifdef EE
+  if (strcmp(ptrToCommandName, eeprom_toutToken+1) == 0) {printCommand(ptrToCommandName,updateWord(&eeprom_tout));return;}
+  if (strcmp(ptrToCommandName, eeprom_listToken+1) == 0) {perform_listToken();return;}
+  if (strcmp(ptrToCommandName, resetToken+1)       == 0) {perform_resetToken();printMessage(msgReset);return;}
+#endif //EE
+
+#ifdef ANTIVOX
+  if (strcmp(ptrToCommandName, avoxtime_Token+1)   == 0) {printCommand(ptrToCommandName,updateWord(&avoxtime));return;}
+#endif //ANTIVOX
+
+#ifdef CW
+  if (strcmp(ptrToCommandName, cw_shiftToken+1)    == 0) {printCommand(ptrToCommandName,updateWord(&cwshift));return;}
+  if (strcmp(ptrToCommandName, cw_stepToken+1)     == 0) {printCommand(ptrToCommandName,updateWord(&cwstep));return;}
+#endif //CW  
+
+#ifdef WDT
+  if (strcmp(ptrToCommandName, wdt_maxToken+1)    == 0)  {printCommand(ptrToCommandName,updateWord(&wdt_max));return;}
+#endif //WDT
+  /*
   if (strcmp(ptrToCommandName, quad_band1Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band1Token());return;}
   if (strcmp(ptrToCommandName, quad_band2Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band2Token());return;}
   if (strcmp(ptrToCommandName, quad_band3Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band3Token());return;}
   if (strcmp(ptrToCommandName, quad_band4Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band4Token());return;}
-  if (strcmp(ptrToCommandName, wdt_maxToken+1)    == 0)  {printCommand(ptrToCommandName,perform_wdt_maxToken());return;}
+  */
   if (strcmp(ptrToCommandName, saveToken+1)        == 0) {perform_saveToken();printMessage(msgSave);return;}
   if (strcmp(ptrToCommandName, quitToken+1)        == 0) {perform_quitToken();return;}
-  if (strcmp(ptrToCommandName, resetToken+1)       == 0) {perform_resetToken();printMessage(msgReset);return;}
   if (strcmp(ptrToCommandName, helpToken+1)        == 0) {perform_helpToken();return;}
 
   nullCommand(ptrToCommandName);
@@ -3136,7 +3250,7 @@ return;
  *-----------------------------------------------------------------------------*/
 void execTerminal() {
   
-   sprintf(hi,"\n\rADX %s command interpreter\n\r",VERSION);
+   sprintf(hi,"\n\rADX %s build(%03d) command interpreter\n\r",VERSION,uint16_t(BUILD));
    Serial.print(hi);
 
    uint8_t n=3;
@@ -3175,6 +3289,7 @@ void execTerminal() {
               wdt_reset();
            #endif //WDT
        }
+       checkEEPROM();
 
    }
  
@@ -3298,7 +3413,6 @@ void setup()
   
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
-
 //***************************[ Main LOOP Function ]**************************
 //*                                                                         *
 //*                                                                         *
@@ -3318,7 +3432,7 @@ void loop()
     #ifdef ANTIVOX
     
     if (getWord(TSW,AVOX)==true) {
-       if (millis()-tavox > avoxtime) {
+       if (millis()-tavox > uint32_t(avoxtime)) {
           setWord(&TSW,AVOX,false);
           tavox=0;
        }
@@ -3328,10 +3442,7 @@ void loop()
 
     #ifdef EE
 //*--- if EEPROM enabled check if timeout to write has been elapsed
-
-    if((millis()-tout)>eeprom_tout && getWord(SSW,SAVEEE)==true ) {
-       updateEEPROM();
-    }
+    checkEEPROM();
     #endif //EEPROM
 
     #ifdef ATUCTL
@@ -3353,7 +3464,7 @@ void loop()
     #endif //CAT
 
     #ifdef WDT
-       if ((millis() > (wdt_tout+wdt_max)) && getWord(SSW,TXON) == HIGH) {
+       if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
           switch_RXTX(LOW);
           setWord(&TSW,TX_WDT,HIGH);
           wdt_tout=millis();
@@ -3382,7 +3493,7 @@ uint16_t n = vox_maxtry;
         break;
     }  //If watchdog has been triggered so no TX is allowed till a wdt_max timeout period has elapsed
     
-    if ((millis() > (wdt_tout+wdt_max)) && getWord(SSW,TXON) == HIGH) {
+    if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
        switch_RXTX(LOW);
        setWord(&TSW,TX_WDT,HIGH);
        wdt_tout=millis();
@@ -3438,7 +3549,7 @@ uint16_t n = vox_maxtry;
              si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
              setWord(&SSW,VOX,true);
           } else {
-            if (millis()-tavox > avoxtime) {
+            if (millis()-tavox > uint32_t(avoxtime)) {
                setWord(&TSW,AVOX,false);
                tavox=0;
             }
@@ -3482,7 +3593,7 @@ uint16_t n = vox_maxtry;
     blinkLED(TX);
  }
     
- if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+wdt_max))) {
+ if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+uint32_t(wdt_max)))) {
     setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
  }
  
