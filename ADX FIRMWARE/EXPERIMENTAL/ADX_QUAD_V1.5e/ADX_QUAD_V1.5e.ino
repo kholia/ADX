@@ -626,18 +626,18 @@ uint16_t cal_factor=0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
 unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-const unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
-                                            { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
-                                            { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
-                                            {10136000,10140000,10130000,10138700,10106000},   //30m [3]
-                                            {14074000,14080000,14078000,14095600,14060000},   //20m [4]
-                                            {18100000,18104000,18104000,18104600,18096000},   //17m [5]
-                                            {21074000,21140000,21078000,21094600,21060000},   //15m [6]                                                                      
-                                            {28074000,28074000,28078000,28124600,28060000}};  //10m [7]                           
+const unsigned long slot[MAXBAND][MAXMODE] PROGMEM={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
+                                                    { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
+                                                    { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
+                                                    {10136000,10140000,10130000,10138700,10106000},   //30m [3]
+                                                    {14074000,14080000,14078000,14095600,14060000},   //20m [4]
+                                                    {18100000,18104000,18104000,18104600,18096000},   //17m [5]
+                                                    {21074000,21140000,21078000,21094600,21060000},   //15m [6]                                                                      
+                                                    {28074000,28074000,28078000,28124600,28060000}};  //10m [7]                           
 
                                                       
 unsigned long freq      = f[mode]; 
-const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};
+const uint8_t LED[4]    PROGMEM = {FT8,FT4,JS8,WSPR};
 
 /*-------------------------------------*
  * Manage button state                 *
@@ -673,9 +673,9 @@ uint32_t      wdt_tout    = 0;
 
                                                     
 #ifdef ONEBAND                                      //If defined selects a single band to avoid mistakes with PA filter 
-   const uint16_t Bands[BANDS]={40,40,40,40};             //All bands the same (change to suit needs)
+   const uint16_t Bands[BANDS] PROGMEM ={10,10,10,10};             //All bands the same (change to suit needs)
 #else
-   const uint16_t Bands[BANDS]={40,30,20,17};             //Band1,Band2,Band3,Band4 (initial setup)
+   const uint16_t Bands[BANDS] PROGMEM ={40,30,20,17};             //Band1,Band2,Band3,Band4 (initial setup)
 #endif //ONEBAND
 
 /*-----------------------------------------------------------------------------------------------------*
@@ -697,7 +697,7 @@ uint32_t      wdt_tout    = 0;
  */
 #ifdef QUAD
 #define QUADMAX         8
-  const uint16_t quads[QUADMAX] = {80,60,40,30,20,17,15,10};
+  const uint16_t quads[QUADMAX] PROGMEM = {80,60,40,30,20,17,15,10};
 #endif //QUAD
 
 /****************************************************************************************************************************************/
@@ -1435,7 +1435,7 @@ void serialEvent() {
    Mods by Pedro E. Colla(LU7DZ) 2022
  *----------------------------------------------------------------------------------------------------*/
 
-  const char *cID="ID";    
+  const char *cID ="ID";    
   const char *cIDr="ID020;";
   const char *cRX0="RX0;";
   const char *cTX0="TX0;";
@@ -1559,9 +1559,9 @@ void setFreqCAT() {
      }   
   #endif //PALPF    
 
-   #ifdef DEBUG
+  #ifdef DEBUG
       _EXCPLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n",__func__,Catbuffer,freq,b,k,q,x);
-   #endif //DEBUG 
+  #endif //DEBUG 
 }
 
 void Command_SETFreqA()          //Set Frequency VFO (A)
