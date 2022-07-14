@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          105
+#define BUILD          107
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -115,8 +115,8 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define TS480          1      //CAT Protocol is Kenwood 480
 #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
 #define ATUCTL         1      //Control external ATU device
-#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
-
+//#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
+//#define ONEBAND        1
 /*
  * The following definitions are disabled but can be enabled selectively
  */
@@ -620,7 +620,9 @@ uint16_t eeprom_tout=EEPROM_TOUT;
 
 uint8_t  SSW=0;               //System SSW variable (to be used with getWord/setWord)
 uint16_t mode=0;              //Default to mode=0 (FT8)
-uint16_t Band_slot=0;         //Default to Bands[0]=40
+//uint16_t Band_slot=0;         //Default to Bands[0]=40
+uint16_t Band_slot=3;         //Default to Bands[3]=10
+
 uint16_t cal_factor=0;
 
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
@@ -675,7 +677,7 @@ uint32_t      wdt_tout    = 0;
 #ifdef ONEBAND                                      //If defined selects a single band to avoid mistakes with PA filter 
    const uint16_t Bands[BANDS] ={10,10,10,10};             //All bands the same (change to suit needs)
 #else
-   const uint16_t Bands[BANDS] ={40,30,20,17};             //Band1,Band2,Band3,Band4 (initial setup)
+   const uint16_t Bands[BANDS] ={40,30,20,10};             //Band1,Band2,Band3,Band4 (initial setup)
 #endif //ONEBAND
 
 /*-----------------------------------------------------------------------------------------------------*
@@ -1627,6 +1629,7 @@ void Command_RX()
   setWord(&SSW,CATTX,false); 
 
   switch_RXTX(LOW);
+  setWord(&SSW,CATTX,false);
   sprintf(hi,"%s",cRX0);
   Serial.print(hi);
   #ifdef ANTIVOX
@@ -1638,8 +1641,9 @@ void Command_RX()
 //*--- Place transceiver in TX mode
 void Command_TX()
 {
-  setWord(&SSW,CATTX,true);
+
   switch_RXTX(HIGH);
+  setWord(&SSW,CATTX,true);
   sprintf(hi,"%s",cTX0);
   Serial.print(hi);
 }
@@ -1896,7 +1900,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
 #ifdef DEBUG
   if (t != getWord(SSW,TXON)) {
-      _TRACELIST("%s (%s)\n",__func__,BOOL2CHAR(t));
+      _EXCPLIST("%s (%s)\n",__func__,BOOL2CHAR(t));
   } 
 #endif //DEBUG  
   
@@ -1908,10 +1912,11 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
  * been cleared.                     *
  *-----------------------------------*/
  #ifdef WDT
-      if (getWord(TSW,TX_WDT)==HIGH) {
-         
-         return;
-      }
+ 
+ //     if (getWord(TSW,TX_WDT)==HIGH) {
+ //        
+ //        return;
+ //     }
  #endif //WDT     
 /*-----------------------------------*
  *               TX                  *
@@ -1926,7 +1931,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 #endif //CW          
      
 #ifdef DEBUG     
-     _TRACELIST("%s TX+ f=%ld\n",__func__,freqtx);
+     _EXCPLIST("%s TX+ f=%ld\n",__func__,freqtx);
 #endif //DEBUG
      
      si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
@@ -1935,8 +1940,8 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
      setWord(&SSW,TXON,HIGH);
 
 #ifdef WDT
-     setWord(&TSW,TX_WDT,LOW);
-     wdt_tout=millis();
+     //setWord(&TSW,TX_WDT,LOW);
+     //wdt_tout=millis();
 #endif //WDT
               
      return;
@@ -2122,12 +2127,12 @@ void ManualTX(){
        #ifdef WDT      
           wdt_reset();
 
-          if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
-             switch_RXTX(LOW);
-             setWord(&TSW,TX_WDT,HIGH);
-             wdt_tout=millis();
-             break;
-          }   
+          //if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
+          //   switch_RXTX(LOW);
+          //   setWord(&TSW,TX_WDT,HIGH);
+          //   wdt_tout=millis();
+          //   break;
+          //}   
           
        #endif //WDT
        buttonTX=getTXSW();
@@ -3512,11 +3517,12 @@ void loop()
     #endif //CAT
 
     #ifdef WDT
-       if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
-          switch_RXTX(LOW);
-          setWord(&TSW,TX_WDT,HIGH);
-          wdt_tout=millis();
-       }
+       
+       //if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
+       //   switch_RXTX(LOW);
+       //   setWord(&TSW,TX_WDT,HIGH);
+       //   wdt_tout=millis();
+       //}
     
 //*--- if WDT enabled reset the watchdog
        wdt_reset();
@@ -3529,51 +3535,49 @@ void loop()
  * if activity is detected the TX is turned on                                      *
  * TX mode remains till no further activity is detected (operate like a VOX command)*
  *----------------------------------------------------------------------------------*/
-uint16_t n = vox_maxtry;
-
+uint16_t n = VOX_MAXTRY;
     setWord(&SSW,VOX,false);
-    while (n>0){                                 //Iterate up to 10 times looking for signal to transmit
+    while ( n > 0 ){                                 //Iterate up to 10 times looking for signal to transmit
 
     #ifdef WDT
-    wdt_reset();
+       wdt_reset();
 
-    if (getWord(TSW,TX_WDT)==HIGH) {
-        break;
-    }  //If watchdog has been triggered so no TX is allowed till a wdt_max timeout period has elapsed
-    
-    if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
-       switch_RXTX(LOW);
-       setWord(&TSW,TX_WDT,HIGH);
-       wdt_tout=millis();
-       break;
-    }
+       //if (getWord(TSW,TX_WDT)==HIGH) {
+       //    break;
+       //}  //If watchdog has been triggered so no TX is allowed till a wdt_max timeout period has elapsed   
+       //if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
+       //   switch_RXTX(LOW);
+       //   setWord(&TSW,TX_WDT,HIGH);
+       //   wdt_tout=millis();
+       //   break;
+       //}
 
     #endif //WDT
     
     TCNT1 = 0;                                  //While this iteration is performed if the TX is off 
     
     while (ACSR &(1<<ACO)){                     //the receiver is operating with autonomy
-       if (TCNT1>cnt_max) break;
+       if (TCNT1>CNT_MAX) break;
     }
     
     while ((ACSR &(1<<ACO))==0){
-       if (TCNT1>cnt_max) break;
+       if (TCNT1>CNT_MAX) break;
     }
     
     TCNT1 = 0;
     
     while (ACSR &(1<<ACO)){
-      if (TCNT1>cnt_max) break;
+      if (TCNT1>CNT_MAX) break;
     }
     
     uint16_t d1 = ICR1;  
     
     while ((ACSR &(1<<ACO))==0){
-      if (TCNT1>cnt_max) break;
+      if (TCNT1>CNT_MAX) break;
     } 
     
     while (ACSR &(1<<ACO)){
-      if (TCNT1>cnt_max) break;
+      if (TCNT1>CNT_MAX) break;
     }
     
     uint16_t d2 = ICR1;
@@ -3583,25 +3587,32 @@ uint16_t n = vox_maxtry;
  * input frequency                                     *
  *-----------------------------------------------------*/
     
-    if (TCNT1 < cnt_max){
+    if (TCNT1 < CNT_MAX){
        //if ((d2-d1) == 0) break;
        unsigned long codefreq = CPU_CLOCK/(d2-d1);
 
        if ((codefreq < FRQ_MAX) && (codefreq > 0)){
 
-          if (getWord(TSW,AVOX)==false) {
+//#ifdef ANTIVOX
+//          if (getWord(TSW,AVOX)==false) {
+//#endif //ANTIVOX
+            
              if (getWord(SSW,VOX) == false){
                  switch_RXTX(HIGH);                 
              }
 
              si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
              setWord(&SSW,VOX,true);
-          } else {
-            if (millis()-tavox > uint32_t(avoxtime)) {
-               setWord(&TSW,AVOX,false);
-               tavox=0;
-            }
-          }
+
+//#ifdef ANTIVOX             
+//          }  else {
+//            if (millis()-tavox > uint32_t(avoxtime)) {
+//               setWord(&TSW,AVOX,false);
+//               tavox=0;
+//            }
+//          }
+//#endif //ANTIVOX
+
        #ifdef WDT
           wdt_reset();
        #endif //WDT
@@ -3637,22 +3648,23 @@ uint16_t n = vox_maxtry;
  * it will stay ready for the next TX command                *
  *                                                           *
  *-----------------------------------------------------------*/
- if (getWord(TSW,TX_WDT)==HIGH) {
-    blinkLED(TX);
- }
+ //if (getWord(TSW,TX_WDT)==HIGH) {
+ //   blinkLED(TX);
+ //}
     
- if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+uint32_t(wdt_max)))) {
-    setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
- }
+ //if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+uint32_t(wdt_max)))) {
+ //   setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
+ //}
  
 #endif //WDT
+
  
- if (getWord(SSW,CATTX)==true) {
+ if (getWord(SSW,CATTX)!=true) {
     switch_RXTX(LOW);
     setWord(&SSW,VOX,false);
     setWord(&SSW,TXON,false);
  }   
-
+ 
  #ifdef WDT
     wdt_reset();
  #endif //WDT     
