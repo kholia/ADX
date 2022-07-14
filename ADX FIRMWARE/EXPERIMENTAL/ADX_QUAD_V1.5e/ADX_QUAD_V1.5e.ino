@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          104
+#define BUILD          105
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -626,18 +626,18 @@ uint16_t cal_factor=0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
 unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-const unsigned long slot[MAXBAND][MAXMODE] PROGMEM={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
-                                                    { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
-                                                    { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
-                                                    {10136000,10140000,10130000,10138700,10106000},   //30m [3]
-                                                    {14074000,14080000,14078000,14095600,14060000},   //20m [4]
-                                                    {18100000,18104000,18104000,18104600,18096000},   //17m [5]
-                                                    {21074000,21140000,21078000,21094600,21060000},   //15m [6]                                                                      
-                                                    {28074000,28074000,28078000,28124600,28060000}};  //10m [7]                           
+const unsigned long slot[MAXBAND][MAXMODE] ={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
+                                             { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
+                                             { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
+                                             {10136000,10140000,10130000,10138700,10106000},   //30m [3]
+                                             {14074000,14080000,14078000,14095600,14060000},   //20m [4]
+                                             {18100000,18104000,18104000,18104600,18096000},   //17m [5]
+                                             {21074000,21140000,21078000,21094600,21060000},   //15m [6]                                                                      
+                                             {28074000,28074000,28078000,28124600,28060000}};  //10m [7]                           
 
                                                       
 unsigned long freq      = f[mode]; 
-const uint8_t LED[4]    PROGMEM = {FT8,FT4,JS8,WSPR};
+const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};
 
 /*-------------------------------------*
  * Manage button state                 *
@@ -673,9 +673,9 @@ uint32_t      wdt_tout    = 0;
 
                                                     
 #ifdef ONEBAND                                      //If defined selects a single band to avoid mistakes with PA filter 
-   const uint16_t Bands[BANDS] PROGMEM ={10,10,10,10};             //All bands the same (change to suit needs)
+   const uint16_t Bands[BANDS] ={10,10,10,10};             //All bands the same (change to suit needs)
 #else
-   const uint16_t Bands[BANDS] PROGMEM ={40,30,20,17};             //Band1,Band2,Band3,Band4 (initial setup)
+   const uint16_t Bands[BANDS] ={40,30,20,17};             //Band1,Band2,Band3,Band4 (initial setup)
 #endif //ONEBAND
 
 /*-----------------------------------------------------------------------------------------------------*
@@ -697,7 +697,7 @@ uint32_t      wdt_tout    = 0;
  */
 #ifdef QUAD
 #define QUADMAX         8
-  const uint16_t quads[QUADMAX] PROGMEM = {80,60,40,30,20,17,15,10};
+  const uint16_t quads[QUADMAX] = {80,60,40,30,20,17,15,10};
 #endif //QUAD
 
 /****************************************************************************************************************************************/
@@ -1997,7 +1997,7 @@ void setLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
    digitalWrite(LEDpin,HIGH);
 
 #ifdef DEBUG
-   _TRACELIST("%s(%d)\n",__func__,LEDpin);
+   _EXCPLIST("%s(%d)\n",__func__,LEDpin);
 #endif //DEBUG   
 
 }
@@ -2487,7 +2487,7 @@ void Mode_assign(){
    #endif //EE
 
    #ifdef DEBUG
-      _INFOLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
+      _EXCPLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
    #endif //DEBUG   
 }
 
@@ -2761,7 +2761,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      Mode_assign();
         
      #ifdef DEBUG
-        _INFOLIST("%s CW+ f=%ld\n",__func__,freq);
+        _EXCPLIST("%s CW+ f=%ld\n",__func__,freq);
      #endif //DEBUG   
 
   }
@@ -2775,7 +2775,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      Mode_assign();
      
      #ifdef DEBUG
-        _INFOLIST("%s CW- f=%ld\n",__func__,freq);
+        _EXCPLIST("%s CW- f=%ld\n",__func__,freq);
      #endif //DEBUG   
      
   }
@@ -2789,7 +2789,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      setFrequencyCW(-1);
      
      #ifdef DEBUG
-        _INFOLIST("%s f+ f=%ld\n",__func__,freq);      
+        _EXCPLIST("%s f+ f=%ld\n",__func__,freq);      
      #endif //DEBUG   
   }
 
@@ -2797,7 +2797,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      setFrequencyCW(+1);
      
      #ifdef DEBUG
-        _INFOLIST("%s f- f=%ld\n",__func__,freq);     
+        _EXCPLIST("%s f- f=%ld\n",__func__,freq);     
      #endif //DEBUG   
   }
 //*-------------------------[CW Implementation]------------------
@@ -2811,13 +2811,13 @@ bool downButtonPL = getSwitchPL(DOWN);
   if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
 
      #ifdef DEBUG
-        _INFOLIST("%s TX+\n",__func__);
+        _EXCPLIST("%s TX+\n",__func__);
      #endif //DEBUG
         
      ManualTX(); 
      
      #ifdef DEBUG
-        _INFOLIST("%s TX-\n",__func__);
+        _EXCPLIST("%s TX-\n",__func__);
      #endif //DEBUG   
   }
 
@@ -2835,20 +2835,23 @@ bool downButtonPL = getSwitchPL(DOWN);
 /*-------------------------------------------------------------*
  * manage band, mode and  calibration selections               *
  *-------------------------------------------------------------*/
+#ifndef ONEBAND
+ 
   if ((upButton == LOW)&&(downButton == LOW)&&(getWord(SSW,TXON)==false)) {
      Band_Select();
      
      #ifdef DEBUG
-      _INFOLIST("%s U+D f=%ld",__func__,freq);
+      _EXCPLIST("%s U+D f=%ld",__func__,freq);
      #endif //DEBUG 
   }
+#endif //ONEBAND
 
   if ((upButton == HIGH)&&(downButton == LOW)&&(getWord(SSW,TXON)==false)) {
 
       mode=(mode-1)%4;
       
       #ifdef DEBUG
-         _INFOLIST("%s m+(%d)\n",__func__,mode);
+         _EXCPLIST("%s m+(%d)\n",__func__,mode);
       #endif //DEBUG
       
       #ifdef EE
@@ -2865,7 +2868,7 @@ bool downButtonPL = getSwitchPL(DOWN);
       mode=(mode+1)%4;
       
       #ifdef DEBUG
-         _INFOLIST("%s m-(%d)\n",__func__,mode);
+         _EXCPLIST("%s m-(%d)\n",__func__,mode);
       #endif //DEBUG   
 
       #ifdef EE
@@ -2927,7 +2930,7 @@ void INIT(){
     updateEEPROM();
     
     #ifdef DEBUG
-       _INFOLIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+       _EXCPLIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     #endif //DEBUG
     
  } else {
@@ -2980,7 +2983,7 @@ void INIT(){
  
   
   #ifdef DEBUG
-     _INFOLIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+     _EXCPLIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
   #endif //DEBUG   
 }  
 
@@ -2992,7 +2995,7 @@ void INIT(){
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
 
 #ifdef DEBUG
-   _INFO;
+   _EXCPLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
 #endif //DEBUG      
 }
 /*--------------------------------------------------------------------------*
