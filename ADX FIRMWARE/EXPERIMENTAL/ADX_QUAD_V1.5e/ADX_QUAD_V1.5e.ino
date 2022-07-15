@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          107
+#define BUILD          110
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -201,8 +201,6 @@ const char *atu_delayToken  = "*atd";
 
 const char *bounce_timeToken= "*bt";
 const char *short_timeToken = "*st";
-const char *vox_maxtryToken = "*vxm";
-const char *vox_cntmaxToken = "*vxc";
 const char *max_blinkToken  = "*mbl";
 
 #ifdef ANTIVOX
@@ -219,16 +217,6 @@ const char *cw_shiftToken   = "*cws";
 const char *cw_stepToken    = "*cwt";
 #endif //CW
 
-#ifdef WDT
-const char *wdt_maxToken    = "*wdt";
-#endif //WDT
-
-#ifdef QUAD
-const char *quad_band1Token = "*qb1";
-const char *quad_band2Token = "*qb2";
-const char *quad_band3Token = "*qb3";
-const char *quad_band4Token = "*qb4";
-#endif //QUAD
 
 const char *saveToken       = "*save"; 
 const char *quitToken       = "*quit";
@@ -575,13 +563,10 @@ int cmdLength    = 0;
    #define EEPROM_ATU_DELAY    70
    #define EEPROM_BOUNCE_TIME  80
    #define EEPROM_SHORT_TIME   90
-   #define EEPROM_VOX_MAXTRY  100 
-   #define EEPROM_VOX_CNTMAX  110
    #define EEPROM_MAX_BLINK   120
    #define EEPROM_EEPROM_TOUT 130
    #define EEPROM_CW_SHIFT    140
    #define EEPROM_CW_STEP     150
-   #define EEPROM_WDT_MAX     160
    #define EEPROM_AVOXTIME    170
    #define EEPROM_END         200
 #endif //TERMINAL
@@ -657,8 +642,7 @@ uint8_t  TSW=0;               //System timer variable (to be used with getWord/s
 #endif //Either ATU or WDT has been defined
 
 #ifdef WDT
-#define       WDT_MAX     15000
-uint16_t      wdt_max     = WDT_MAX;
+#define       WDT_MAX     130000
 uint32_t      wdt_tout    = 0;
 #endif //WDT
 //**********************************[ BAND SELECT ]************************************************
@@ -759,7 +743,7 @@ void flipATU() {
     }
   }
   #ifdef DEBUG
-  _EXCPLIST("%s band=%d quad=%d\n",__func__,b,q);
+  _INFOLIST("%s band=%d quad=%d\n",__func__,b,q);
   #endif //DEBUG
   return q;
  }
@@ -779,7 +763,7 @@ void setQUAD(int LPFslot) {
    delay(100);
   
    #ifdef DEBUG
-      _EXCPLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
+      _INFOLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
    #endif //DEBUG 
   
 }
@@ -1205,7 +1189,7 @@ void doSetFreq() { //ADDITIONAL CONTROL FOR LEGAL BAND NEEDED
         setQUAD(q);
      }   
      #ifdef DEBUG
-        _EXCPLIST("%s bands[%d]=%d quad=%d\n",__func__,b,s,q);
+        _INFOLIST("%s bands[%d]=%d quad=%d\n",__func__,b,s,q);
      #endif //DEBUG
      
   #endif //QUAD    
@@ -1562,7 +1546,7 @@ void setFreqCAT() {
   #endif //PALPF    
 
   #ifdef DEBUG
-      _EXCPLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n",__func__,Catbuffer,freq,b,k,q,x);
+      _INFOLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n",__func__,Catbuffer,freq,b,k,q,x);
   #endif //DEBUG 
 }
 
@@ -1900,7 +1884,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
 #ifdef DEBUG
   if (t != getWord(SSW,TXON)) {
-      _EXCPLIST("%s (%s)\n",__func__,BOOL2CHAR(t));
+      _INFOLIST("%s (%s)\n",__func__,BOOL2CHAR(t));
   } 
 #endif //DEBUG  
   
@@ -1913,10 +1897,10 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
  *-----------------------------------*/
  #ifdef WDT
  
- //     if (getWord(TSW,TX_WDT)==HIGH) {
- //        
- //        return;
- //     }
+      if (getWord(TSW,TX_WDT)==HIGH) {       
+         return;
+      }
+      
  #endif //WDT     
 /*-----------------------------------*
  *               TX                  *
@@ -1931,7 +1915,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 #endif //CW          
      
 #ifdef DEBUG     
-     _EXCPLIST("%s TX+ f=%ld\n",__func__,freqtx);
+     _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
 #endif //DEBUG
      
      si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
@@ -1940,8 +1924,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
      setWord(&SSW,TXON,HIGH);
 
 #ifdef WDT
-     //setWord(&TSW,TX_WDT,LOW);
-     //wdt_tout=millis();
+     wdt_tout=millis();
 #endif //WDT
               
      return;
@@ -2002,7 +1985,7 @@ void setLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
    digitalWrite(LEDpin,HIGH);
 
 #ifdef DEBUG
-   _EXCPLIST("%s(%d)\n",__func__,LEDpin);
+   _INFOLIST("%s(%d)\n",__func__,LEDpin);
 #endif //DEBUG   
 
 }
@@ -2127,13 +2110,17 @@ void ManualTX(){
        #ifdef WDT      
           wdt_reset();
 
-          //if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
-          //   switch_RXTX(LOW);
-          //   setWord(&TSW,TX_WDT,HIGH);
-          //   wdt_tout=millis();
-          //   break;
-          //}   
-          
+          if ((millis() > (wdt_tout+uint32_t(WDT_MAX))) && getWord(SSW,TXON) == HIGH) {
+             switch_RXTX(LOW);
+             setWord(&TSW,TX_WDT,HIGH);
+             wdt_tout=millis();
+             return;
+          }   
+
+          #ifdef CAT
+             serialEvent();
+          #endif //CAT
+             
        #endif //WDT
        buttonTX=getTXSW();
                 
@@ -2350,8 +2337,6 @@ uint16_t build=BUILD;
    
    EEPROM.put(EEPROM_BOUNCE_TIME,bounce_time);
    EEPROM.put(EEPROM_SHORT_TIME,short_time);
-   EEPROM.put(EEPROM_VOX_MAXTRY,vox_maxtry);
-   EEPROM.put(EEPROM_VOX_CNTMAX,cnt_max);
    EEPROM.put(EEPROM_MAX_BLINK,max_blink);
    EEPROM.put(EEPROM_EEPROM_TOUT,eeprom_tout);
 
@@ -2363,10 +2348,6 @@ uint16_t build=BUILD;
    EEPROM.put(EEPROM_CW_SHIFT,cw_shift);
    EEPROM.put(EEPROM_CW_STEP,cw_step);
 #endif //CW
-
-#ifdef WDT
-   EEPROM.put(EEPROM_WDT_MAX,wdt_max);
-#endif //WDT
    
 #endif //TERMINAL
 
@@ -2401,8 +2382,6 @@ uint16_t build=BUILD;
    
    bounce_time= BOUNCE_TIME;
    short_time = SHORT_TIME;
-   vox_maxtry = VOX_MAXTRY;
-   cnt_max    = CNT_MAX;
    max_blink  = MAX_BLINK;
    eeprom_tout= EEPROM_TOUT;
 
@@ -2416,9 +2395,6 @@ uint16_t build=BUILD;
    cw_step    = CW_STEP;
 #endif //CW
 
-#ifdef WDT
-   wdt_max   = WDT_MAX;
-#endif //WDT   
 
 #endif //TERMINAL
 
@@ -2492,7 +2468,7 @@ void Mode_assign(){
    #endif //EE
 
    #ifdef DEBUG
-      _EXCPLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
+      _INFOLIST("%s mode(%d) f(%ld)\n",__func__,mode,f[mode]);
    #endif //DEBUG   
 }
 
@@ -2547,7 +2523,7 @@ void Freq_assign(){
         setQUAD(b);
      }
      #ifdef DEBUG
-        _EXCPLIST("%s Band=%d slot=%d quad=%d f=%ld\n",__func__,Band,b,q,freq);   
+        _INFOLIST("%s Band=%d slot=%d quad=%d f=%ld\n",__func__,Band,b,q,freq);   
      #endif
 #endif //PA and LPF daughter board defined
 
@@ -2766,7 +2742,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      Mode_assign();
         
      #ifdef DEBUG
-        _EXCPLIST("%s CW+ f=%ld\n",__func__,freq);
+        _INFOLIST("%s CW+ f=%ld\n",__func__,freq);
      #endif //DEBUG   
 
   }
@@ -2780,7 +2756,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      Mode_assign();
      
      #ifdef DEBUG
-        _EXCPLIST("%s CW- f=%ld\n",__func__,freq);
+        _INFOLIST("%s CW- f=%ld\n",__func__,freq);
      #endif //DEBUG   
      
   }
@@ -2794,7 +2770,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      setFrequencyCW(-1);
      
      #ifdef DEBUG
-        _EXCPLIST("%s f+ f=%ld\n",__func__,freq);      
+        _INFOLIST("%s f+ f=%ld\n",__func__,freq);      
      #endif //DEBUG   
   }
 
@@ -2802,7 +2778,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      setFrequencyCW(+1);
      
      #ifdef DEBUG
-        _EXCPLIST("%s f- f=%ld\n",__func__,freq);     
+        _INFOLIST("%s f- f=%ld\n",__func__,freq);     
      #endif //DEBUG   
   }
 //*-------------------------[CW Implementation]------------------
@@ -2816,13 +2792,13 @@ bool downButtonPL = getSwitchPL(DOWN);
   if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
 
      #ifdef DEBUG
-        _EXCPLIST("%s TX+\n",__func__);
+        _INFOLIST("%s TX+\n",__func__);
      #endif //DEBUG
         
      ManualTX(); 
      
      #ifdef DEBUG
-        _EXCPLIST("%s TX-\n",__func__);
+        _INFOLIST("%s TX-\n",__func__);
      #endif //DEBUG   
   }
 
@@ -2846,7 +2822,7 @@ bool downButtonPL = getSwitchPL(DOWN);
      Band_Select();
      
      #ifdef DEBUG
-      _EXCPLIST("%s U+D f=%ld",__func__,freq);
+      _INFOLIST("%s U+D f=%ld",__func__,freq);
      #endif //DEBUG 
   }
 #endif //ONEBAND
@@ -2856,7 +2832,7 @@ bool downButtonPL = getSwitchPL(DOWN);
       mode=(mode-1)%4;
       
       #ifdef DEBUG
-         _EXCPLIST("%s m+(%d)\n",__func__,mode);
+         _INFOLIST("%s m+(%d)\n",__func__,mode);
       #endif //DEBUG
       
       #ifdef EE
@@ -2873,7 +2849,7 @@ bool downButtonPL = getSwitchPL(DOWN);
       mode=(mode+1)%4;
       
       #ifdef DEBUG
-         _EXCPLIST("%s m-(%d)\n",__func__,mode);
+         _INFOLIST("%s m-(%d)\n",__func__,mode);
       #endif //DEBUG   
 
       #ifdef EE
@@ -2889,13 +2865,13 @@ bool downButtonPL = getSwitchPL(DOWN);
 }
 /*---------------------------------------------------------------------------------*
  * keepAlive()
- * Reference function for debugging purposes, called once per loop()
+ * Reference function for debugging purposes, called once per loop
  *---------------------------------------------------------------------------------*/
 void keepAlive() {
 
 #ifdef DEBUG
 
-   /* Code here -- Reserved for future usage -- hook into loop()*/
+   /* Code here -- Reserved for future usage -- hook into loop*/
 
 #endif //DEBUG
    
@@ -2935,7 +2911,7 @@ void INIT(){
     updateEEPROM();
     
     #ifdef DEBUG
-       _EXCPLIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+       _INFOLIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     #endif //DEBUG
     
  } else {
@@ -2966,8 +2942,6 @@ void INIT(){
    
    EEPROM.get(EEPROM_BOUNCE_TIME,bounce_time);
    EEPROM.get(EEPROM_SHORT_TIME,short_time);
-   EEPROM.get(EEPROM_VOX_MAXTRY,vox_maxtry);
-   EEPROM.get(EEPROM_VOX_CNTMAX,cnt_max);
    EEPROM.get(EEPROM_MAX_BLINK,max_blink);
    EEPROM.get(EEPROM_EEPROM_TOUT,eeprom_tout);
 
@@ -2980,15 +2954,12 @@ void INIT(){
    EEPROM.get(EEPROM_CW_STEP,cw_step);
 #endif //CW
 
-#ifdef WDT
-   EEPROM.get(EEPROM_WDT_MAX,wdt_max);
-#endif //WDT
    
 #endif //TERMINAL
  
   
   #ifdef DEBUG
-     _EXCPLIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+     _INFOLIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
   #endif //DEBUG   
 }  
 
@@ -3000,7 +2971,7 @@ void INIT(){
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
 
 #ifdef DEBUG
-   _EXCPLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
+   _INFOLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
 #endif //DEBUG      
 }
 /*--------------------------------------------------------------------------*
@@ -3260,8 +3231,6 @@ void execCommand(char * commandLine) {
   
   if (strcmp(ptrToCommandName, bounce_timeToken+1) == 0) {printCommand(ptrToCommandName,updateWord(&bounce_time));return;}
   if (strcmp(ptrToCommandName, short_timeToken+1)  == 0) {printCommand(ptrToCommandName,updateWord(&short_time));return;}
-  if (strcmp(ptrToCommandName, vox_maxtryToken+1)  == 0) {printCommand(ptrToCommandName,updateWord(&vox_maxtry));return;}
-  if (strcmp(ptrToCommandName, vox_cntmaxToken+1)  == 0) {printCommand(ptrToCommandName,updateWord(&cnt_max));return;}
   if (strcmp(ptrToCommandName, max_blinkToken+1)   == 0) {printCommand(ptrToCommandName,updateWord(&max_blink));return;}
 
 #ifdef EE
@@ -3279,15 +3248,6 @@ void execCommand(char * commandLine) {
   if (strcmp(ptrToCommandName, cw_stepToken+1)     == 0) {printCommand(ptrToCommandName,updateWord(&cwstep));return;}
 #endif //CW  
 
-#ifdef WDT
-  if (strcmp(ptrToCommandName, wdt_maxToken+1)    == 0)  {printCommand(ptrToCommandName,updateWord(&wdt_max));return;}
-#endif //WDT
-  /*
-  if (strcmp(ptrToCommandName, quad_band1Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band1Token());return;}
-  if (strcmp(ptrToCommandName, quad_band2Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band2Token());return;}
-  if (strcmp(ptrToCommandName, quad_band3Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band3Token());return;}
-  if (strcmp(ptrToCommandName, quad_band4Token+1)  == 0) {printCommand(ptrToCommandName,perform_quad_band4Token());return;}
-  */
   if (strcmp(ptrToCommandName, saveToken+1)        == 0) {perform_saveToken();printMessage(msgSave);return;}
   if (strcmp(ptrToCommandName, quitToken+1)        == 0) {perform_quitToken();return;}
   if (strcmp(ptrToCommandName, helpToken+1)        == 0) {perform_helpToken();return;}
@@ -3353,7 +3313,7 @@ void setup()
 
    #ifdef DEBUG
       Serial.begin(BAUD);
-      _EXCPLIST("%s: ADX Firmware V(%s) build(%d)\n",__func__,VERSION,BUILD);
+      _INFOLIST("%s: ADX Firmware V(%s) build(%d)\n",__func__,VERSION,BUILD);
    #endif //DEBUG
 
 /*-----
@@ -3406,7 +3366,7 @@ void setup()
         setQUAD(q);
      }   
      #ifdef DEBUG
-        _EXCPLIST("%s Bands[%d]=%d quad=%d\n",__func__,Band_slot,s,q);
+        _INFOLIST("%s Bands[%d]=%d quad=%d\n",__func__,Band_slot,s,q);
      #endif //DEBUG   
 
    #endif //QUAD      
@@ -3508,9 +3468,6 @@ void loop()
     }
     #endif //ATUCTL       
 
-
-
-
     #ifdef CAT 
 //*--- if CAT enabled check for serial events (TS480 & IC746)
        serialEvent();
@@ -3518,11 +3475,11 @@ void loop()
 
     #ifdef WDT
        
-       //if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
-       //   switch_RXTX(LOW);
-       //   setWord(&TSW,TX_WDT,HIGH);
-       //   wdt_tout=millis();
-       //}
+       if ((millis() > (wdt_tout+uint32_t(WDT_MAX))) && getWord(SSW,TXON) == HIGH && getWord(SSW,CATTX)==true) {
+          switch_RXTX(LOW);
+          setWord(&TSW,TX_WDT,HIGH);
+          wdt_tout=millis();
+       }
     
 //*--- if WDT enabled reset the watchdog
        wdt_reset();
@@ -3542,15 +3499,16 @@ uint16_t n = VOX_MAXTRY;
     #ifdef WDT
        wdt_reset();
 
-       //if (getWord(TSW,TX_WDT)==HIGH) {
-       //    break;
-       //}  //If watchdog has been triggered so no TX is allowed till a wdt_max timeout period has elapsed   
-       //if ((millis() > (wdt_tout+uint32_t(wdt_max))) && getWord(SSW,TXON) == HIGH) {
-       //   switch_RXTX(LOW);
-       //   setWord(&TSW,TX_WDT,HIGH);
-       //   wdt_tout=millis();
-       //   break;
-       //}
+       if (getWord(TSW,TX_WDT)==HIGH) {
+           break;
+       }  //If watchdog has been triggered so no TX is allowed till a wdt_max timeout period has elapsed   
+       
+       if ((millis() > (wdt_tout+uint32_t(WDT_MAX))) && getWord(SSW,TXON) == HIGH) {
+          switch_RXTX(LOW);
+          setWord(&TSW,TX_WDT,HIGH);
+          wdt_tout=millis();
+          break;
+       }
 
     #endif //WDT
     
@@ -3648,16 +3606,19 @@ uint16_t n = VOX_MAXTRY;
  * it will stay ready for the next TX command                *
  *                                                           *
  *-----------------------------------------------------------*/
- //if (getWord(TSW,TX_WDT)==HIGH) {
- //   blinkLED(TX);
- //}
+ if (getWord(TSW,TX_WDT)==HIGH) {
+    blinkLED(TX);
+ }
     
- //if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+uint32_t(wdt_max)))) {
- //   setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
- //}
+ if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+uint32_t(WDT_MAX)))) {
+    setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
+ }
  
 #endif //WDT
 
+#ifdef CAT
+ serialEvent();
+#endif //CAT 
  
  if (getWord(SSW,CATTX)!=true) {
     switch_RXTX(LOW);
