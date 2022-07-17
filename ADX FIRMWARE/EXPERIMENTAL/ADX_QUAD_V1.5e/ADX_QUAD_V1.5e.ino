@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          110
+#define BUILD          114
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -115,7 +115,9 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define TS480          1      //CAT Protocol is Kenwood 480
 #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
 #define ATUCTL         1      //Control external ATU device
+#define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
 //#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
+
 //#define ONEBAND        1
 /*
  * The following definitions are disabled but can be enabled selectively
@@ -127,6 +129,7 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 //#define CW           1      //Enable CW operation
 //#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
 //#define CAT_FULL     1      //Extend CAT support to the entire CAT command set (valid only for TS480)
+
 
 /*****************************************************************
  * Consistency rules, solve conflicting directives               *
@@ -480,6 +483,10 @@ int cmdLength    = 0;
    uint16_t avoxtime =   AVOXTIME;
    uint32_t tavox    =   0;
 #endif //ANTIVOX   
+
+#ifdef RESET
+   #define RTIME       2000
+#endif //RESET   
 
 #define AIN0           6           //(PD6)
 #define AIN1           7           //(PD7)
@@ -2617,6 +2624,26 @@ void Band_Select(){
    }                                               
    if (txButton == LOW) {
       digitalWrite(TX,0);
+#ifdef RESET      
+      uint32_t tnow=millis();
+      while (getTXSW()== LOW) { 
+            if (millis()-tnow>RTIME) {
+                setLED(WSPR,false);
+                setLED(JS8,false);
+                setLED(FT4,false),
+                setLED(FT8,false),
+                delay(500);
+                resetLED();
+                delay(500);
+            }    
+            #ifdef WDT
+            wdt_reset();
+            #endif //WDT
+      }
+    if (millis()-tnow > RTIME) {
+       resetFunc();
+    }        
+#endif //RESET      
       
       #ifdef EE
          tout=millis();
