@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          114
+#define BUILD          115
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -116,16 +116,15 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
 #define ATUCTL         1      //Control external ATU device
 #define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
-//#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
+#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
+#define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
 
-//#define ONEBAND        1
 /*
  * The following definitions are disabled but can be enabled selectively
  */
 //#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 //#define TERMINAL     1      //Serial configuration terminal
 //#define IC746        1      //CAT Protocol is ICOM 746
-//#define ONEBAND      1      //Forces a single band operation in order not to mess up because of a wrong final filter
 //#define CW           1      //Enable CW operation
 //#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
 //#define CAT_FULL     1      //Extend CAT support to the entire CAT command set (valid only for TS480)
@@ -3578,9 +3577,9 @@ uint16_t n = VOX_MAXTRY;
 
        if ((codefreq < FRQ_MAX) && (codefreq > 0)){
 
-//#ifdef ANTIVOX
-//          if (getWord(TSW,AVOX)==false) {
-//#endif //ANTIVOX
+#ifdef ANTIVOX
+          if (getWord(TSW,AVOX)==false) {
+#endif //ANTIVOX
             
              if (getWord(SSW,VOX) == false){
                  switch_RXTX(HIGH);                 
@@ -3589,14 +3588,14 @@ uint16_t n = VOX_MAXTRY;
              si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
              setWord(&SSW,VOX,true);
 
-//#ifdef ANTIVOX             
-//          }  else {
-//            if (millis()-tavox > uint32_t(avoxtime)) {
-//               setWord(&TSW,AVOX,false);
-//               tavox=0;
-//            }
-//          }
-//#endif //ANTIVOX
+#ifdef ANTIVOX             
+          }  else {
+            if (millis()-tavox > uint32_t(avoxtime)) {
+               setWord(&TSW,AVOX,false);
+               tavox=0;
+            }
+          }
+#endif //ANTIVOX
 
        #ifdef WDT
           wdt_reset();
