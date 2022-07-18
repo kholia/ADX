@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          115
+#define BUILD          116
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -111,14 +111,14 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
  *****************************************************************/
 #define WDT            1      //Hardware and TX watchdog enabled
 #define EE             1      //User EEPROM for persistence
-#define CAT            1      //Emulates a TS-480 transceiver CAT protocol (reduced footprint)
+#define CAT            1      //Enable CAT protocol over serial port
 #define TS480          1      //CAT Protocol is Kenwood 480
 #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
 #define ATUCTL         1      //Control external ATU device
 #define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
 #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
 #define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
-
+#define PDX            1      //Support for the PDX+ board from Dhiru (VU3CER)
 /*
  * The following definitions are disabled but can be enabled selectively
  */
@@ -146,7 +146,11 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #if (defined(CAT))
 
 #if defined(TS480)
-    #define BAUD 115200    
+    #ifdef PDX
+       #define BAUD 19200
+    #else   
+       #define BAUD 115200
+    #endif //PDX       
 #else    
     #define BAUD 19200    
 #endif //TS480
