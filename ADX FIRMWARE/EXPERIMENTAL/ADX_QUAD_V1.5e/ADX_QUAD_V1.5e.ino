@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          116
+#define BUILD          117
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -2280,11 +2280,14 @@ void Calibration(){
   
   while (true) {
 
+ bool upButton     = getUPSSW();
+ bool downButton   = getDOWNSSW();
+
      #ifdef WDT
         wdt_reset();
      #endif //WDT
      
-     if (getUPSSW() == LOW) {
+     if (upButton == LOW) {
         cal_factor = cal_factor - 100;
 
         #ifdef EE
@@ -2301,7 +2304,7 @@ void Calibration(){
      } 
    
 
-     if (getDOWNSSW() == LOW) {
+     if (downButton == LOW) {
         cal_factor = cal_factor + 100;
 
         #ifdef EE
