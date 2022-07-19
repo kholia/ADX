@@ -64,8 +64,8 @@ uint32_t val;
 uint32_t val_EE;
 int addr = 0;
 int mode;
-unsigned long freq =  14074000;
-unsigned long freq1 = 14074000;
+unsigned long freq =  28074000;
+unsigned long freq1 = 28074000;
 int32_t cal_factor;
 int TX_State = 0;
 

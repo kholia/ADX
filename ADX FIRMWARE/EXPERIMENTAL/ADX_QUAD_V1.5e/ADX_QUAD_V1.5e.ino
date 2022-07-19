@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          117
+#define BUILD          118
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -421,14 +421,16 @@ int cmdLength    = 0;
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
+#define DEBUG 1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
-   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 /*-------------------------------------------------------------------------*
  * Define Info,Exception and Trace macros (replaced by NOP if not enabled) *
  *-------------------------------------------------------------------------*/
+
 #ifdef DEBUG
    #define _DEBUG           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
    #define _DEBUGLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
@@ -551,6 +553,7 @@ int cmdLength    = 0;
 #define BANDS       4            //Max number of bands allowed
 #define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
 #define XT_CAL_F   33000 
+#define CAL_STEP   100           //Calibration factor step up/down while in calibration
 
 
 #define INT0        0
@@ -610,15 +613,16 @@ uint16_t short_time =SHORT_TIME;
 uint16_t vox_maxtry =VOX_MAXTRY;
 int      cnt_max    =CNT_MAX;
 uint16_t max_blink  =MAX_BLINK;
+#ifdef EE
 uint16_t eeprom_tout=EEPROM_TOUT;
-
+#endif //EE
 
 uint8_t  SSW=0;               //System SSW variable (to be used with getWord/setWord)
 uint16_t mode=0;              //Default to mode=0 (FT8)
 //uint16_t Band_slot=0;         //Default to Bands[0]=40
 uint16_t Band_slot=3;         //Default to Bands[3]=10
 
-uint16_t cal_factor=0;
+int32_t  cal_factor=0;
 
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
@@ -2237,7 +2241,7 @@ void Calibration(){
 
 
   #ifdef DEBUG
-     _INFO;
+     _EXCP;
   #endif //DEBUG
   
   resetLED();
@@ -2253,6 +2257,19 @@ void Calibration(){
   
   si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
   si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
+
+  /*-------
+   * Reset calibration & apply initial values
+   */
+  cal_factor=0;
+  #ifdef EE
+     EEPROM.put(EEPROM_CAL, cal_factor); 
+  #endif //EEPROM
+  
+  si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
+  si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
+
+
    
   while (n>0) {
 
@@ -2277,6 +2294,7 @@ void Calibration(){
          wdt_reset();
          #endif //WDT
      }
+     _EXCPLIST("%s cal_factor=%ld\n",__func__,cal_factor);
   
   while (true) {
 
@@ -2288,24 +2306,25 @@ void Calibration(){
      #endif //WDT
      
      if (upButton == LOW) {
-        cal_factor = cal_factor - 100;
+        cal_factor = cal_factor - CAL_STEP;
 
         #ifdef EE
            EEPROM.put(EEPROM_CAL, cal_factor); 
         #endif //EEPROM
         
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
-    
+
+        _EXCPLIST("%s (-) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
   // Set Calibration CLK output
   
-        si5351.set_freq(Cal_freq * 100, SI5351_CLK2);
+        si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
         si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
         si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
      } 
    
 
      if (downButton == LOW) {
-        cal_factor = cal_factor + 100;
+        cal_factor = cal_factor + CAL_STEP;
 
         #ifdef EE
            EEPROM.put(EEPROM_CAL, cal_factor);    
@@ -2314,7 +2333,8 @@ void Calibration(){
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
 
  // Set Calbration Clock output
-           
+        _EXCPLIST("%s (+) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
+    
         si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
         si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
         si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable clock2 
@@ -3346,7 +3366,7 @@ void setup()
 
    #ifdef DEBUG
       Serial.begin(BAUD);
-      _INFOLIST("%s: ADX Firmware V(%s) build(%d)\n",__func__,VERSION,BUILD);
+      _EXCPLIST("%s: ADX Firmware V(%s) build(%d)\n",__func__,VERSION,BUILD);
    #endif //DEBUG
 
 /*-----

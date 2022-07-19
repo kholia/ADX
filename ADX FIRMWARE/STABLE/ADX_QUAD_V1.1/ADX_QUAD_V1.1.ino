@@ -181,10 +181,12 @@ mode = 4;
 }
 
 
-
+/*
 addr = 40;
  EEPROM.put(addr, mode); 
+*/ 
                 Mode_assign();
+
                 
   }} 
    
@@ -201,12 +203,12 @@ if (mode > 4){
 mode = 1;
 }
 
-
+/*
 
 addr = 40;
  EEPROM.put(addr, mode); 
-                    Mode_assign();
-                    
+*/ 
+                    Mode_assign();                    
   }} 
 
   TXSW_State = digitalRead(TXSW);
@@ -289,10 +291,10 @@ unsigned int d1,d2;
 //************************************[ MODE Assign ]**********************************
 
 void Mode_assign(){
-  
+/*
 addr = 40;
 EEPROM.get(addr,mode);
-
+*/
 
 if ( mode == 1){
   freq1 = F_WSPR;
@@ -413,10 +415,10 @@ digitalWrite(WSPR, LOW);
          digitalWrite(FT4, LOW); 
              digitalWrite(FT8, LOW); 
 
-
+/*
 addr = 50;
 EEPROM.get(addr,Band_slot);
-
+*/
 if (Band_slot == 1){
   Band = Band1;
   
@@ -536,9 +538,10 @@ digitalWrite(TX,0);
 void Band_Select(){
 
 digitalWrite(TX,1);
+/*
 addr = 50; 
 EEPROM.get(addr,Band_slot);
-
+*/
 digitalWrite(WSPR,LOW); 
 digitalWrite(JS8, LOW); 
 digitalWrite(FT4, LOW); 
@@ -698,10 +701,10 @@ digitalWrite(TX,0);
 goto Band_cont;
 
 Band_exit:
-
+/*
 addr = 50;
  EEPROM.put(addr, Band_slot); 
-
+*/
 
  Band_assign();
 
@@ -758,8 +761,10 @@ delay(100);
 digitalWrite(WSPR, HIGH); 
 digitalWrite(FT8, HIGH);
 
+/*
 addr = 10;
 EEPROM.get(addr, cal_factor); 
+*/
 //Serial.print("cal factor= ");
 
 Calibrate:
@@ -773,9 +778,9 @@ UP_State = digitalRead(UP);
 if (UP_State == LOW) {
 
 cal_factor = cal_factor - 100;
-
+/*
  EEPROM.put(addr, cal_factor); 
-
+*/
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
   
   
@@ -796,8 +801,9 @@ if (DOWN_State == LOW) {
 if (DOWN_State == LOW) {
 
 cal_factor = cal_factor + 100;
+/*
 EEPROM.put(addr, cal_factor); 
-    
+*/    
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
   
   // Set CLK2 output
@@ -814,7 +820,7 @@ EEPROM.put(addr, cal_factor);
 
 //*********************************[ INITIALIZATION FUNCTION ]******************************************
 void INIT(){
-
+/*
  addr = 30;
 EEPROM.get(addr,temp);
 
@@ -856,6 +862,7 @@ EEPROM.get(addr,Band_slot);
 
 
     }  
+*/
 
 Band_assign();
 
