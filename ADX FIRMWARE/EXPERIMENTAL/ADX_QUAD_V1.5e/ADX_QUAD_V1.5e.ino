@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          120
+#define BUILD          122
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -145,15 +145,9 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 
 #if (defined(CAT))
 
-#if defined(TS480)
-    #ifdef PDX
-       #define BAUD 19200
-    #else   
-       #define BAUD 115200
-    #endif //PDX       
-#else    
-    #define BAUD 19200    
-#endif //TS480
+#if defined(TS480)|| defined(IC746)
+    #define BAUD 19200
+#endif //TS480 or IC746
 
 #endif //CAT    
 
@@ -421,10 +415,9 @@ int cmdLength    = 0;
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-#define DEBUG 1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
-   #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 /*-------------------------------------------------------------------------*
@@ -554,6 +547,7 @@ int cmdLength    = 0;
 #define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
 #define XT_CAL_F   33000 
 #define CAL_STEP   100           //Calibration factor step up/down while in calibration
+#define REPEAT_KEY 100            //Key repetition period while in calibration
 
 
 #define INT0        0
@@ -613,6 +607,7 @@ uint16_t short_time =SHORT_TIME;
 uint16_t vox_maxtry =VOX_MAXTRY;
 int      cnt_max    =CNT_MAX;
 uint16_t max_blink  =MAX_BLINK;
+
 #ifdef EE
 uint16_t eeprom_tout=EEPROM_TOUT;
 #endif //EE
@@ -1973,15 +1968,21 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 /**********************************************************************************************/
 /*                                      LED Management                                        */
 /**********************************************************************************************/
+void clearLED(uint8_t LEDpin) {
+  digitalWrite(LEDpin,LOW);
+  #ifdef DEBUG
+     _TRACELIST("%s pin=%d",__func__,LEDpin);
+  #endif //DEBUG   
+}
 /*----- 
  * Turn off all LEDs
  */
 void resetLED() {               //Turn-off all LEDs
 
-   digitalWrite(WSPR, LOW); 
-   digitalWrite(JS8, LOW); 
-   digitalWrite(FT4, LOW); 
-   digitalWrite(FT8, LOW); 
+   clearLED(WSPR);
+   clearLED(JS8);
+   clearLED(FT4);
+   clearLED(FT8);
 
    #ifdef DEBUG
    _TRACE;
@@ -2110,7 +2111,20 @@ ISR (PCINT2_vect) {
       }
   }
 }
-
+/*-----------------------------------------------------------------------------*
+ * detectKey                                                                   *
+ * detect if a push button is pressed                                          *
+ *-----------------------------------------------------------------------------*/
+bool detectKey(uint8_t k) {
+   uint32_t tdown=millis();
+   if ( digitalRead(k)==LOW ) {
+      while (millis()-tdown < 200) {}
+      if (digitalRead(k)==LOW){
+         return LOW;
+      }
+   }
+   return HIGH;
+}
 /*----------------------------------------------------------*
  * Manually turn TX while pressed                           *
  *----------------------------------------------------------*/
@@ -2234,6 +2248,7 @@ bool getTXSW() {
     }
     return HIGH;
 }
+
 /*----------------------------------------------------------*
  * Calibration function
  *----------------------------------------------------------*/
@@ -2305,7 +2320,8 @@ void Calibration(){
         wdt_reset();
      #endif //WDT
      
-     if (upButton == LOW) {
+//     if (upButton == LOW) {
+     if (detectKey(UP)==LOW) {
         cal_factor = cal_factor - CAL_STEP;
 
         #ifdef EE
@@ -2323,7 +2339,8 @@ void Calibration(){
      } 
    
 
-     if (downButton == LOW) {
+//     if (downButton == LOW) {
+     if (detectKey(DOWN)==LOW) {
         cal_factor = cal_factor + CAL_STEP;
 
         #ifdef EE
@@ -2339,10 +2356,9 @@ void Calibration(){
         si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
         si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable clock2 
 
-     } 
+     }
 
   }
-
 }
 
 #ifdef EE
@@ -2619,40 +2635,50 @@ void Band_Select(){
    
    blinkLED(LED[3-Band_slot]);
    setLED(LED[3-Band_slot],true);
+   bool     l=false;
+   uint32_t t=millis();
    
    while (true) {
-   #ifdef WDT
-      wdt_reset();
-   #endif //WDT      
+      #ifdef WDT
+         wdt_reset();
+      #endif //WDT      
+
+      if ((millis()-t) > uint32_t(BDLY)) {
+         t=millis();
+         (l==false ? setLED(TX,false) : clearLED(TX));
+         l=!l;
+      }
       
-   bool upButton   = getUPSSW();
-   bool downButton = getDOWNSSW();
-   bool txButton   = getTXSW();
+      bool upButton   = getUPSSW();
+      bool downButton = getDOWNSSW();
+      bool txButton   = getTXSW();
           
-   if ((upButton == HIGH) && (downButton == LOW)) {
-         
-       Band_slot=changeBand(-1);
-       setLED(LED[3-Band_slot],true);
+//      if ((upButton == HIGH) && (downButton == LOW)) {
+      if (detectKey(UP)==LOW) {        
+          Band_slot=changeBand(-1);
+          setLED(LED[3-Band_slot],true);
 
-       #ifdef DEBUG
-          _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
-       #endif //DEBUG   
-   } 
+          #ifdef DEBUG
+             _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
+          #endif //DEBUG   
+      } 
    
-   if ((upButton == LOW) && (downButton == HIGH)) {
-      Band_slot=changeBand(+1);
-      setLED(LED[3-Band_slot],true);
+//      if ((upButton == LOW) && (downButton == HIGH)) {
+      if (detectKey(DOWN)==LOW) {
+         Band_slot=changeBand(+1);
+         setLED(LED[3-Band_slot],true);
 
-      #ifdef DEBUG
-         _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
-      #endif //DEBUG   
+         #ifdef DEBUG
+            _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
+         #endif //DEBUG   
 
-   }                                               
-   if (txButton == LOW) {
-      digitalWrite(TX,0);
+      }                                               
+      if (txButton == LOW) {
+         digitalWrite(TX,0);
+
 #ifdef RESET      
-      uint32_t tnow=millis();
-      while (getTXSW()== LOW) { 
+         uint32_t tnow=millis();
+         while (getTXSW()== LOW) { 
             if (millis()-tnow>RTIME) {
                 setLED(WSPR,false);
                 setLED(JS8,false);
@@ -2665,22 +2691,23 @@ void Band_Select(){
             #ifdef WDT
             wdt_reset();
             #endif //WDT
-      }
-    if (millis()-tnow > RTIME) {
-       resetFunc();
-    }        
+         }
+         if (millis()-tnow > RTIME) {
+         resetFunc();
+       }        
 #endif //RESET      
       
-      #ifdef EE
+       #ifdef EE
          tout=millis();
          setWord(&SSW,SAVEEE,true);
-      #endif //EE
+       #endif //EE
 
-      Band_assign();
+       setLED(TX,false);
+       Band_assign();
 /*------------------------------------------*
  * Update master frequency                  *
  *------------------------------------------*/ 
-      return; 
+       return; 
    } 
 }
 }
@@ -3056,20 +3083,7 @@ void definePinOut() {
 #endif //DEBUG      
 }
 
-/*-----------------------------------------------------------------------------*
- * detectKey                                                                   *
- * detect if a push button is pressed                                          *
- *-----------------------------------------------------------------------------*/
-bool detectKey(uint8_t k) {
-   uint32_t tdown=millis();
-   if ( digitalRead(k)==LOW ) {
-      while (millis()-tdown < 200) {}
-      if (digitalRead(k)==LOW){
-         return true;
-      }
-   }
-   return false;
-}
+
 #ifdef TERMINAL
 /*====================================================================================================*/
 /*                                     Command Line Terminal                                          */
@@ -3432,7 +3446,7 @@ void setup()
 /*------
  * Check if calibration is needed
  */
-   if (detectKey(DOWN)) {Calibration();}
+   if (detectKey(DOWN)==LOW) {Calibration();}
   
 /*--------------------------------------------------------*
  * initialize the timer1 as an analog comparator          *
@@ -3472,7 +3486,7 @@ void setup()
 /*------------------
  * if UP switch pressed at bootup then enter Terminal mode
  */
-   if (detectKey(UP)) { 
+   if (detectKey(UP)==LOW) { 
       execTerminal();      
    }  
 #endif //TERMINAL   

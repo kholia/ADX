@@ -91,8 +91,6 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 		cwt		CW Step in Hz
 
 
-		** only if WDT is defined **
-		wdt		Max allowed TX time in mSecs
 
 ```
 - (fix) Calibration, proper handling of the DOWN key at bootup to enter calibration, then CLK2 is the output with 1 MHz
@@ -100,6 +98,10 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 - Build number is added to the firmware (#define BUILD xxx), when the build number set differs from the one stored in EEPROM values are reset to default.
 - Changes in the EEPROM management, all values supported by the configuration terminal are now stored in EEPROM.
 - Changes in the way to enter calibration mode at the start of the firmware to make it more reliable.
+- CAT TS480 is set now as Speed: 19200 for commonality and compatibility with existing software. 
+- Calibration, if the UP or DOWN buttons are kept pressed the calibration offset is changed continuously few times per second.
+- (fix) While in band change mode the TX button is kept blinking to signal that.
+- A RESET mode, if in BAND CHANGEN mode the TX button is kept pressed for more than 2 secs the board is reset, EEPROM content is preserved (enabled with #include RESET 1 directive).
 - Minor memory & code optimizations, bug removal.
 
 ### Hardware mods
