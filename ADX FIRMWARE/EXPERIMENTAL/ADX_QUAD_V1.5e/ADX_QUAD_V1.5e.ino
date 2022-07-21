@@ -118,7 +118,6 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
 #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
 #define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
-#define PDX            1      //Support for the PDX+ board from Dhiru (VU3CER)
 /*
  * The following definitions are disabled but can be enabled selectively
  */
@@ -1192,10 +1191,10 @@ void doSetFreq() { //ADDITIONAL CONTROL FOR LEGAL BAND NEEDED
    }
 
   #ifdef QUAD  //Set the PA & LPF filter board settings if defined
-     uint16_t s=bands[b];
-     int q=band2QUAD(s);
-     if (q != -1) { 
-        setQUAD(q);
+     uint16_t s=Bands[b];
+     int p=band2QUAD(s);
+     if (p != -1) { 
+        setQUAD(p);
      }   
      #ifdef DEBUG
         _INFOLIST("%s bands[%d]=%d quad=%d\n",__func__,b,s,q);
