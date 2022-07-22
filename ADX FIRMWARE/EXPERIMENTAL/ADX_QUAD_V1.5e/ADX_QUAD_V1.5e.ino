@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          123
+#define BUILD          125
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -118,7 +118,6 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
 #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
 #define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
-//#define LEGACY         1      //Enable code AS IS version 1.1 for testing purposes
 /*
  * The following definitions are disabled but can be enabled selectively
  */
@@ -128,6 +127,7 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 //#define CW           1      //Enable CW operation
 //#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
 //#define CAT_FULL     1      //Extend CAT support to the entire CAT command set (valid only for TS480)
+//#define LEGACY       1      //Enable code AS IS version 1.1 for testing purposes
 
 
 /*****************************************************************
@@ -415,6 +415,7 @@ int cmdLength    = 0;
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
+
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
@@ -547,7 +548,9 @@ int cmdLength    = 0;
 #define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
 #define XT_CAL_F   33000 
 #define CAL_STEP   100           //Calibration factor step up/down while in calibration
-#define REPEAT_KEY 50            //Key repetition period while in calibration
+#define REPEAT_KEY 30            //Key repetition period while in calibration
+#define WAIT       true
+#define NOWAIT     false
 
 
 #define INT0        0
@@ -2115,15 +2118,45 @@ ISR (PCINT2_vect) {
  * detectKey                                                                   *
  * detect if a push button is pressed                                          *
  *-----------------------------------------------------------------------------*/
-bool detectKey(uint8_t k) {
+bool detectKey(uint8_t k, bool v, bool w) {
+
    uint32_t tdown=millis();
-   if ( digitalRead(k)==LOW ) {
-      while (millis()-tdown < REPEAT_KEY) {}
-      if (digitalRead(k)==LOW){
-         return LOW;
+   if (digitalRead(k)==v) {
+
+      
+      while (millis()-tdown<REPEAT_KEY) {
+#ifdef WDT
+          wdt_reset();
+#endif //WDT                        
       }
-   }
-   return HIGH;
+      if (digitalRead(k)==v) { //confirmed as v value now wait for the inverse, if not return the inverse      
+          
+          if (w==false) {
+             return v;
+          }
+          
+          while (true) {
+#ifdef WDT
+              wdt_reset();
+#endif //WDT                        
+
+              if (digitalRead(k)!=v) {
+                 tdown=millis();
+                 while (millis()-tdown<REPEAT_KEY) {
+#ifdef WDT
+              wdt_reset();
+#endif //WDT                                          
+                 }
+                 if (digitalRead(k)!=v) {
+                    return v;
+                 }
+              }
+          }
+          return !v;
+                     
+          }
+   }   
+   return !v;
 }
 /*----------------------------------------------------------*
  * Manually turn TX while pressed                           *
@@ -2427,7 +2460,7 @@ EEPROM.put(addr, cal_factor);
      #endif //WDT
      
 //     if (upButton == LOW) {
-     if (detectKey(UP)==LOW) {
+     if (detectKey(UP,LOW,NOWAIT)==LOW) {
         cal_factor = cal_factor - CAL_STEP;
 
         #ifdef EE
@@ -2446,7 +2479,7 @@ EEPROM.put(addr, cal_factor);
    
 
 //     if (downButton == LOW) {
-     if (detectKey(DOWN)==LOW) {
+     if (detectKey(DOWN,LOW,NOWAIT)==LOW) {
         cal_factor = cal_factor + CAL_STEP;
 
         #ifdef EE
@@ -2738,7 +2771,7 @@ void Band_Select(){
    resetLED();
 
    #ifdef DEBUG
-      _INFOLIST("%s slot(%d) LED(%d)\n",__func__,Band_slot,LED[3-Band_slot]);
+      _EXCPLIST("%s slot(%d) LED(%d)\n",__func__,Band_slot,LED[3-Band_slot]);
    #endif //DEBUG
    
    blinkLED(LED[3-Band_slot]);
@@ -2762,22 +2795,22 @@ void Band_Select(){
       bool txButton   = getTXSW();
           
 //      if ((upButton == HIGH) && (downButton == LOW)) {
-      if (detectKey(UP)==LOW) {        
+      if (detectKey(UP,LOW,WAIT)==LOW) {        
           Band_slot=changeBand(-1);
           setLED(LED[3-Band_slot],true);
 
           #ifdef DEBUG
-             _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
+             _EXCPLIST("%s slot(%d)\n",__func__,Band_slot);
           #endif //DEBUG   
       } 
    
 //      if ((upButton == LOW) && (downButton == HIGH)) {
-      if (detectKey(DOWN)==LOW) {
+      if (detectKey(DOWN,LOW,WAIT)==LOW) {
          Band_slot=changeBand(+1);
          setLED(LED[3-Band_slot],true);
 
          #ifdef DEBUG
-            _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
+            _EXCPLIST("%s slot(%d)\n",__func__,Band_slot);
          #endif //DEBUG   
 
       }                                               
@@ -3554,7 +3587,7 @@ void setup()
 /*------
  * Check if calibration is needed
  */
-   if (detectKey(DOWN)==LOW) {Calibration();}
+   if (detectKey(DOWN,LOW,WAIT)==LOW) {Calibration();}
   
 /*--------------------------------------------------------*
  * initialize the timer1 as an analog comparator          *
@@ -3594,7 +3627,7 @@ void setup()
 /*------------------
  * if UP switch pressed at bootup then enter Terminal mode
  */
-   if (detectKey(UP)==LOW) { 
+   if (detectKey(UP,LOW,WAIT)==LOW) { 
       execTerminal();      
    }  
 #endif //TERMINAL   
