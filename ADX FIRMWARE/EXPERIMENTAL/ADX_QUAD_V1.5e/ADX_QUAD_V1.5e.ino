@@ -101,7 +101,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          122
+#define BUILD          123
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -118,6 +118,7 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
 #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
 #define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
+//#define LEGACY         1      //Enable code AS IS version 1.1 for testing purposes
 /*
  * The following definitions are disabled but can be enabled selectively
  */
@@ -546,7 +547,7 @@ int cmdLength    = 0;
 #define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
 #define XT_CAL_F   33000 
 #define CAL_STEP   100           //Calibration factor step up/down while in calibration
-#define REPEAT_KEY 100            //Key repetition period while in calibration
+#define REPEAT_KEY 50            //Key repetition period while in calibration
 
 
 #define INT0        0
@@ -2117,7 +2118,7 @@ ISR (PCINT2_vect) {
 bool detectKey(uint8_t k) {
    uint32_t tdown=millis();
    if ( digitalRead(k)==LOW ) {
-      while (millis()-tdown < 200) {}
+      while (millis()-tdown < REPEAT_KEY) {}
       if (digitalRead(k)==LOW){
          return LOW;
       }
@@ -2252,8 +2253,114 @@ bool getTXSW() {
  * Calibration function
  *----------------------------------------------------------*/
 void Calibration(){
+  
+#ifdef LEGACY
 
 
+int UP_State;
+int DOWN_State;
+
+digitalWrite(FT8, LOW);
+digitalWrite(FT4, LOW);
+digitalWrite(JS8, LOW);
+digitalWrite(WSPR, LOW);
+
+digitalWrite(WSPR, HIGH); 
+digitalWrite(FT8, HIGH);
+delay(100);        
+ 
+digitalWrite(WSPR, LOW); 
+digitalWrite(FT8, LOW);
+delay(100);                 
+
+
+digitalWrite(WSPR, HIGH); 
+digitalWrite(FT8, HIGH);
+delay(100);        
+ 
+digitalWrite(WSPR, LOW); 
+digitalWrite(FT8, LOW);
+delay(100);                       
+
+ digitalWrite(WSPR, HIGH); 
+digitalWrite(FT8, HIGH);
+delay(100);        
+ 
+digitalWrite(WSPR, LOW); 
+digitalWrite(FT8, LOW);
+delay(100);                       
+
+digitalWrite(WSPR, HIGH); 
+digitalWrite(FT8, HIGH);
+delay(100);        
+ 
+digitalWrite(WSPR, LOW); 
+digitalWrite(FT8, LOW);
+delay(100);                       
+
+digitalWrite(WSPR, HIGH); 
+digitalWrite(FT8, HIGH);
+
+/*
+addr = 10;
+EEPROM.get(addr, cal_factor); 
+*/
+//Serial.print("cal factor= ");
+
+Calibrate:
+
+    UP_State = digitalRead(UP);
+
+if (UP_State == LOW) {
+   delay(50); 
+     
+UP_State = digitalRead(UP);
+if (UP_State == LOW) {
+
+cal_factor = cal_factor - 100;
+/*
+ EEPROM.put(addr, cal_factor); 
+*/
+  si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
+  
+  
+  // Set CLK2 output
+  si5351.set_freq(Cal_freq * 100, SI5351_CLK2);
+  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
+  si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
+
+  
+  }} 
+   
+    DOWN_State = digitalRead(DOWN);
+
+if (DOWN_State == LOW) {
+   delay(50);   
+   
+         DOWN_State = digitalRead(DOWN);
+if (DOWN_State == LOW) {
+
+cal_factor = cal_factor + 100;
+/*
+EEPROM.put(addr, cal_factor); 
+*/    
+  si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
+  
+  // Set CLK2 output
+  si5351.set_freq(Cal_freq * 100, SI5351_CLK2);
+  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
+  si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable clock2 
+
+  }} 
+
+   goto Calibrate;
+
+
+
+/*--------------------------
+ * end of legacy test code
+ *-------------------------*/
+#else
   #ifdef DEBUG
      _EXCP;
   #endif //DEBUG
@@ -2358,6 +2465,8 @@ void Calibration(){
      }
 
   }
+
+#endif //LEGACY  
 }
 
 #ifdef EE
