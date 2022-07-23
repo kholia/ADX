@@ -107,7 +107,7 @@
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          126
+#define BUILD          128
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -115,9 +115,7 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 /*****************************************************************
  * CONFIGURATION Properties                                      *
  *****************************************************************/
-#ifndef PICO
 #define WDT            1      //Hardware and TX watchdog enabled
-#endif
 #define EE             1      //User EEPROM for persistence
 #define CAT            1      //Enable CAT protocol over serial port
 #define TS480          1      //CAT Protocol is Kenwood 480
@@ -129,6 +127,7 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 /*
  * The following definitions are disabled but can be enabled selectively
  */
+//#define CAL_RESET    1      //If enabled reset cal_factor when performing a new calibration()
 //#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
 //#define TERMINAL     1      //Serial configuration terminal
 //#define IC746        1      //CAT Protocol is ICOM 746
@@ -141,6 +140,10 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 /*****************************************************************
  * Consistency rules, solve conflicting directives               *
  *****************************************************************/
+#ifdef PICO
+    #undef WDT
+#endif
+
 #if (defined(CAT) && !defined(TS480) && !defined(IC746))
     #define IC746      1
 #endif
@@ -423,7 +426,6 @@ int cmdLength    = 0;
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
@@ -555,7 +557,7 @@ int cmdLength    = 0;
 #define BANDS       4            //Max number of bands allowed
 #define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
 #define XT_CAL_F   33000 
-#define CAL_STEP   100           //Calibration factor step up/down while in calibration
+#define CAL_STEP   500           //Calibration factor step up/down while in calibration (sweet spot experimentally found by Barb)
 #define REPEAT_KEY 30            //Key repetition period while in calibration
 #define WAIT       true
 #define NOWAIT     false
@@ -613,20 +615,20 @@ int cmdLength    = 0;
 #endif //CW
 
 //*******************************[ VARIABLE DECLARATIONS ]*************************************
-uint16_t bounce_time=BOUNCE_TIME;
-uint16_t short_time =SHORT_TIME;
-uint16_t vox_maxtry =VOX_MAXTRY;
-int      cnt_max    =CNT_MAX;
-uint16_t max_blink  =MAX_BLINK;
+uint16_t bounce_time = BOUNCE_TIME;
+uint16_t short_time  = SHORT_TIME;
+uint16_t vox_maxtry  = VOX_MAXTRY;
+int      cnt_max     = CNT_MAX;
+uint16_t max_blink   = MAX_BLINK;
 
 #ifdef EE
-uint16_t eeprom_tout=EEPROM_TOUT;
+uint16_t eeprom_tout = EEPROM_TOUT;
 #endif //EE
 
 uint8_t  SSW=0;               //System SSW variable (to be used with getWord/setWord)
 uint16_t mode=0;              //Default to mode=0 (FT8)
-//uint16_t Band_slot=0;         //Default to Bands[0]=40
-uint16_t Band_slot=3;         //Default to Bands[3]=10
+//uint16_t Band_slot = 0;         //Default to Bands[0]=40
+uint16_t Band_slot   = 3;         //Default to Bands[3]=10
 
 int32_t  cal_factor=0;
 
@@ -1892,7 +1894,7 @@ long cal = XT_CAL_F;
   si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);// Set for reduced power for RX 
 
   #ifdef DEBUG
-    _INFO;
+    _EXCP;
   #endif //DEBUG
 
 }
@@ -2101,6 +2103,7 @@ ISR (PCINT2_vect) {
               #ifdef DEBUG
                  _TRACELIST("%s pin(%d) too short, ignored!\n",__func__,p);
               #endif //DEBUG   
+              downTimer[p]=millis();  //fix weird Barb pushbutton with a 2nd train of bouncing signals
             
            }
            setWord(&SSW,v,true);
@@ -2293,13 +2296,13 @@ bool getTXSW() {
     return HIGH;
 }
 
-/*----------------------------------------------------------*
- * Calibration function
- *----------------------------------------------------------*/
-void Calibration(){
-  
+/*--------
+ * Old (legacy) Calibration procedure for testing purposes
+ * must be removed once debugged
+ *-------*/
 #ifdef LEGACY
 
+void legacy_Calibration() {
 
 int UP_State;
 int DOWN_State;
@@ -2398,16 +2401,26 @@ EEPROM.put(addr, cal_factor);
   }} 
 
    goto Calibrate;
-
-
-
 /*--------------------------
  * end of legacy test code
  *-------------------------*/
-#else
+  
+}
+#endif //LEGACY
+/*----------------------------------------------------------*
+ * Calibration function
+ *----------------------------------------------------------*/
+void Calibration(){
+  
+
   #ifdef DEBUG
      _EXCP;
   #endif //DEBUG
+
+#ifdef LEGACY
+  legacy_Calibration();
+  return;
+#endif //LEGACY    
   
   resetLED();
   uint8_t  n=4;
@@ -2426,10 +2439,15 @@ EEPROM.put(addr, cal_factor);
   /*-------
    * Reset calibration & apply initial values
    */
+
+#ifdef CAL_RESET 
   cal_factor=0;
+  
   #ifdef EE
      EEPROM.put(EEPROM_CAL, cal_factor); 
   #endif //EEPROM
+  
+#endif //CAL_RESET
   
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
   si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
@@ -2459,7 +2477,10 @@ EEPROM.put(addr, cal_factor);
          wdt_reset();
          #endif //WDT
      }
+
+#ifdef DEBUG
      _EXCPLIST("%s cal_factor=%ld\n",__func__,cal_factor);
+#endif //DEBUG
   
   while (true) {
 
@@ -2470,7 +2491,6 @@ EEPROM.put(addr, cal_factor);
         wdt_reset();
      #endif //WDT
      
-//     if (upButton == LOW) {
      if (detectKey(UP,LOW,NOWAIT)==LOW) {
         cal_factor = cal_factor - CAL_STEP;
 
@@ -2480,7 +2500,12 @@ EEPROM.put(addr, cal_factor);
         
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
 
+#ifdef DEBUG
+
         _EXCPLIST("%s (-) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
+        
+#endif //DEBUG
+
   // Set Calibration CLK output
   
         si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
@@ -2489,7 +2514,6 @@ EEPROM.put(addr, cal_factor);
      } 
    
 
-//     if (downButton == LOW) {
      if (detectKey(DOWN,LOW,NOWAIT)==LOW) {
         cal_factor = cal_factor + CAL_STEP;
 
@@ -2500,7 +2524,11 @@ EEPROM.put(addr, cal_factor);
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
 
  // Set Calbration Clock output
+#ifdef DEBUG
+
         _EXCPLIST("%s (+) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
+
+#endif //DEBUG
     
         si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
         si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
@@ -2509,8 +2537,6 @@ EEPROM.put(addr, cal_factor);
      }
 
   }
-
-#endif //LEGACY  
 }
 
 #ifdef EE
@@ -2786,7 +2812,7 @@ void Band_Select(){
    resetLED();
 
    #ifdef DEBUG
-      _EXCPLIST("%s slot(%d) LED(%d)\n",__func__,Band_slot,LED[3-Band_slot]);
+      _INFOLIST("%s slot(%d) LED(%d)\n",__func__,Band_slot,LED[3-Band_slot]);
    #endif //DEBUG
    
    blinkLED(LED[3-Band_slot]);
@@ -2815,7 +2841,7 @@ void Band_Select(){
           setLED(LED[3-Band_slot],true);
 
           #ifdef DEBUG
-             _EXCPLIST("%s slot(%d)\n",__func__,Band_slot);
+             _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
           #endif //DEBUG   
       } 
    
@@ -2825,7 +2851,7 @@ void Band_Select(){
          setLED(LED[3-Band_slot],true);
 
          #ifdef DEBUG
-            _EXCPLIST("%s slot(%d)\n",__func__,Band_slot);
+            _INFOLIST("%s slot(%d)\n",__func__,Band_slot);
          #endif //DEBUG   
 
       }                                               
@@ -3140,6 +3166,10 @@ void INIT(){
  
  if (build != uint16_t(BUILD)) {
     resetEEPROM();
+    #ifdef DEBUG
+       _EXCPLIST("%s EEPROM Reset Build<> cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+    #endif //DEBUG
+    
  }
  
  if (temp != save){
@@ -3147,7 +3177,7 @@ void INIT(){
     updateEEPROM();
     
     #ifdef DEBUG
-       _INFOLIST("%s EEPROM Reset cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+       _INFOLIST("%s EEPROM Reset cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     #endif //DEBUG
     
  } else {
@@ -3193,9 +3223,11 @@ void INIT(){
    
 #endif //TERMINAL
  
+
+  setup_si5351();
   
   #ifdef DEBUG
-     _INFOLIST("%s EEPROM Read cal(%d) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+     _EXCPLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
   #endif //DEBUG   
 }  
 
@@ -3207,7 +3239,7 @@ void INIT(){
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
 
 #ifdef DEBUG
-   _INFOLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
+   _EXCPLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
 #endif //DEBUG      
 }
 /*--------------------------------------------------------------------------*
@@ -3557,6 +3589,13 @@ void setup()
 
    definePinOut();
 
+   setup_si5351();   
+   
+   #ifdef DEBUG
+      _INFOLIST("%s setup_si5351 ok\n",__func__);
+   #endif //DEBUG   
+   
+
 #ifndef PICO
    PCICR  |= B00000100; // Enable interrupts at PD port
    PCMSK2 |= B00011100; // Signal interrupts for D2,D3 and D4 pins (UP/DOWN/TX)
@@ -3569,10 +3608,9 @@ void setup()
       _INFOLIST("%s INT ok\n",__func__);
    #endif //DEBUG   
 
-   setup_si5351();   
-   
+   INIT();
    #ifdef DEBUG
-      _INFOLIST("%s setup_si5351 ok\n",__func__);
+      _INFOLIST("%s INIT ok\n",__func__);
    #endif //DEBUG   
    
    #ifdef QUAD
@@ -3596,10 +3634,6 @@ void setup()
 
    #endif //QUAD      
    
-   INIT();
-   #ifdef DEBUG
-      _INFOLIST("%s INIT ok\n",__func__);
-   #endif //DEBUG   
 
 /*------
  * Check if calibration is needed
