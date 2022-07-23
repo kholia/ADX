@@ -94,17 +94,16 @@
 /*-----------------------------------------------------------*
  * System Includes
  *-----------------------------------------------------------*/
-
-// #define PICO           1   //Compile for Raspberry Pi Pico board
+//#define PICO           1   //Compile for Raspberry Pi Pico board
 
 #include <Arduino.h>
 #include <stdint.h>
-#ifndef PICO
-#include <avr/wdt.h> 
-#endif
 #include <si5351.h>
 #include "Wire.h"
 #include <EEPROM.h>
+#ifndef PICO
+    #include <avr/wdt.h> 
+#endif //PICO
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
 #define BUILD          128
@@ -115,6 +114,8 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 /*****************************************************************
  * CONFIGURATION Properties                                      *
  *****************************************************************/
+
+
 #define WDT            1      //Hardware and TX watchdog enabled
 #define EE             1      //User EEPROM for persistence
 #define CAT            1      //Enable CAT protocol over serial port
@@ -142,7 +143,8 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
  *****************************************************************/
 #ifdef PICO
     #undef WDT
-#endif
+
+#endif //PICO
 
 #if (defined(CAT) && !defined(TS480) && !defined(IC746))
     #define IC746      1
@@ -184,6 +186,62 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
    #undef TS480
 #endif   
 
+
+#ifdef PICO
+
+#include "pico/stdlib.h"
+#include "pico/binary_info.h"
+#include "hardware/gpio.h"
+#include "hardware/sync.h"
+#include "hardware/structs/ioqspi.h"
+#include "hardware/structs/sio.h"
+
+/*-----------------------------------------     
+ * This is specific code for the RP2040
+ */
+ bool __no_inline_not_in_flash_func(get_bootsel_button)() {
+    const uint CS_PIN_INDEX = 1;
+
+/*--------------------------------------------------------------------------* 
+ * 
+ * Must disable interrupts, as interrupt handlers may be in flash, and we 
+ * are about to temporarily disable flash access! 
+ *--------------------------------------------------------------------------*/
+     uint32_t flags = save_and_disable_interrupts();
+
+/*---    
+ * 
+ *Set chip select to Hi-Z
+ *
+ *----*/
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
+                    GPIO_OVERRIDE_LOW << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+
+/*------
+  Note we can't call into any sleep functions in flash right now
+*-------*/  
+  for (volatile int i = 0; i < 1000; ++i);
+
+/*-----------
+  The HI GPIO registers in SIO can observe and control the 6 QSPI pins.
+  Note the button pulls the pin *low* when pressed.
+*------------*/    
+    bool button_state = !(sio_hw->gpio_hi_in & (1u << CS_PIN_INDEX));
+
+/*-----------
+ * Need to restore the state of chip select, else we are going to have a
+ * bad time when we return to code in flash!
+ *-----------*/ 
+  
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
+                    GPIO_OVERRIDE_NORMAL << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+
+    restore_interrupts(flags);
+    return button_state;
+}
+#endif //PICO
 /*--------------------------------------------------------*
  * Terminal related areas, commands and definitions       *
  *--------------------------------------------------------*/
@@ -507,7 +565,11 @@ int cmdLength    = 0;
 #define FT4           11           //FT4 LED
 #define FT8           12           //FT8 LED
 
+#ifndef PICO
 #define TX            13           //(PB5) TX LED
+#else
+#define TX            25           // Standard Pico in board LED
+#endif //PICO
 /*----------------------------------------------------------------*
  *  Global State Variables (Binary)                               *
  *----------------------------------------------------------------*/
@@ -2128,6 +2190,10 @@ ISR (PCINT2_vect) {
 }
 #endif
 
+#ifdef PICO
+  #define digitalRead(x)    get_bootsel_button()
+  #define digitalWrite(x,y) gpio_put(x,y)
+#endif    
 /*-----------------------------------------------------------------------------*
  * detectKey                                                                   *
  * detect if a push button is pressed                                          *
@@ -2290,10 +2356,14 @@ bool getDOWNSSW() {
  *---------------------------------------------------------------*/
 bool getTXSW() {
 
+#ifdef PICO
+    return get_bootsel_button();
+#else
     if ( getWord(button[INT2],PUSHSTATE)==LOW && (millis()-downTimer[INT2]>bounce_time) ) {
        return LOW;
     }
     return HIGH;
+#endif //PICO    
 }
 
 /*--------
@@ -2835,7 +2905,6 @@ void Band_Select(){
       bool downButton = getDOWNSSW();
       bool txButton   = getTXSW();
           
-//      if ((upButton == HIGH) && (downButton == LOW)) {
       if (detectKey(UP,LOW,WAIT)==LOW) {        
           Band_slot=changeBand(-1);
           setLED(LED[3-Band_slot],true);
@@ -2845,7 +2914,6 @@ void Band_Select(){
           #endif //DEBUG   
       } 
    
-//      if ((upButton == LOW) && (downButton == HIGH)) {
       if (detectKey(DOWN,LOW,WAIT)==LOW) {
          Band_slot=changeBand(+1);
          setLED(LED[3-Band_slot],true);
@@ -3051,8 +3119,13 @@ bool downButtonPL = getSwitchPL(DOWN);
  * TX button short press          *
  * Transmit mode                  *
  *--------------------------------*/
+ #ifdef PICO
+   if (digitalRead(TXSW)==LOW) {
+ #else
+ 
   if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
 
+#endif //PICO
      #ifdef DEBUG
         _INFOLIST("%s TX+\n",__func__);
      #endif //DEBUG
@@ -3249,6 +3322,13 @@ void INIT(){
  *--------------------------------------------------------------------------*/
 void definePinOut() {
 
+#ifdef PICO
+   bi_decl(bi_program_description("First Blink"));
+   bi_decl(bi_1pin_with_name(TX, "On-board LED"));
+
+   gpio_init(TX);
+   gpio_set_dir(TX, GPIO_OUT);
+#else
    pinMode(UP,   INPUT);
    pinMode(DOWN, INPUT);
    pinMode(TXSW, INPUT);
@@ -3269,6 +3349,7 @@ void definePinOut() {
 #ifdef DEBUG
    _INFO;
 #endif //DEBUG      
+#endif //PICO
 }
 
 
@@ -3588,6 +3669,7 @@ void setup()
    #endif //CAT   
 
    definePinOut();
+   blinkLED(TX);
 
    setup_si5351();   
    
@@ -3684,6 +3766,7 @@ void setup()
       execTerminal();      
    }  
 #endif //TERMINAL   
+   blinkLED(TX);
   
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
