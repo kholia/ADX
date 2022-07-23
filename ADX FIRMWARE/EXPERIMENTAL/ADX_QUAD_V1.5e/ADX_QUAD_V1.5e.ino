@@ -94,14 +94,20 @@
 /*-----------------------------------------------------------*
  * System Includes
  *-----------------------------------------------------------*/
+
+// #define PICO           1   //Compile for Raspberry Pi Pico board
+
+#include <Arduino.h>
 #include <stdint.h>
+#ifndef PICO
 #include <avr/wdt.h> 
+#endif
 #include <si5351.h>
 #include "Wire.h"
 #include <EEPROM.h>
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          125
+#define BUILD          126
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
@@ -109,7 +115,9 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 /*****************************************************************
  * CONFIGURATION Properties                                      *
  *****************************************************************/
+#ifndef PICO
 #define WDT            1      //Hardware and TX watchdog enabled
+#endif
 #define EE             1      //User EEPROM for persistence
 #define CAT            1      //Enable CAT protocol over serial port
 #define TS480          1      //CAT Protocol is Kenwood 480
@@ -2050,6 +2058,7 @@ void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
 
 }
 
+#ifndef PICO
 /**********************************************************************************************/
 /*                               PushButton Management                                        */
 /**********************************************************************************************/
@@ -2114,6 +2123,8 @@ ISR (PCINT2_vect) {
       }
   }
 }
+#endif
+
 /*-----------------------------------------------------------------------------*
  * detectKey                                                                   *
  * detect if a push button is pressed                                          *
@@ -2646,7 +2657,9 @@ void Mode_assign(){
     switch_RXTX(LOW);
     setWord(&SSW,VOX,false);
     setWord(&SSW,TXON,false);
+#ifdef WDT
     wdt_reset();
+#endif
 
 /*--------------------------------------------*   
  * Update master frequency here               *
@@ -2738,7 +2751,9 @@ void Freq_assign(){
     switch_RXTX(LOW);
     setWord(&SSW,VOX,false);
     setWord(&SSW,TXON,false);
+#ifdef WDT
     wdt_reset();
+#endif
 
     #ifdef DEBUG
        _INFOLIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n",__func__,Band,b,mode,Band_slot,f[0],f[1],f[2],f[3],freq);
@@ -3542,11 +3557,13 @@ void setup()
 
    definePinOut();
 
+#ifndef PICO
    PCICR  |= B00000100; // Enable interrupts at PD port
    PCMSK2 |= B00011100; // Signal interrupts for D2,D3 and D4 pins (UP/DOWN/TX)
    setWord(&button[INT0],PUSHSTATE,HIGH);
    setWord(&button[INT1],PUSHSTATE,HIGH);
    setWord(&button[INT2],PUSHSTATE,HIGH);
+#endif
 
    #ifdef DEBUG
       _INFOLIST("%s INT ok\n",__func__);
@@ -3589,6 +3606,7 @@ void setup()
  */
    if (detectKey(DOWN,LOW,WAIT)==LOW) {Calibration();}
   
+#ifndef PICO
 /*--------------------------------------------------------*
  * initialize the timer1 as an analog comparator          *
  * this is the main feature of the VOX/Modulation scheme  *
@@ -3604,6 +3622,7 @@ void setup()
   #ifdef DEBUG
      _INFOLIST("%s Timer1 set Ok\n",__func__);
   #endif //DEBUG   
+#endif
   
   switch_RXTX(LOW);
   #ifdef DEBUG
@@ -3720,6 +3739,7 @@ uint16_t n = VOX_MAXTRY;
 
     #endif //WDT
     
+#ifndef PICO
     TCNT1 = 0;                                  //While this iteration is performed if the TX is off 
     
     while (ACSR &(1<<ACO)){                     //the receiver is operating with autonomy
@@ -3787,6 +3807,7 @@ uint16_t n = VOX_MAXTRY;
     } else {
        n--;
     }
+#endif
     
     #ifdef CAT 
 //*--- if CAT enabled check for serial events (again)
