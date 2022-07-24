@@ -91,30 +91,54 @@
 // 7 - If you read as accurate as possible 1000000 Hz then calibration is done. 
 // 8 - Power off ADX.
 //*******************************[ LIBRARIES ]*************************************************
+/*-------------------------------------------------------------*
+ * Define the runtime platform either PICO (Raspberry Pi Pico) *
+ * or !PICO (Arduino ATMega328p)                               *
+ *-------------------------------------------------------------*/
+//#define PICO           1   //Compile for Raspberry Pi Pico board
+ 
 /*-----------------------------------------------------------*
  * System Includes
  *-----------------------------------------------------------*/
-//#define PICO           1   //Compile for Raspberry Pi Pico board
-
 #include <Arduino.h>
 #include <stdint.h>
 #include <si5351.h>
 #include "Wire.h"
 #include <EEPROM.h>
-#ifndef PICO
-    #include <avr/wdt.h> 
+
+#ifdef PICO
+   #include "pico/stdlib.h"
+   #include "pico/binary_info.h"
+   #include "hardware/gpio.h"
+   #include "hardware/sync.h"
+   #include "hardware/structs/ioqspi.h"
+   #include "hardware/structs/sio.h"
+   #include <stdio.h>
+#else
+   #include <avr/wdt.h> 
 #endif //PICO
 //********************************[ DEFINES ]***************************************************
 #define VERSION        "1.5e"
-#define BUILD          128
+#define BUILD          129
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
 void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc(); to reboot
+
+
+#ifdef PICO
+   #define getGPIO(x) gpio_get(x)
+   #define setGPIO(x,y) gpio_put(x,y)
+#else
+   #define getGPIO(x) digitalRead(x) 
+   #define setGPIO(x,y) digitalWrite(x,y)  
+#endif //PICO
 /*****************************************************************
  * CONFIGURATION Properties                                      *
  *****************************************************************/
-
+#ifdef PICO
+    /* No special configuration options for the PICO yet */
+#else  
 
 #define WDT            1      //Hardware and TX watchdog enabled
 #define EE             1      //User EEPROM for persistence
@@ -137,13 +161,30 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 //#define CAT_FULL     1      //Extend CAT support to the entire CAT command set (valid only for TS480)
 //#define LEGACY       1      //Enable code AS IS version 1.1 for testing purposes
 
+#endif //PICO
 
 /*****************************************************************
  * Consistency rules, solve conflicting directives               *
  *****************************************************************/
 #ifdef PICO
     #undef WDT
+    #undef EE
+    #undef CAT
+    #undef TS480
+    #undef QUAD
+    #undef ATUCTL
+    #undef RESET
+    #undef ANTIVOX
+    #undef ONEBAND
 
+    #undef CAL_RESET
+    #undef DEBUG
+    #undef TERMINAL
+    #undef IC746
+    #undef CW
+    #undef SHIFTLIMIT
+    #undef CAT_FULL
+    #undef LEGACY
 #endif //PICO
 
 #if (defined(CAT) && !defined(TS480) && !defined(IC746))
@@ -153,20 +194,17 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL))
    #define SERIAL_TOUT          10
    #define SERIAL_WAIT           2
-   char hi[120];    
 #endif //DEBUG or CAT
 
-#if (defined(CAT))
+char hi[80];    
 
+#define BAUD 19200
+
+#if (defined(CAT))
 #if defined(TS480)|| defined(IC746)
     #define BAUD 19200
 #endif //TS480 or IC746
-
 #endif //CAT    
-
-#if defined(DEBUG)
-    #define BAUD 115200
-#endif //DEBUG
     
 #if (defined(QUAD))
     #undef   ONEBAND
@@ -187,61 +225,8 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #endif   
 
 
-#ifdef PICO
 
-#include "pico/stdlib.h"
-#include "pico/binary_info.h"
-#include "hardware/gpio.h"
-#include "hardware/sync.h"
-#include "hardware/structs/ioqspi.h"
-#include "hardware/structs/sio.h"
 
-/*-----------------------------------------     
- * This is specific code for the RP2040
- */
- bool __no_inline_not_in_flash_func(get_bootsel_button)() {
-    const uint CS_PIN_INDEX = 1;
-
-/*--------------------------------------------------------------------------* 
- * 
- * Must disable interrupts, as interrupt handlers may be in flash, and we 
- * are about to temporarily disable flash access! 
- *--------------------------------------------------------------------------*/
-     uint32_t flags = save_and_disable_interrupts();
-
-/*---    
- * 
- *Set chip select to Hi-Z
- *
- *----*/
-    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
-                    GPIO_OVERRIDE_LOW << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
-                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
-
-/*------
-  Note we can't call into any sleep functions in flash right now
-*-------*/  
-  for (volatile int i = 0; i < 1000; ++i);
-
-/*-----------
-  The HI GPIO registers in SIO can observe and control the 6 QSPI pins.
-  Note the button pulls the pin *low* when pressed.
-*------------*/    
-    bool button_state = !(sio_hw->gpio_hi_in & (1u << CS_PIN_INDEX));
-
-/*-----------
- * Need to restore the state of chip select, else we are going to have a
- * bad time when we return to code in flash!
- *-----------*/ 
-  
-    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
-                    GPIO_OVERRIDE_NORMAL << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
-                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
-
-    restore_interrupts(flags);
-    return button_state;
-}
-#endif //PICO
 /*--------------------------------------------------------*
  * Terminal related areas, commands and definitions       *
  *--------------------------------------------------------*/
@@ -484,9 +469,10 @@ int cmdLength    = 0;
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
+//#define DEBUG 1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
-   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 /*-------------------------------------------------------------------------*
@@ -531,12 +517,50 @@ int cmdLength    = 0;
 /*---------------------------------------------------------------*
  * Pin Assignment                                                *
  *---------------------------------------------------------------*/
-#define UP             2           //UP Switch
-#define DOWN           3           //DOWN Switch
-#define TXSW           4           //TX Switch
+#ifdef PICO
+
+   #define AIN0            0      //Reserved To implement zero crossing detection algorithm
+   #define AIN1            1      //Reserved To implement zero crossing detection algorithm
+   #define RX             18      //RX Switch
+   #define WSPR            9      //WSPR LED 
+   #define JS8            10      //JS8 LED
+   #define FT4            11      //FT4 LED
+   #define FT8             8      //FT8 LED
+   #define TX             25      //TX LED  //should be changed to 22 once the initial debugging is completed
+
+   #define UP             19      //UP Switch
+   #define DOWN           20      //DOWN Switch
+   #define TXSW           14       //TX Switch
+
 
 #ifdef ATUCTL
+   #define ATU            21     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+#endif //ATUCTL
+   
+
+#else
+
+   #define UP             2           //UP Switch
+   #define DOWN           3           //DOWN Switch
+   #define TXSW           4           //TX Switch
+
+   #define AIN0           6           //(PD6)
+   #define AIN1           7           //(PD7)
+
+   #define RX             8           //RX Switch
+   #define TX            13           //(PB5) TX LED
+
+   #define WSPR           9           //WSPR LED 
+   #define JS8           10           //JS8 LED
+   #define FT4           11           //FT4 LED
+   #define FT8           12           //FT8 LED
+#ifdef ATUCTL
    #define ATU            5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+#endif //ATUCTL
+
+#endif //PICO
+
+#ifdef ATUCTL
    #define ATU_DELAY    200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
 
    uint16_t atu       =  ATU;
@@ -555,21 +579,6 @@ int cmdLength    = 0;
    #define RTIME       2000
 #endif //RESET   
 
-#define AIN0           6           //(PD6)
-#define AIN1           7           //(PD7)
-
-#define RX             8           //RX Switch
-
-#define WSPR           9           //WSPR LED 
-#define JS8           10           //JS8 LED
-#define FT4           11           //FT4 LED
-#define FT8           12           //FT8 LED
-
-#ifndef PICO
-#define TX            13           //(PB5) TX LED
-#else
-#define TX            25           // Standard Pico in board LED
-#endif //PICO
 /*----------------------------------------------------------------*
  *  Global State Variables (Binary)                               *
  *----------------------------------------------------------------*/
@@ -773,6 +782,49 @@ uint32_t      wdt_tout    = 0;
 /****************************************************************************************************************************************/
 /*                                                     CODE INFRAESTRUCTURE                                                             */
 /****************************************************************************************************************************************/
+#ifdef PICO
+/*----------------------------------------------------------------------*     
+ * This is specific code for the RP2040 to manage the BOOTSEL button    *
+ * this code is for debugging purposes only                             *
+ *----------------------------------------------------------------------*/
+ bool __no_inline_not_in_flash_func(get_bootsel_button)() {
+    const uint CS_PIN_INDEX = 1;
+
+/*--------------------------------------------------------------------------* 
+ * 
+ * Must disable interrupts, as interrupt handlers may be in flash, and we 
+ * are about to temporarily disable flash access! 
+ *--------------------------------------------------------------------------*/
+    uint32_t flags = save_and_disable_interrupts();
+
+/*---    
+ * 
+ *Set chip select to Hi-Z
+ *
+ *----*/
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,GPIO_OVERRIDE_LOW << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+
+/*------
+  Note we can't call into any sleep functions in flash right now
+*-------*/  
+    for (volatile int i = 0; i < 1000; ++i);
+
+/*-----------
+  The HI GPIO registers in SIO can observe and control the 6 QSPI pins.
+  Note the button pulls the pin *low* when pressed.
+*------------*/    
+    bool button_state = !(sio_hw->gpio_hi_in & (1u << CS_PIN_INDEX));
+
+/*-----------
+ * Need to restore the state of chip select, else we are going to have a
+ * bad time when we return to code in flash!
+ *-----------*/ 
+  
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,GPIO_OVERRIDE_NORMAL << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+    restore_interrupts(flags);
+    return button_state;
+}
+#endif //PICO
 
 /*-------------------------------------------*
  * getWord                                   *
@@ -799,7 +851,7 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 /*====================================================================================================*/
 void flipATU() {
   
-   digitalWrite(atu,HIGH);
+   setGPIO(atu,HIGH);
    setWord(&TSW,ATUCLK,true);
    tATU=millis();
    
@@ -1956,7 +2008,7 @@ long cal = XT_CAL_F;
   si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);// Set for reduced power for RX 
 
   #ifdef DEBUG
-    _EXCP;
+    _INFO;
   #endif //DEBUG
 
 }
@@ -1989,7 +2041,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 /*-----------------------------------*
  *               TX                  *
  *-----------------------------------*/
-     digitalWrite(RX,LOW);
+     setGPIO(RX,LOW);
      si5351.output_enable(SI5351_CLK1, 0);   //RX off
      
 #ifdef CW
@@ -2004,7 +2056,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
      
      si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
      si5351.output_enable(SI5351_CLK0, 1);   // TX on
-     digitalWrite(TX,HIGH);
+     setGPIO(TX,HIGH);
      setWord(&SSW,TXON,HIGH);
 
 #ifdef WDT
@@ -2021,7 +2073,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     if (getWord(SSW,CATTX)==true) { return;}  //if the PTT is managed by the CAT subsystem get out of the way.
 #endif //CAT
 
-    digitalWrite(RX,HIGH);
+    setGPIO(RX,HIGH);
     si5351.output_enable(SI5351_CLK0, 0);   //TX off    
     
 #ifdef DEBUG
@@ -2032,7 +2084,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     
     si5351.set_freq(freq*100ULL, SI5351_CLK1);
     si5351.output_enable(SI5351_CLK1, 1);   //RX on
-    digitalWrite(TX,0); 
+    setGPIO(TX,0); 
     setWord(&SSW,TXON,LOW);
     setWord(&SSW,VOX,LOW);
 /*---------------------------------------------------------*
@@ -2044,7 +2096,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 /*                                      LED Management                                        */
 /**********************************************************************************************/
 void clearLED(uint8_t LEDpin) {
-  digitalWrite(LEDpin,LOW);
+  setGPIO(LEDpin,LOW);
   #ifdef DEBUG
      _TRACELIST("%s pin=%d",__func__,LEDpin);
   #endif //DEBUG   
@@ -2072,7 +2124,7 @@ void resetLED() {               //Turn-off all LEDs
 void setLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
    
    (clrLED==true ? resetLED() : void(_NOP)); 
-   digitalWrite(LEDpin,HIGH);
+   setGPIO(LEDpin,HIGH);
 
 #ifdef DEBUG
    _INFOLIST("%s(%d)\n",__func__,LEDpin);
@@ -2092,9 +2144,9 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
    uint8_t n=(max_blink-1);
 
    while (n>0) {
-       digitalWrite(LEDpin,HIGH);
+       setGPIO(LEDpin,HIGH);
        delay(BDLY);
-       digitalWrite(LEDpin,LOW);
+       setGPIO(LEDpin,LOW);
        delay(BDLY);
        n--;
 
@@ -2109,8 +2161,8 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
  */
 void calibrateLED(){           //Set callibration mode
 
-   digitalWrite(WSPR, HIGH); 
-   digitalWrite(FT8, HIGH);
+   setGPIO(WSPR, HIGH); 
+   setGPIO(FT8, HIGH);
    delay(DELAY_CAL);        
 }
 /*-----
@@ -2190,10 +2242,7 @@ ISR (PCINT2_vect) {
 }
 #endif
 
-#ifdef PICO
-  #define digitalRead(x)    get_bootsel_button()
-  #define digitalWrite(x,y) gpio_put(x,y)
-#endif    
+
 /*-----------------------------------------------------------------------------*
  * detectKey                                                                   *
  * detect if a push button is pressed                                          *
@@ -2201,7 +2250,7 @@ ISR (PCINT2_vect) {
 bool detectKey(uint8_t k, bool v, bool w) {
 
    uint32_t tdown=millis();
-   if (digitalRead(k)==v) {
+   if (getGPIO(k)==v) {
 
       
       while (millis()-tdown<REPEAT_KEY) {
@@ -2209,7 +2258,7 @@ bool detectKey(uint8_t k, bool v, bool w) {
           wdt_reset();
 #endif //WDT                        
       }
-      if (digitalRead(k)==v) { //confirmed as v value now wait for the inverse, if not return the inverse      
+      if (getGPIO(k)==v) { //confirmed as v value now wait for the inverse, if not return the inverse      
           
           if (w==false) {
              return v;
@@ -2220,14 +2269,14 @@ bool detectKey(uint8_t k, bool v, bool w) {
               wdt_reset();
 #endif //WDT                        
 
-              if (digitalRead(k)!=v) {
+              if (getGPIO(k)!=v) {
                  tdown=millis();
                  while (millis()-tdown<REPEAT_KEY) {
 #ifdef WDT
               wdt_reset();
 #endif //WDT                                          
                  }
-                 if (digitalRead(k)!=v) {
+                 if (getGPIO(k)!=v) {
                     return v;
                  }
               }
@@ -2356,14 +2405,10 @@ bool getDOWNSSW() {
  *---------------------------------------------------------------*/
 bool getTXSW() {
 
-#ifdef PICO
-    return get_bootsel_button();
-#else
     if ( getWord(button[INT2],PUSHSTATE)==LOW && (millis()-downTimer[INT2]>bounce_time) ) {
        return LOW;
     }
     return HIGH;
-#endif //PICO    
 }
 
 /*--------
@@ -2377,46 +2422,46 @@ void legacy_Calibration() {
 int UP_State;
 int DOWN_State;
 
-digitalWrite(FT8, LOW);
-digitalWrite(FT4, LOW);
-digitalWrite(JS8, LOW);
-digitalWrite(WSPR, LOW);
+setGPIO(FT8, LOW);
+setGPIO(FT4, LOW);
+setGPIO(JS8, LOW);
+setGPIO(WSPR, LOW);
 
-digitalWrite(WSPR, HIGH); 
-digitalWrite(FT8, HIGH);
+setGPIO(WSPR, HIGH); 
+setGPIO(FT8, HIGH);
 delay(100);        
  
-digitalWrite(WSPR, LOW); 
-digitalWrite(FT8, LOW);
+setGPIO(WSPR, LOW); 
+setGPIO(FT8, LOW);
 delay(100);                 
 
 
-digitalWrite(WSPR, HIGH); 
-digitalWrite(FT8, HIGH);
+setGPIO(WSPR, HIGH); 
+setGPIO(FT8, HIGH);
 delay(100);        
  
-digitalWrite(WSPR, LOW); 
-digitalWrite(FT8, LOW);
+setGPIO(WSPR, LOW); 
+setGPIO(FT8, LOW);
 delay(100);                       
 
- digitalWrite(WSPR, HIGH); 
-digitalWrite(FT8, HIGH);
+setGPIO(WSPR, HIGH); 
+setGPIO(FT8, HIGH);
 delay(100);        
  
-digitalWrite(WSPR, LOW); 
-digitalWrite(FT8, LOW);
+setGPIO(WSPR, LOW); 
+setGPIO(FT8, LOW);
 delay(100);                       
 
-digitalWrite(WSPR, HIGH); 
-digitalWrite(FT8, HIGH);
+setGPIO(WSPR, HIGH); 
+setGPIO(FT8, HIGH);
 delay(100);        
  
-digitalWrite(WSPR, LOW); 
-digitalWrite(FT8, LOW);
+setGPIO(WSPR, LOW); 
+setGPIO(FT8, LOW);
 delay(100);                       
 
-digitalWrite(WSPR, HIGH); 
-digitalWrite(FT8, HIGH);
+setGPIO(WSPR, HIGH); 
+setGPIO(FT8, HIGH);
 
 /*
 addr = 10;
@@ -2426,12 +2471,12 @@ EEPROM.get(addr, cal_factor);
 
 Calibrate:
 
-    UP_State = digitalRead(UP);
+    UP_State = getGPIO(UP);
 
 if (UP_State == LOW) {
    delay(50); 
      
-UP_State = digitalRead(UP);
+UP_State = getGPIO(UP);
 if (UP_State == LOW) {
 
 cal_factor = cal_factor - 100;
@@ -2449,12 +2494,12 @@ cal_factor = cal_factor - 100;
   
   }} 
    
-    DOWN_State = digitalRead(DOWN);
+    DOWN_State = getGPIO(DOWN);
 
 if (DOWN_State == LOW) {
    delay(50);   
    
-         DOWN_State = digitalRead(DOWN);
+         DOWN_State = getGPIO(DOWN);
 if (DOWN_State == LOW) {
 
 cal_factor = cal_factor + 100;
@@ -2484,7 +2529,7 @@ void Calibration(){
   
 
   #ifdef DEBUG
-     _EXCP;
+     _INFO;
   #endif //DEBUG
 
 #ifdef LEGACY
@@ -2542,14 +2587,14 @@ void Calibration(){
         EEPROM.get(EEPROM_CAL,cal_factor);
      #endif //EEPROM
 
-     while (digitalRead(DOWN)==LOW) { 
+     while (getGPIO(DOWN)==LOW) { 
          #ifdef WDT
          wdt_reset();
          #endif //WDT
      }
 
 #ifdef DEBUG
-     _EXCPLIST("%s cal_factor=%ld\n",__func__,cal_factor);
+     _INFOLIST("%s cal_factor=%ld\n",__func__,cal_factor);
 #endif //DEBUG
   
   while (true) {
@@ -2572,7 +2617,7 @@ void Calibration(){
 
 #ifdef DEBUG
 
-        _EXCPLIST("%s (-) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
+        _INFOLIST("%s (-) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
         
 #endif //DEBUG
 
@@ -2596,7 +2641,7 @@ void Calibration(){
  // Set Calbration Clock output
 #ifdef DEBUG
 
-        _EXCPLIST("%s (+) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
+        _INFOLIST("%s (+) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
 
 #endif //DEBUG
     
@@ -2924,7 +2969,7 @@ void Band_Select(){
 
       }                                               
       if (txButton == LOW) {
-         digitalWrite(TX,0);
+         setGPIO(TX,LOW);
 
 #ifdef RESET      
          uint32_t tnow=millis();
@@ -3119,14 +3164,9 @@ bool downButtonPL = getSwitchPL(DOWN);
  * TX button short press          *
  * Transmit mode                  *
  *--------------------------------*/
- #ifdef PICO
-   if (digitalRead(TXSW)==LOW) {
- #else
  
-  if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
-
-#endif //PICO
-     #ifdef DEBUG
+    if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
+    #ifdef DEBUG
         _INFOLIST("%s TX+\n",__func__);
      #endif //DEBUG
         
@@ -3240,7 +3280,7 @@ void INIT(){
  if (build != uint16_t(BUILD)) {
     resetEEPROM();
     #ifdef DEBUG
-       _EXCPLIST("%s EEPROM Reset Build<> cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+       _INFOLIST("%s EEPROM Reset Build<> cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     #endif //DEBUG
     
  }
@@ -3300,7 +3340,7 @@ void INIT(){
   setup_si5351();
   
   #ifdef DEBUG
-     _EXCPLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+     _INFOLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
   #endif //DEBUG   
 }  
 
@@ -3312,7 +3352,7 @@ void INIT(){
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
 
 #ifdef DEBUG
-   _EXCPLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
+   _INFOLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
 #endif //DEBUG      
 }
 /*--------------------------------------------------------------------------*
@@ -3323,11 +3363,40 @@ void INIT(){
 void definePinOut() {
 
 #ifdef PICO
-   bi_decl(bi_program_description("First Blink"));
-   bi_decl(bi_1pin_with_name(TX, "On-board LED"));
-
+   
    gpio_init(TX);
+   gpio_init(UP);
+   gpio_init(DOWN);
+   gpio_init(TXSW);
+   gpio_init(RX);
+   gpio_init(WSPR);
+   gpio_init(JS8);
+   gpio_init(FT4);
+   gpio_init(FT8);
+   gpio_init(AIN0);
+   gpio_init(AIN1);
+
+
+   gpio_set_dir(UP, GPIO_IN);
+   gpio_set_dir(DOWN,GPIO_IN);
+   gpio_set_dir(TXSW,GPIO_IN);
+   
+   gpio_set_dir(RX,GPIO_OUT);
    gpio_set_dir(TX, GPIO_OUT);
+   gpio_set_dir(WSPR,GPIO_OUT);
+   gpio_set_dir(JS8,GPIO_OUT);
+   gpio_set_dir(FT4,GPIO_OUT);
+   gpio_set_dir(FT8,GPIO_OUT);
+   
+   gpio_set_dir(AIN0,GPIO_IN);
+   gpio_set_dir(AIN1,GPIO_IN);
+
+#ifdef ATUCTL
+   gpio_init(uint8_t(atu));
+   gpio_set_dir (uint8_t(atu), GPIO_OUT);
+   flipATU();
+#endif //ATUCTL      
+   
 #else
    pinMode(UP,   INPUT);
    pinMode(DOWN, INPUT);
@@ -3614,7 +3683,7 @@ void execTerminal() {
          wdt_reset();
       #endif //WDT   
    }
-   while (digitalRead(UP)==LOW) {
+   while (getGPIO(UP)==LOW) {
       #ifdef WDT
          wdt_reset();
       #endif //WDT
@@ -3649,7 +3718,12 @@ void setup()
 
    #ifdef DEBUG
       Serial.begin(BAUD);
-      _EXCPLIST("%s: ADX Firmware V(%s) build(%d)\n",__func__,VERSION,BUILD);
+      #if defined(__AVR_ATmega168__) || defined(__AVR_ATmega328P__)
+          const char * proc = "ATmega328P";
+      #else
+          const char * proc = "RP2040";     
+      #endif    
+      _EXCPLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n",__func__,VERSION,BUILD,proc);
    #endif //DEBUG
 
 /*-----
@@ -3766,7 +3840,10 @@ void setup()
       execTerminal();      
    }  
 #endif //TERMINAL   
-   blinkLED(TX);
+
+#ifdef DEBUG
+   _EXCPLIST("%s() completed",__func__);
+#endif //DEBUG   
   
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
@@ -3777,7 +3854,17 @@ void setup()
 void loop()
 {  
 
-//*--- Debug hook
+#ifdef DEBUG
+    //setGPIO(TX,getGPIO(TXSW));
+    int x=1000;
+    x--;
+    if (x==0) {
+       x=1000;
+       Serial.println("command set");
+    }
+#endif //DEBUG
+ 
+ //*--- Debug hook
     keepAlive();
 
 //*--- changes in mode, band, frequency and operational status
@@ -3808,7 +3895,7 @@ void loop()
 
     if ((millis()-tATU)>atu_delay && getWord(TSW,ATUCLK)==true) {
        setWord(&TSW,ATUCLK,false);
-       digitalWrite(atu,LOW);
+       setGPIO(atu,LOW);
     }
     #endif //ATUCTL       
 
