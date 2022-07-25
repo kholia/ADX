@@ -97,6 +97,7 @@
  *-------------------------------------------------------------*/
 #define ADX              1   //This is the standard ADX Arduino based board 
 //#define PDX            1   //Compile for Raspberry Pi Pico board
+
  
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            EXTERNAL LIBRARIES USED                                          *
@@ -121,6 +122,7 @@
    #include "hardware/structs/ioqspi.h"
    #include "hardware/structs/sio.h"
    #include <stdio.h>
+   #include "hardware/watchdog.h"
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            VERSION HEADER                                                   *
@@ -134,16 +136,19 @@
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
-void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc(); to reboot
 
 #ifdef ADX
+   void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc(); to reboot
    #define getGPIO(x) digitalRead(x) 
    #define setGPIO(x,y) digitalWrite(x,y)  
 #endif //ADX
 
 #ifdef PDX
+   #define resetFunc() while(true) {}
    #define getGPIO(x) gpio_get(x)
    #define setGPIO(x,y) gpio_put(x,y)
+   #define PICODISPLAY 1
+   #define wdt_reset() watchdog_update()
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
@@ -174,30 +179,37 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #endif //PICO
 
 #ifdef PDX
+   #define WDT            1      //Hardware and TX watchdog enabled
+   #define CAT            1      //Enable CAT protocol over serial port
+   #define TS480          1      //CAT Protocol is Kenwood 480
+
     /* No special configuration options for the PICO yet */
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#define BOUNCE_TIME 200           //mSec minimum to debounce
-#define SHORT_TIME  10*BOUNCE_TIME //mSec minimum to consider long push
-#define SI5351_REF  25000000UL   //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
-#define CPU_CLOCK   16000000UL   //Processor clock
-#define VOX_MAXTRY  10           //Max number of attempts to detect an audio incoming signal
-#define CNT_MAX     65000        //Max count of timer1
-#define FRQ_MAX     30000        //Max divisor for frequency allowed
-#define BDLY        200          //Delay when blinking LED
+#define BOUNCE_TIME    200           //mSec minimum to debounce
+#define SHORT_TIME     10*BOUNCE_TIME //mSec minimum to consider long push
+#define SI5351_REF     25000000UL   //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
+#define CPU_CLOCK      16000000UL   //Processor clock
+#define VOX_MAXTRY     10           //Max number of attempts to detect an audio incoming signal
+#define CNT_MAX        65000        //Max count of timer1
+#define FRQ_MAX        30000        //Max divisor for frequency allowed
+#define BDLY           200          //Delay when blinking LED
 #define DELAY_WAIT  BDLY*2       //Double Delay
 #define DELAY_CAL   DELAY_WAIT/10
-#define MAXMODE     5            //Max number of digital modes
-#define MAX_BLINK   4            //Max number of blinks
-#define BANDS       4            //Max number of bands allowed
-#define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
-#define XT_CAL_F   33000         //Si5351 Calibration constant 
-#define CAL_STEP   500           //Calibration factor step up/down while in calibration (sweet spot experimentally found by Barb)
-#define REPEAT_KEY 30            //Key repetition period while in calibration
-#define WAIT       true          //Debouncing constant
-#define NOWAIT     false         //Debouncing constant
+#define MAXMODE        5            //Max number of digital modes
+#define MAX_BLINK      4            //Max number of blinks
+#define BANDS          4            //Max number of bands allowed
+#define MAXBAND       10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
+#define XT_CAL_F      33000         //Si5351 Calibration constant 
+#define CAL_STEP      500           //Calibration factor step up/down while in calibration (sweet spot experimentally found by Barb)
+#define REPEAT_KEY    30            //Key repetition period while in calibration
+#define WAIT          true          //Debouncing constant
+#define NOWAIT        false         //Debouncing constant
+#define SERIAL_TOUT   10
+#define SERIAL_WAIT   2
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      PIN ASSIGNMENTS                                                        *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -234,9 +246,15 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
    #define FT8             8      //FT8 LED
    #define TX             25      //TX LED  //should be changed to 22 once the initial debugging is completed
 
-   #define UP             19      //UP Switch
-   #define DOWN           20      //DOWN Switch
-   #define TXSW           14       //TX Switch
+#ifdef PICODISPLAY
+   #define UP             15      //UP Switch Mapped to GPIO15 which is Y on the PicoDisplay Board
+   #define DOWN           13      //DOWN Switch Mapped to GPIO13 which is A on the PicoDisplay Board
+   #define TXSW           14      //TX Switch Mapped to GPIO14 which is X on the PicoDisplay Board 
+#else
+   #define UP             19      //UP Switch (this must be set to GPIO19 when running on a PDX board)
+   #define DOWN           20      //DOWN Switch (this must be set to GPIO20 when running on a PDX board) 
+   #define TXSW           14      //TX Switch
+#endif //PICODISPLAY   
 
 
 #ifdef ATUCTL
@@ -290,10 +308,7 @@ char hi[80];
 //*--- This is a transient rule, the porting to Pico is incomplete so no functions are allowed
 
 #ifdef PDX
-    #undef WDT
     #undef EE
-    #undef CAT
-    #undef TS480
     #undef QUAD
     #undef ATUCTL
     #undef RESET
@@ -319,10 +334,6 @@ char hi[80];
 
 //*--- If any usage of the serial port is made then serial constants needs to be set
     
-#if (defined(DEBUG) || defined(CAT) || defined(TERMINAL))
-   #define SERIAL_TOUT          10
-   #define SERIAL_WAIT           2
-#endif //DEBUG or CAT
 
 //*--- If a QUAD multiband board is defined then the transceiver must not be a single band one
    
@@ -1965,15 +1976,18 @@ void serialEvent(){
   if (rc<=0) {return;}
   buf[rc]=0x0;
 
+
+
   int k=0;
-  for (int j;j<rc;j++){
+  for (int j=0;j<rc;j++){
     if (buf[j]!=0x0d && buf[j]!=0x0a) { 
         serialBuffer[k++]=buf[j];
     }    
+
   }
   
 #ifdef DEBUG  
-   _TRACELIST("%s cleansed buffer=%s len=%d\n",__func__,serialBuffer,rc);
+   _TRACELIST("%s CAT received buffer=%s len=%d\n",__func__,serialBuffer,rc);
 #endif //DEBUG  
 
   if (strcmp((const char*)serialBuffer,strCmd)==0) { //coincidence
@@ -2386,6 +2400,7 @@ void ManualTX(){
  *---------------------------------------------------------------------*/
 bool getSwitchPL(uint8_t pin) {
 
+#ifdef ADX
 //*--- pin can be 2,3,4
 
     byte p=pin-2;
@@ -2407,13 +2422,20 @@ bool getSwitchPL(uint8_t pin) {
        return LOW;
     } else {    
        return HIGH;
-    }           
+    }     
+
+#endif //ADX
+
+#ifdef PDX   //No support for Press Long feature yet
+    return HIGH;
+#endif //PDX    
 }
 /*----------------------------------------------------------*
  * get value for a digital pin and return after debouncing  *
  *----------------------------------------------------------*/
 bool getSwitch(uint8_t pin) {
 
+#ifdef ADX
 //*--- pin can be 2,3,4
 
     byte p=pin-2;
@@ -2435,7 +2457,14 @@ bool getSwitch(uint8_t pin) {
        return LOW;
     } else {    
        return HIGH;
-    }           
+    }     
+#endif //ADX
+
+#ifdef PDX
+    return detectKey(pin,LOW,WAIT);
+#endif //PDX
+
+         
 }
 /*----------------------------------------------------------*
  * read UP switch
@@ -2449,7 +2478,7 @@ bool getUPSSW() {
  * read DOWN Switch
  *----------------------------------------------------------*/
 bool getDOWNSSW() {
-  
+
     return getSwitch(DOWN); 
 
 }
@@ -2462,10 +2491,19 @@ bool getDOWNSSW() {
  *---------------------------------------------------------------*/
 bool getTXSW() {
 
+
+#ifdef ADX
     if ( getWord(button[INT2],PUSHSTATE)==LOW && (millis()-downTimer[INT2]>bounce_time) ) {
        return LOW;
     }
     return HIGH;
+#endif //ADX    
+
+#ifdef PDX
+    return detectKey(TXSW,LOW,false);
+#endif //PDX
+
+
 }
 
 
@@ -3034,10 +3072,11 @@ void setFrequencyCW(int f) {
  *  manage change in mode during run-time
  *---------------------------------------------------------------------------*/
 void checkMode() {
-  
+
+
+bool txButton     = getTXSW();
 bool upButton     = getUPSSW();
 bool downButton   = getDOWNSSW();
-bool txButton     = getTXSW();
 bool upButtonPL   = getSwitchPL(UP);
 bool downButtonPL = getSwitchPL(DOWN);
 
@@ -3108,15 +3147,15 @@ bool downButtonPL = getSwitchPL(DOWN);
  *--------------------------------*/
  
     if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
-    #ifdef DEBUG
-        _INFOLIST("%s TX+\n",__func__);
-     #endif //DEBUG
+       #ifdef DEBUG
+          _EXCPLIST("%s TX+\n",__func__);
+       #endif //DEBUG
         
-     ManualTX(); 
+       ManualTX(); 
      
-     #ifdef DEBUG
-        _INFOLIST("%s TX-\n",__func__);
-     #endif //DEBUG   
+       #ifdef DEBUG
+         _EXCPLIST("%s TX-\n",__func__);
+       #endif //DEBUG   
   }
 
 /*------------------------------------------------------------*
@@ -3139,17 +3178,21 @@ bool downButtonPL = getSwitchPL(DOWN);
      Band_Select();
      
      #ifdef DEBUG
-      _INFOLIST("%s U+D f=%ld",__func__,freq);
+      _EXCPLIST("%s U+D f=%ld",__func__,freq);
      #endif //DEBUG 
   }
 #endif //ONEBAND
 
   if ((upButton == HIGH)&&(downButton == LOW)&&(getWord(SSW,TXON)==false)) {
 
-      mode=(mode-1)%4;
+      if (mode==0) {
+        mode=3;
+      } else {
+        mode--;
+      }
       
       #ifdef DEBUG
-         _INFOLIST("%s m+(%d)\n",__func__,mode);
+         _EXCPLIST("%s m+(%d)\n",__func__,mode);
       #endif //DEBUG
       
       #ifdef EE
@@ -3157,6 +3200,10 @@ bool downButtonPL = getSwitchPL(DOWN);
       #endif //EEPROM     
 
       Mode_assign();
+
+      #ifdef DEBUG
+         _EXCPLIST("%s mode assigned(%d)\n",__func__,mode);
+      #endif //DEBUG   
   
   } 
    
@@ -3165,16 +3212,22 @@ bool downButtonPL = getSwitchPL(DOWN);
       
       mode=(mode+1)%4;
       
-      #ifdef DEBUG
-         _INFOLIST("%s m-(%d)\n",__func__,mode);
-      #endif //DEBUG   
 
       #ifdef EE
          tout=millis();
          setWord(&SSW,SAVEEE,true);
       #endif //EE Avoid the tear and wear of the EEPROM because of successive changes
-     
+
+      #ifdef DEBUG
+         _EXCPLIST("%s m-(%d)\n",__func__,mode);
+      #endif //DEBUG   
+
       Mode_assign();
+
+      #ifdef DEBUG
+         _EXCPLIST("%s mode assigned(%d)\n",__func__,mode);
+      #endif //DEBUG   
+
   } 
 
 
@@ -3645,6 +3698,10 @@ void definePinOut() {
    gpio_set_dir(UP, GPIO_IN);
    gpio_set_dir(DOWN,GPIO_IN);
    gpio_set_dir(TXSW,GPIO_IN);
+
+   gpio_pull_up(TXSW);
+   gpio_pull_up(DOWN);
+   gpio_pull_up(UP);
    
    gpio_set_dir(RX,GPIO_OUT);
    gpio_set_dir(TX, GPIO_OUT);
@@ -3674,31 +3731,35 @@ void definePinOut() {
 void setup()
 {
 
+/*-----
+ * Initialization is common for all uses of the serial port, specific variables and constants 
+ * has been given proper initialization based on the protocol used
+ *-----*/
+
+   #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL))
+      Serial.begin(BAUD,SERIAL_8N2);
+      while (!Serial) {
+      #ifdef WDT      
+         wdt_reset();
+      #endif //WDT              
+      }
+      Serial.flush();
+      Serial.setTimeout(SERIAL_TOUT);    
+   #endif //DEBUG or CAT or Terminal
+
    #ifdef DEBUG
-      Serial.begin(BAUD);
       #if defined(__AVR_ATmega168__) || defined(__AVR_ATmega328P__)
           const char * proc = "ATmega328P";
       #else
           const char * proc = "RP2040";     
-      #endif    
+      #endif         
       _EXCPLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n",__func__,VERSION,BUILD,proc);
    #endif //DEBUG
 
-/*-----
- * Initialization is common for all CAT protocols, specific variables and constants 
- * has been given proper initialization based on the protocol used
- *-----*/
-   #ifdef CAT  
-      Serial.begin(BAUD,SERIAL_8N2);
-      while (!Serial) {    //Wait till Serial port ready  
-      #ifdef WDT      
-         wdt_reset();
-      #endif //WDT         
-      
-      }
-      Serial.flush();
-      Serial.setTimeout(SERIAL_TOUT);    
-   #endif //CAT   
+#ifdef CAT
+   _EXCPLIST("%s CAT sub-system initialized\n",__func__);
+#endif //CAT   
+   
 
    definePinOut();
    blinkLED(TX);
@@ -3706,7 +3767,7 @@ void setup()
    setup_si5351();   
    
    #ifdef DEBUG
-      _INFOLIST("%s setup_si5351 ok\n",__func__);
+      _EXCPLIST("%s setup_si5351 ok\n",__func__);
    #endif //DEBUG   
    
 
@@ -3716,21 +3777,22 @@ void setup()
    setWord(&button[INT0],PUSHSTATE,HIGH);
    setWord(&button[INT1],PUSHSTATE,HIGH);
    setWord(&button[INT2],PUSHSTATE,HIGH);
-#endif //ADX
 
    #ifdef DEBUG
-      _INFOLIST("%s INT ok\n",__func__);
+      _EXCPLIST("%s INT ok\n",__func__);
    #endif //DEBUG   
+#endif //ADX
+
 
    initADX();
    #ifdef DEBUG
-      _INFOLIST("%s INIT ok\n",__func__);
+      _EXCPLIST("%s INIT ok\n",__func__);
    #endif //DEBUG   
    
    #ifdef QUAD
      setupQUAD();
      #ifdef DEBUG
-        _INFOLIST("%s setupQUAD ok\n",__func__);
+        _EXCPLIST("%s setupQUAD ok\n",__func__);
      #endif //DEBUG   
 
      /*---------
@@ -3743,7 +3805,7 @@ void setup()
         setQUAD(q);
      }   
      #ifdef DEBUG
-        _INFOLIST("%s Bands[%d]=%d quad=%d\n",__func__,Band_slot,s,q);
+        _EXCPLIST("%s Bands[%d]=%d quad=%d\n",__func__,Band_slot,s,q);
      #endif //DEBUG   
 
    #endif //QUAD      
@@ -3768,25 +3830,33 @@ void setup()
   pinMode(AIN1, INPUT); //PD7 = AN1 = HiZ, PD6 = AN0 = 0
 
   #ifdef DEBUG
-     _INFOLIST("%s Timer1 set Ok\n",__func__);
+     _EXCPLIST("%s Timer1 set Ok\n",__func__);
   #endif //DEBUG   
 #endif //ADX
   
   switch_RXTX(LOW);
   #ifdef DEBUG
-      _INFOLIST("%s switch_RXTX Low ok\n",__func__);
+      _EXCPLIST("%s switch_RXTX Low ok\n",__func__);
   #endif //DEBUG   
 
   Mode_assign(); 
 
   #ifdef WDT
-     wdt_disable();
-     wdt_enable(WDTO_8S);
+     
+     #ifdef ADX
+        wdt_disable();
+        wdt_enable(WDTO_8S);
+     #endif //ADX
+     
+     #ifdef PDX
+        watchdog_enable(8000, 1);
+     #endif //PDX   
+     
      setWord(&TSW,TX_WDT,false);
   #endif //WDT
 
   #ifdef DEBUG
-     _INFO;
+     _EXCPLIST("%s completed\n",__func__);
   #endif //DEBUG   
 
 
@@ -3799,9 +3869,6 @@ void setup()
    }  
 #endif //TERMINAL   
 
-#ifdef DEBUG
-   _EXCPLIST("%s() completed",__func__);
-#endif //DEBUG   
   
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -3810,22 +3877,11 @@ void setup()
 void loop()
 {  
 
-#ifdef DEBUG
-    //setGPIO(TX,getGPIO(TXSW));
-    int x=1000;
-    x--;
-    if (x==0) {
-       x=1000;
-       Serial.println("command set");
-    }
-#endif //DEBUG
- 
  //*--- Debug hook
     keepAlive();
 
 //*--- changes in mode, band, frequency and operational status
     checkMode();
-
 
 //*--- Manage anti-VOX timeout after avoxtime (mSec) the anti-vox condition is cleared
 
@@ -3879,6 +3935,8 @@ void loop()
  * if activity is detected the TX is turned on                                      *
  * TX mode remains till no further activity is detected (operate like a VOX command)*
  *----------------------------------------------------------------------------------*/
+#ifdef ADX
+
 uint16_t n = VOX_MAXTRY;
     setWord(&SSW,VOX,false);
     while ( n > 0 ){                                 //Iterate up to 10 times looking for signal to transmit
@@ -3899,7 +3957,6 @@ uint16_t n = VOX_MAXTRY;
 
     #endif //WDT
     
-#ifdef ADX
     TCNT1 = 0;                                  //While this iteration is performed if the TX is off 
     
     while (ACSR &(1<<ACO)){                     //the receiver is operating with autonomy
@@ -3967,7 +4024,7 @@ uint16_t n = VOX_MAXTRY;
     } else {
        n--;
     }
-#endif //ADX
+
     
     #ifdef CAT 
 //*--- if CAT enabled check for serial events (again)
@@ -3978,7 +4035,7 @@ uint16_t n = VOX_MAXTRY;
        wdt_reset();
     #endif //WDT
  }
-
+#endif //ADX
 /*---------------------------------------------------------------------------------*
  * when out of the loop no further TX activity is performed, therefore the TX is   *
  * turned off and the board is set into RX mode                                    *
