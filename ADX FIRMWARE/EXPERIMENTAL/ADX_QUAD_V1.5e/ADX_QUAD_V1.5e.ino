@@ -95,18 +95,25 @@
  * Define the runtime platform either PICO (Raspberry Pi Pico) *
  * or !PICO (Arduino ATMega328p)                               *
  *-------------------------------------------------------------*/
-//#define PICO           1   //Compile for Raspberry Pi Pico board
+#define ADX              1   //This is the standard ADX Arduino based board 
+//#define PDX            1   //Compile for Raspberry Pi Pico board
  
-/*-----------------------------------------------------------*
- * System Includes
- *-----------------------------------------------------------*/
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                            EXTERNAL LIBRARIES USED                                          *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
 #include <Arduino.h>
 #include <stdint.h>
 #include <si5351.h>
 #include "Wire.h"
 #include <EEPROM.h>
 
-#ifdef PICO
+   
+#ifdef ADX
+   #include <avr/wdt.h> 
+#endif //ADX
+
+#ifdef PDX
    #include "pico/stdlib.h"
    #include "pico/binary_info.h"
    #include "hardware/gpio.h"
@@ -114,41 +121,44 @@
    #include "hardware/structs/ioqspi.h"
    #include "hardware/structs/sio.h"
    #include <stdio.h>
-#else
-   #include <avr/wdt.h> 
-#endif //PICO
-//********************************[ DEFINES ]***************************************************
+#endif //PDX
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                            VERSION HEADER                                                   *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "1.5e"
-#define BUILD          129
+#define BUILD          130
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                            MACRO DEFINES                                                    *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 #undef  _NOP
 #define _NOP          (byte)0
 void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc(); to reboot
 
-
-#ifdef PICO
-   #define getGPIO(x) gpio_get(x)
-   #define setGPIO(x,y) gpio_put(x,y)
-#else
+#ifdef ADX
    #define getGPIO(x) digitalRead(x) 
    #define setGPIO(x,y) digitalWrite(x,y)  
-#endif //PICO
-/*****************************************************************
- * CONFIGURATION Properties                                      *
- *****************************************************************/
-#ifdef PICO
-    /* No special configuration options for the PICO yet */
-#else  
+#endif //ADX
 
-#define WDT            1      //Hardware and TX watchdog enabled
-#define EE             1      //User EEPROM for persistence
-#define CAT            1      //Enable CAT protocol over serial port
-#define TS480          1      //CAT Protocol is Kenwood 480
-#define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
-#define ATUCTL         1      //Control external ATU device
-#define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
-#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
-#define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
+#ifdef PDX
+   #define getGPIO(x) gpio_get(x)
+   #define setGPIO(x,y) gpio_put(x,y)
+#endif //PDX
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                            FEATURE CONFIGURATION PROPERTIES                                 *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+#ifdef ADX
+   #define WDT            1      //Hardware and TX watchdog enabled
+   #define EE             1      //User EEPROM for persistence
+   #define CAT            1      //Enable CAT protocol over serial port
+   #define TS480          1      //CAT Protocol is Kenwood 480
+   #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
+   #define ATUCTL         1      //Control external ATU device
+   #define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
+   #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
+   #define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
 /*
  * The following definitions are disabled but can be enabled selectively
  */
@@ -163,10 +173,123 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 
 #endif //PICO
 
-/*****************************************************************
- * Consistency rules, solve conflicting directives               *
- *****************************************************************/
-#ifdef PICO
+#ifdef PDX
+    /* No special configuration options for the PICO yet */
+#endif //PDX
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+#define BOUNCE_TIME 200           //mSec minimum to debounce
+#define SHORT_TIME  10*BOUNCE_TIME //mSec minimum to consider long push
+#define SI5351_REF  25000000UL   //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
+#define CPU_CLOCK   16000000UL   //Processor clock
+#define VOX_MAXTRY  10           //Max number of attempts to detect an audio incoming signal
+#define CNT_MAX     65000        //Max count of timer1
+#define FRQ_MAX     30000        //Max divisor for frequency allowed
+#define BDLY        200          //Delay when blinking LED
+#define DELAY_WAIT  BDLY*2       //Double Delay
+#define DELAY_CAL   DELAY_WAIT/10
+#define MAXMODE     5            //Max number of digital modes
+#define MAX_BLINK   4            //Max number of blinks
+#define BANDS       4            //Max number of bands allowed
+#define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
+#define XT_CAL_F   33000         //Si5351 Calibration constant 
+#define CAL_STEP   500           //Calibration factor step up/down while in calibration (sweet spot experimentally found by Barb)
+#define REPEAT_KEY 30            //Key repetition period while in calibration
+#define WAIT       true          //Debouncing constant
+#define NOWAIT     false         //Debouncing constant
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                      PIN ASSIGNMENTS                                                        *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+#ifdef ADX
+   #define UP             2           //UP Switch
+   #define DOWN           3           //DOWN Switch
+   #define TXSW           4           //TX Switch
+
+   #define AIN0           6           //(PD6)
+   #define AIN1           7           //(PD7)
+
+   #define RX             8           //RX Switch
+   #define TX            13           //(PB5) TX LED
+
+   #define WSPR           9           //WSPR LED 
+   #define JS8           10           //JS8 LED
+   #define FT4           11           //FT4 LED
+   #define FT8           12           //FT8 LED
+#ifdef ATUCTL
+   #define ATU            5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+#endif //ATUCTL
+
+#endif //ADX
+
+
+#ifdef PDX
+
+   #define AIN0            0      //Reserved To implement zero crossing detection algorithm
+   #define AIN1            1      //Reserved To implement zero crossing detection algorithm
+   #define RX             18      //RX Switch
+   #define WSPR            9      //WSPR LED 
+   #define JS8            10      //JS8 LED
+   #define FT4            11      //FT4 LED
+   #define FT8             8      //FT8 LED
+   #define TX             25      //TX LED  //should be changed to 22 once the initial debugging is completed
+
+   #define UP             19      //UP Switch
+   #define DOWN           20      //DOWN Switch
+   #define TXSW           14       //TX Switch
+
+
+#ifdef ATUCTL
+   #define ATU            21     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+#endif //ATUCTL 
+#endif //PDX
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                      GLOBAL STATE VARIABLE DEFINITIONS                                      *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+/*----------------------------------------------------------------*
+ *  Global State Variables (Binary)                               *
+ *----------------------------------------------------------------*/
+#define TXON   0B00000001    //State of the TX
+#define VOX    0B00000010    //Audio input detected
+#define UPPUSH 0B00000100    //UP button pressed
+#define DNPUSH 0B00001000    //DOWN button pressed
+#define TXPUSH 0B00010000    //TXSW button pressed
+#define CATTX  0B00100000    //TX turned on via CAT (disable VOX)
+#define SAVEEE 0B01000000    //Mark of EEPROM updated
+#define CWMODE 0B10000000    //CW Active
+/*----------------------------------------------------------------*
+ * Operating switch                                               *
+ * ---------------------------------------------------------------*/
+#define PUSHSTATE   0B00000001
+#define SHORTPUSH   0B00000010    //simple push flag
+#define LONGPUSH    0B00000100    //long push flag
+#define INPROGRESS  0B00001000    //in progress mark
+#define ATUCLK      0B00010000    //control the width of the ATU pulse
+#define TX_WDT      0B00100000    //TX Watchdog has been activated
+#define AVOX        0B01000000    //ANTI-VOX has been activated
+
+/*----------------------------------------------------------------*
+ * Miscellaneour definitions                                              *
+ * ---------------------------------------------------------------*/
+char hi[80];    
+#define BAUD            19200
+#define INT0                0
+#define INT1                1
+#define INT2                2
+#define RTIME            2000
+
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                      CONSISTENCY RULES                                                      *
+//* Feature definition might conflict among them so some consistency rules are applied to remove*
+//* potential inconsistencies on the definitions                                                *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+
+//*--- This is a transient rule, the porting to Pico is incomplete so no functions are allowed
+
+#ifdef PDX
     #undef WDT
     #undef EE
     #undef CAT
@@ -187,32 +310,33 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
     #undef LEGACY
 #endif //PICO
 
+//*--- Two CAT protocols are supported but just one of them are allowed at any given time
+//*--- IC746 is more efficient in terms of memory, so it's selected
+
 #if (defined(CAT) && !defined(TS480) && !defined(IC746))
     #define IC746      1
 #endif
+
+//*--- If any usage of the serial port is made then serial constants needs to be set
     
 #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL))
    #define SERIAL_TOUT          10
    #define SERIAL_WAIT           2
 #endif //DEBUG or CAT
 
-char hi[80];    
-
-#define BAUD 19200
-
-#if (defined(CAT))
-#if defined(TS480)|| defined(IC746)
-    #define BAUD 19200
-#endif //TS480 or IC746
-#endif //CAT    
-    
+//*--- If a QUAD multiband board is defined then the transceiver must not be a single band one
+   
 #if (defined(QUAD))
     #undef   ONEBAND
 #endif //QUAD, no ONEBAND    
 
+//*--- If CAT is defined then DEBUG  can not be activated simultaneously
+
 #if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
    #undef  DEBUG
 #endif // CAT && DEBUG
+
+//*--- If CAT is not defined then erase all conflicting definitions
 
 #if (!defined(CAT))  //Rule for conflicting usage of the CAT Protocol (can't activate extended without basic)
    #undef  CAT_FULL
@@ -220,18 +344,17 @@ char hi[80];
    #undef  IC746
 #endif // CAT && DEBUG
 
+//*--- if both supported CAT protocols are simultaneously selected then keep one
+
 #if (defined(TS480) && defined(IC746))
    #undef TS480
 #endif   
 
 
-
-
-/*--------------------------------------------------------*
- * Terminal related areas, commands and definitions       *
- *--------------------------------------------------------*/
 #ifdef TERMINAL
-
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*               DEFINITIONS SPECIFIC TO THE CONFIGURATION TERMINAL FUNCTION                   *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #include <string.h>
 #include <stdlib.h>
 #define  CR '\r'
@@ -280,11 +403,10 @@ const char *endList         = "XXX";
 
 #endif //TERMINAL
 
-/*-----------------------------------------------------------------*
- * TS480 CAT Protocol                                              *
- *                                                                 *
- *-----------------------------------------------------------------*/
 #ifdef TS480
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*               DEFINITIONS SPECIFIC TO TS480 CAT PROTOCOL                                    *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
    #define CATCMD_SIZE          18
    
@@ -292,184 +414,18 @@ const char *endList         = "XXX";
    const int        BUFFER_SIZE = CATCMD_SIZE;
    char             buf[BUFFER_SIZE];
 
-#endif
-/*-----------------------------------------------------------------*
- * IC746 CAT Protocol                                              *
- *                                                                 *
- *-----------------------------------------------------------------*/
-#ifdef IC746
-
-/*---
- * Memory areas specific to the protocol
- ----*/
-
-/*
-Command buffer (without preamble and EOM)
-  |FE|FE|56|E0|cmd|sub-cmd|data|FD|  // Preamble (FE) and EOM (FD) are discarded leaving
-  2 addr bytes , 1 command, 1 sub-command, up to 12 data, (longest is unimplemented edge frequency)
-*/
-#define CAT_CMD_BUF_LENGTH  16
-/*----------------------------------------------------------------------*
- * includes specific to the IC-746 protocol                             *
- *----------------------------------------------------------------------*/
-/* 
- *  Protocol
- */
-#define CAT_PREAMBLE        0xFE  // sent twice at start of command
-#define CAT_EOM             0xFD  // end of message
-#define CAT_ACK             0xFB  // OK
-#define CAT_NACK            0xFA  // No good
-#define CAT_RIG_ADDR        0x56  // Rig ID for IC746
-#define CAT_CTRL_ADDR       0xE0  // Controller ID
-
-/*
- * Commands
- */
-
-#define CAT_SET_TCV_FREQ    0x00  // Not implemented
-#define CAT_SET_TCV_MODE    0x01  // Not implemented
-#define CAT_READ_BAND_EDGE  0x02  // Not implemented
-#define CAT_READ_FREQ       0x03
-#define CAT_READ_MODE       0x04
-#define CAT_SET_FREQ        0x05
-#define CAT_SET_MODE        0x06
-#define CAT_SET_VFO         0x07
-#define CAT_SEL_MEM         0x08  // Not implemented
-#define CAT_WRITE_MEM       0x09  // Not implemented
-#define CAT_MEM_TO_VFO      0x0A  // Not implemented
-#define CAT_CLEAR_MEM       0x0B  // Not implemented
-#define CAT_READ_OFFSET     0x0C  // Not implemented
-#define CAT_SET_OFFSET      0x0D  // Not implemented
-#define CAT_SCAN            0x0E  // Not implemented
-#define CAT_SPLIT           0x0F
-#define CAT_SET_RD_STEP     0x10  // Not implemented
-#define CAT_SET_RD_ATT      0x11  // Not implemented
-#define CAT_SET_RD_ANT      0x12  // Not implemented
-#define CAT_SET_UT102       0x13  // Not implemented
-#define CAT_SET_RD_PARAMS1  0x14  // Not implemented
-#define CAT_READ_SMETER     0x15  // Only impemented read S-Meter
-#define CAT_SET_RD_PARAMS2  0x16  // Not implemented (various settings)
-#define CAT_READ_ID         0x19  
-#define CAT_MISC            0x1A  // Only implemented sub-command 3 Read IF filter 
-#define CAT_SET_TONE        0x1B  // Not implemented (VHF/UHF)
-#define CAT_PTT             0x1C
-
-/*
-   CAT Sub COmmands
-*/
-#define CAT_MODE_LSB        0x00
-#define CAT_MODE_USB        0x01
-#define CAT_MODE_AM         0x02 // Not implemented
-#define CAT_MODE_CW         0x03 // Not implemented
-#define CAT_MODE_RTTY       0x04 // Not implemented
-#define CAT_MODE_FM         0x05 // Not implemented
-#define CAT_MODE_CW_R       0x06 // Not implemented
-#define CAT_MODE_RTTY_R     0x07 // Not implemented
-#define CAT_MODE_FILTER1    0x01 // Required for "read mode"
-
-/*
- * VFO Subcommand
- */
-
-#define CAT_VFO_A           0x00
-#define CAT_VFO_B           0x01
-#define CAT_VFO_A_TO_B      0xA0
-#define CAT_VFO_SWAP        0xB0
-
-/*
- * Split Subcommand
- */
-#define CAT_SPLIT_OFF       0x00
-#define CAT_SPLIT_ON        0x01
-#define CAT_SIMPLE_DUP      0x10 // Not implemented
-#define CAT_MINUS_DUP       0x11 // Not implemented
-#define CAT_PLUS_DUP        0x12 // Not implemented
-
-/*
- * S-Meter / Squelch Subcommand
- */
-#define CAT_READ_SUB_SQL    0x01 // Not implemented (squelch)
-#define CAT_READ_SUB_SMETER 0x02
-
-/*
- * PTT Subcommand
- */
-#define CAT_PTT_RX          0x00
-#define CAT_PTT_TX          0x01
-
-// 1A - MISC Subcommands
-#define CAT_SET_MEM_CHAN    0x00  // Not implemented
-#define CAT_SET_BANDSTACK   0x01  // Not implemented
-#define CAT_SET_MEM_KEYER   0x02  // Not implemented
-#define CAT_READ_IF_FILTER  0x03  // Hard coded response to keep WSJTX and other CAT controllers happy
-
-// Command Receive States
-#define CAT_RCV_WAITING     0  // waiting for 1st preamble byte
-#define CAT_RCV_INIT        1  // waiting for 2nd preamble byte
-#define CAT_RCV_RECEIVING   2  // waiting for command bytes
+#endif //TS480
 
 
-
-
-// Command indices
-//
-// Command structure after preamble and EOM have been discarded
-// |56|E0|cmd|sub-cmd|data
-//   56 - fixed transceiver address for IC746
-//   E0 - fixed cat xontroller address
-// The sub-command field varies by command. For somme commands the sub-cmd field is not supplied and the data
-// begins immediatedly follwing the command.
-//
-// The following are the array indexes within the command buffer for command elements that are sent with the command
-// or are where we put data to return to the conroller
-//
-#define CAT_IX_TO_ADDR     0
-#define CAT_IX_FROM_ADDR   1
-#define CAT_IX_CMD         2
-#define CAT_IX_SUB_CMD     3
-#define CAT_IX_FREQ        3   // Set Freq has no sub-command
-#define CAT_IX_MODE        3   // Get mode has no sub-command
-#define CAT_IX_TUNE_STEP   3   // Get step has no sub-command
-#define CAT_IX_ANT_SEL     3   // Get amt has no sub-command
-#define CAT_IX_PTT         4   // PTT RX/TX indicator
-#define CAT_IX_IF_FILTER   4   // IF Filter value
-#define CAT_IX_SMETER      4   // S Meter 0-255
-#define CAT_IX_SQUELCH     4   // Squelch 0=close, 1= open
-#define CAT_IX_ID          5
-#define CAT_IX_DATA        4   // Data following sub-comand
-
-// Lentgth of commands that request data 
-#define CAT_RD_LEN_NOSUB   3   //  3 bytes - 56 E0 cc
-#define CAT_RD_LEN_SUB     4   //  4 bytes - 56 E0 cc ss  (cmd, sub command)
-
-// Length of data responses
-#define CAT_SZ_SMETER      6   //  6 bytes - E0 56 15 02 nn nn 
-#define CAT_SZ_SQUELCH     5   //  5 bytes - E0 56 15 01 nn
-#define CAT_SZ_PTT         5   //  5 bytes - E0 56 1C 00 nn
-#define CAT_SZ_FREQ        8   //  8 bytes - E0 56 03 ff ff ff ff ff  (frequency in little endian BCD)
-#define CAT_SZ_MODE        5   //  5 bytes - E0 56 04 mm ff  (mode, then filter)
-#define CAT_SZ_IF_FILTER   5   //  5 bytes - E0 56 1A 03 nn
-#define CAT_SZ_TUNE_STEP   4   //  4 bytes - E0 56 10 nn
-#define CAT_SZ_ANT_SEL     4   //  4 bytes - E0 56 12 nn
-#define CAT_SZ_ID          5   //  5 bytes - E0 56 19 00 56    (returns RIG ID)
-#define CAT_SZ_UNIMP_1B    5   //  5 bytes - E0 56 NN SS 00    (unimplemented commands that require 1 data byte
-#define CAT_SZ_UNIMP_2B    6   //  6 bytes - EO 56 NN SS 00 00 (unimplemented commandds that required 2 data bytes
-
-
- 
-byte cmdBuf[CAT_CMD_BUF_LENGTH];
-byte rcvState    = CAT_RCV_WAITING;
-boolean cmdRcvd  = false;
-int bytesRcvd    = 0;
-int cmdLength    = 0;
-
-
-#endif
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*               DEBUG SUPPORT MACRO DEFINITIONS                                               *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
 //#define DEBUG 1
+
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
    #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
@@ -478,7 +434,6 @@ int cmdLength    = 0;
 /*-------------------------------------------------------------------------*
  * Define Info,Exception and Trace macros (replaced by NOP if not enabled) *
  *-------------------------------------------------------------------------*/
-
 #ifdef DEBUG
    #define _DEBUG           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
    #define _DEBUGLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
@@ -514,53 +469,10 @@ int cmdLength    = 0;
    #define _EXCPLIST(...)  _EXCP
 #endif
 
-/*---------------------------------------------------------------*
- * Pin Assignment                                                *
- *---------------------------------------------------------------*/
-#ifdef PICO
-
-   #define AIN0            0      //Reserved To implement zero crossing detection algorithm
-   #define AIN1            1      //Reserved To implement zero crossing detection algorithm
-   #define RX             18      //RX Switch
-   #define WSPR            9      //WSPR LED 
-   #define JS8            10      //JS8 LED
-   #define FT4            11      //FT4 LED
-   #define FT8             8      //FT8 LED
-   #define TX             25      //TX LED  //should be changed to 22 once the initial debugging is completed
-
-   #define UP             19      //UP Switch
-   #define DOWN           20      //DOWN Switch
-   #define TXSW           14       //TX Switch
-
-
 #ifdef ATUCTL
-   #define ATU            21     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
-#endif //ATUCTL
-   
-
-#else
-
-   #define UP             2           //UP Switch
-   #define DOWN           3           //DOWN Switch
-   #define TXSW           4           //TX Switch
-
-   #define AIN0           6           //(PD6)
-   #define AIN1           7           //(PD7)
-
-   #define RX             8           //RX Switch
-   #define TX            13           //(PB5) TX LED
-
-   #define WSPR           9           //WSPR LED 
-   #define JS8           10           //JS8 LED
-   #define FT4           11           //FT4 LED
-   #define FT8           12           //FT8 LED
-#ifdef ATUCTL
-   #define ATU            5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
-#endif //ATUCTL
-
-#endif //PICO
-
-#ifdef ATUCTL
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*               ATU RESET FUNCTION SUPPORT                                                    *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
    #define ATU_DELAY    200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
 
    uint16_t atu       =  ATU;
@@ -570,97 +482,36 @@ int cmdLength    = 0;
 #endif //ATUCTL
 
 #ifdef ANTIVOX
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*       ANTIVOX FEATURE IF PTT IS CONTROLLED BY CAT AVOID NOISE TO PTT THE ADX                *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
    #define AVOXTIME    2000
    uint16_t avoxtime =   AVOXTIME;
    uint32_t tavox    =   0;
 #endif //ANTIVOX   
 
-#ifdef RESET
-   #define RTIME       2000
-#endif //RESET   
-
-/*----------------------------------------------------------------*
- *  Global State Variables (Binary)                               *
- *----------------------------------------------------------------*/
-#define TXON   0B00000001    //State of the TX
-#define VOX    0B00000010    //Audio input detected
-#define UPPUSH 0B00000100    //UP button pressed
-#define DNPUSH 0B00001000    //DOWN button pressed
-#define TXPUSH 0B00010000    //TXSW button pressed
-#define CATTX  0B00100000    //TX turned on via CAT (disable VOX)
-#define SAVEEE 0B01000000    //Mark of EEPROM updated
-#define CWMODE 0B10000000    //CW Active
-
-/*----------------------------------------------------------------*
- * Operating switch                                               *
- * ---------------------------------------------------------------*/
-#define PUSHSTATE   0B00000001
-#define SHORTPUSH   0B00000010    //simple push flag
-#define LONGPUSH    0B00000100    //long push flag
-#define INPROGRESS  0B00001000    //in progress mark
-
-#ifdef ATUCTL
-#define ATUCLK      0B00010000    //control the width of the ATU pulse
-#endif //ATU
-
-#ifdef WDT
-#define TX_WDT      0B00100000    //TX Watchdog has been activated
-#endif //WDT
-
-#ifdef ANTIVOX
-#define AVOX        0B01000000    //ANTI-VOX has been activated
-#endif //ANTIVOX
-/*----------------------------------------------------------------*
- * General purpose global define                                  *
- * ---------------------------------------------------------------*/
-#define BOUNCE_TIME 200           //mSec minimum to debounce
-#define SHORT_TIME  10*BOUNCE_TIME //mSec minimum to consider long push
-#define SI5351_REF  25000000UL   //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
-#define CPU_CLOCK   16000000UL   //Processor clock
-#define VOX_MAXTRY  10           //Max number of attempts to detect an audio incoming signal
-#define CNT_MAX     65000        //Max count of timer1
-#define FRQ_MAX     30000        //Max divisor for frequency allowed
-#define BDLY        200          //Delay when blinking LED
-#define DELAY_WAIT  BDLY*2       //Double Delay
-#define DELAY_CAL   DELAY_WAIT/10
-#define MAXMODE     5            //Max number of digital modes
-#define MAX_BLINK   4            //Max number of blinks
-#define BANDS       4            //Max number of bands allowed
-#define MAXBAND    10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
-#define XT_CAL_F   33000 
-#define CAL_STEP   500           //Calibration factor step up/down while in calibration (sweet spot experimentally found by Barb)
-#define REPEAT_KEY 30            //Key repetition period while in calibration
-#define WAIT       true
-#define NOWAIT     false
-
-
-#define INT0        0
-#define INT1        1
-#define INT2        2
-
-/*------------------------------------------------------------------------*
- * Define EEPROM related configuration parameters, if EE is not defined   *
- * no EEPROM support is provided                                          *
- *------------------------------------------------------------------------*/
 #ifdef EE
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*       DEFINITIONS RELATED TO THE USAGE OF EEPROM AS A PERMANENT STORAGE                     *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
    #define EEPROM_CAL          10
    #define EEPROM_BUILD        20
    #define EEPROM_TEMP         30
    #define EEPROM_MODE         40
    #define EEPROM_BAND         50
 
-#ifdef TERMINAL
-   #define EEPROM_ATU          60
-   #define EEPROM_ATU_DELAY    70
-   #define EEPROM_BOUNCE_TIME  80
-   #define EEPROM_SHORT_TIME   90
-   #define EEPROM_MAX_BLINK   120
-   #define EEPROM_EEPROM_TOUT 130
-   #define EEPROM_CW_SHIFT    140
-   #define EEPROM_CW_STEP     150
-   #define EEPROM_AVOXTIME    170
-   #define EEPROM_END         200
-#endif //TERMINAL
+   #ifdef TERMINAL
+      #define EEPROM_ATU          60
+      #define EEPROM_ATU_DELAY    70
+      #define EEPROM_BOUNCE_TIME  80
+      #define EEPROM_SHORT_TIME   90
+      #define EEPROM_MAX_BLINK   120
+      #define EEPROM_EEPROM_TOUT 130
+      #define EEPROM_CW_SHIFT    140
+      #define EEPROM_CW_STEP     150
+      #define EEPROM_AVOXTIME    170
+      #define EEPROM_END         200
+   #endif //TERMINAL
 
    uint32_t tout=0;
 
@@ -669,9 +520,10 @@ int cmdLength    = 0;
    #define EEPROM_TOUT  500     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
 
-/*-------------------------------------------------------------------------*
- * Define CW related configuration parameters                              *
- *-------------------------------------------------------------------------*/
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*       DEFINITIONS RELATED TO THE IMPLEMENTATION OF CW MODE                                  *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
 #ifdef CW
    #define CWSHIFT        600
    #define CWSTEP         500
@@ -685,27 +537,22 @@ int cmdLength    = 0;
    
 #endif //CW
 
-//*******************************[ VARIABLE DECLARATIONS ]*************************************
-uint16_t bounce_time = BOUNCE_TIME;
-uint16_t short_time  = SHORT_TIME;
-uint16_t vox_maxtry  = VOX_MAXTRY;
-int      cnt_max     = CNT_MAX;
-uint16_t max_blink   = MAX_BLINK;
 
-#ifdef EE
-uint16_t eeprom_tout = EEPROM_TOUT;
-#endif //EE
-
-uint8_t  SSW=0;               //System SSW variable (to be used with getWord/setWord)
-uint16_t mode=0;              //Default to mode=0 (FT8)
-//uint16_t Band_slot = 0;         //Default to Bands[0]=40
-uint16_t Band_slot   = 3;         //Default to Bands[3]=10
-
-int32_t  cal_factor=0;
-
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*       GLOBAL VARIABLE DEFINITION                                                            *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+uint16_t bounce_time    = BOUNCE_TIME;
+uint16_t short_time     = SHORT_TIME;
+uint16_t vox_maxtry     = VOX_MAXTRY;
+int      cnt_max        = CNT_MAX;
+uint16_t max_blink      = MAX_BLINK;
+uint8_t  SSW            = 0;          //System SSW variable (to be used with getWord/setWord)
+uint16_t mode           = 0;          //Default to mode=0 (FT8)
+uint16_t Band_slot      = 0;          //Default to Bands[0]=40
+int32_t  cal_factor     = 0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
-unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
+unsigned long f[MAXMODE]                   = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
 const unsigned long slot[MAXBAND][MAXMODE] ={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
                                              { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
                                              { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
@@ -726,6 +573,16 @@ uint8_t       button[3]   ={0,0,0};
 unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
 
 
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*       GLOBAL VARIABLE DEFINITION CONDITIIONAL TO DIFFERENT OPTIONAL FUNCTIONS               *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+#ifdef EE
+uint16_t eeprom_tout = EEPROM_TOUT;
+#endif //EE
+
+
 #ifdef CW
 unsigned long freqCW      = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
 #endif //CW
@@ -738,8 +595,10 @@ uint8_t  TSW=0;               //System timer variable (to be used with getWord/s
 #define       WDT_MAX     130000
 uint32_t      wdt_tout    = 0;
 #endif //WDT
-//**********************************[ BAND SELECT ]************************************************
 
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                             BAND SELECT CONFIGURATION                                       *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 /*
  ADX can support up to 4 bands on board. Those 4 bands needs to be assigned to Band1 ... Band4 from supported 6 bands.
  To change bands press SW1 and SW2 simultaneously. Band LED will flash 3 times briefly and stay lit for the stored band. also TX LED will be lit to indicate
@@ -779,10 +638,11 @@ uint32_t      wdt_tout    = 0;
   const uint16_t quads[QUADMAX] = {80,60,40,30,20,17,15,10};
 #endif //QUAD
 
-/****************************************************************************************************************************************/
-/*                                                     CODE INFRAESTRUCTURE                                                             */
-/****************************************************************************************************************************************/
-#ifdef PICO
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                    CODE INFRASTRUCTURE                                                      *
+//* General purpose procedures and functions needed to implement services through the code      *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+#ifdef PDX
 /*----------------------------------------------------------------------*     
  * This is specific code for the RP2040 to manage the BOOTSEL button    *
  * this code is for debugging purposes only                             *
@@ -824,7 +684,7 @@ uint32_t      wdt_tout    = 0;
     restore_interrupts(flags);
     return button_state;
 }
-#endif //PICO
+#endif //PDX
 
 /*-------------------------------------------*
  * getWord                                   *
@@ -844,11 +704,12 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
   }
 }
 
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*==*
+//*                    ATU DEVICE MANAGEMENT                                                     *
+//*this is an optional function that creates a brief pulse aimed to reset the ATU on band changes*
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
 #ifdef ATUCTL
-/*====================================================================================================*/
-/*                                     ATU Device management                                          */
-/*====================================================================================================*/
 void flipATU() {
   
    setGPIO(atu,HIGH);
@@ -860,6 +721,10 @@ void flipATU() {
    #endif //DEBUG    
 }
 #endif //ATUCTL
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   QUAD BOARD MANAGEMENT                                                     *
+//*this is an optional function that support the configuration of the QUAD board on band changes*
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
 #ifdef QUAD
 /*====================================================================================================*/
@@ -1024,9 +889,10 @@ int getMode(int s,uint32_t f) {
 }
 
 #ifdef IC746
-
-/*-----------------------------------------------------------------------------------------------------*
- *                                    IC746 CAT SubSystem                                              *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   IC746 CAT PROTOCOL SUBSYSTEM                                              *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+/*
  * cloned from ADX CAT support developed by Alan Altman (AG7XS) as part of his ADX_CAT_V3.51.ino sketch*
  * with adaptations to port his implementation to the overall architecture of this sketch. Functionally*
  * it should behave (as a black box) in the same way. The obvious advantage of his implementation is   *
@@ -1046,6 +912,173 @@ int getMode(int s,uint32_t f) {
    Mods and adaptations performed by Pedro E. Colla (LU7DZ) 2022 (permission given by Alan for
    the relevant part of his work on this porting)
  *----------------------------------------------------------------------------------------------------*/
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*               DEFINITIONS SPECIFIC TO IC746 CAT PROTOCOL                                    *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+/*---
+ * Memory areas specific to the protocol
+ ----*/
+
+/*
+Command buffer (without preamble and EOM)
+  |FE|FE|56|E0|cmd|sub-cmd|data|FD|  // Preamble (FE) and EOM (FD) are discarded leaving
+  2 addr bytes , 1 command, 1 sub-command, up to 12 data, (longest is unimplemented edge frequency)
+*/
+#define CAT_CMD_BUF_LENGTH  16
+/*----------------------------------------------------------------------*
+ * includes specific to the IC-746 protocol                             *
+ *----------------------------------------------------------------------*/
+/* 
+ *  Protocol
+ */
+#define CAT_PREAMBLE        0xFE  // sent twice at start of command
+#define CAT_EOM             0xFD  // end of message
+#define CAT_ACK             0xFB  // OK
+#define CAT_NACK            0xFA  // No good
+#define CAT_RIG_ADDR        0x56  // Rig ID for IC746
+#define CAT_CTRL_ADDR       0xE0  // Controller ID
+
+/*
+ * Commands
+ */
+
+#define CAT_SET_TCV_FREQ    0x00  // Not implemented
+#define CAT_SET_TCV_MODE    0x01  // Not implemented
+#define CAT_READ_BAND_EDGE  0x02  // Not implemented
+#define CAT_READ_FREQ       0x03
+#define CAT_READ_MODE       0x04
+#define CAT_SET_FREQ        0x05
+#define CAT_SET_MODE        0x06
+#define CAT_SET_VFO         0x07
+#define CAT_SEL_MEM         0x08  // Not implemented
+#define CAT_WRITE_MEM       0x09  // Not implemented
+#define CAT_MEM_TO_VFO      0x0A  // Not implemented
+#define CAT_CLEAR_MEM       0x0B  // Not implemented
+#define CAT_READ_OFFSET     0x0C  // Not implemented
+#define CAT_SET_OFFSET      0x0D  // Not implemented
+#define CAT_SCAN            0x0E  // Not implemented
+#define CAT_SPLIT           0x0F
+#define CAT_SET_RD_STEP     0x10  // Not implemented
+#define CAT_SET_RD_ATT      0x11  // Not implemented
+#define CAT_SET_RD_ANT      0x12  // Not implemented
+#define CAT_SET_UT102       0x13  // Not implemented
+#define CAT_SET_RD_PARAMS1  0x14  // Not implemented
+#define CAT_READ_SMETER     0x15  // Only impemented read S-Meter
+#define CAT_SET_RD_PARAMS2  0x16  // Not implemented (various settings)
+#define CAT_READ_ID         0x19  
+#define CAT_MISC            0x1A  // Only implemented sub-command 3 Read IF filter 
+#define CAT_SET_TONE        0x1B  // Not implemented (VHF/UHF)
+#define CAT_PTT             0x1C
+
+/*
+   CAT Sub COmmands
+*/
+#define CAT_MODE_LSB        0x00
+#define CAT_MODE_USB        0x01
+#define CAT_MODE_AM         0x02 // Not implemented
+#define CAT_MODE_CW         0x03 // Not implemented
+#define CAT_MODE_RTTY       0x04 // Not implemented
+#define CAT_MODE_FM         0x05 // Not implemented
+#define CAT_MODE_CW_R       0x06 // Not implemented
+#define CAT_MODE_RTTY_R     0x07 // Not implemented
+#define CAT_MODE_FILTER1    0x01 // Required for "read mode"
+
+/*
+ * VFO Subcommand
+ */
+
+#define CAT_VFO_A           0x00
+#define CAT_VFO_B           0x01
+#define CAT_VFO_A_TO_B      0xA0
+#define CAT_VFO_SWAP        0xB0
+
+/*
+ * Split Subcommand
+ */
+#define CAT_SPLIT_OFF       0x00
+#define CAT_SPLIT_ON        0x01
+#define CAT_SIMPLE_DUP      0x10 // Not implemented
+#define CAT_MINUS_DUP       0x11 // Not implemented
+#define CAT_PLUS_DUP        0x12 // Not implemented
+
+/*
+ * S-Meter / Squelch Subcommand
+ */
+#define CAT_READ_SUB_SQL    0x01 // Not implemented (squelch)
+#define CAT_READ_SUB_SMETER 0x02
+
+/*
+ * PTT Subcommand
+ */
+#define CAT_PTT_RX          0x00
+#define CAT_PTT_TX          0x01
+
+// 1A - MISC Subcommands
+#define CAT_SET_MEM_CHAN    0x00  // Not implemented
+#define CAT_SET_BANDSTACK   0x01  // Not implemented
+#define CAT_SET_MEM_KEYER   0x02  // Not implemented
+#define CAT_READ_IF_FILTER  0x03  // Hard coded response to keep WSJTX and other CAT controllers happy
+
+// Command Receive States
+#define CAT_RCV_WAITING     0  // waiting for 1st preamble byte
+#define CAT_RCV_INIT        1  // waiting for 2nd preamble byte
+#define CAT_RCV_RECEIVING   2  // waiting for command bytes
+
+
+
+
+// Command indices
+//
+// Command structure after preamble and EOM have been discarded
+// |56|E0|cmd|sub-cmd|data
+//   56 - fixed transceiver address for IC746
+//   E0 - fixed cat xontroller address
+// The sub-command field varies by command. For somme commands the sub-cmd field is not supplied and the data
+// begins immediatedly follwing the command.
+//
+// The following are the array indexes within the command buffer for command elements that are sent with the command
+// or are where we put data to return to the conroller
+//
+#define CAT_IX_TO_ADDR     0
+#define CAT_IX_FROM_ADDR   1
+#define CAT_IX_CMD         2
+#define CAT_IX_SUB_CMD     3
+#define CAT_IX_FREQ        3   // Set Freq has no sub-command
+#define CAT_IX_MODE        3   // Get mode has no sub-command
+#define CAT_IX_TUNE_STEP   3   // Get step has no sub-command
+#define CAT_IX_ANT_SEL     3   // Get amt has no sub-command
+#define CAT_IX_PTT         4   // PTT RX/TX indicator
+#define CAT_IX_IF_FILTER   4   // IF Filter value
+#define CAT_IX_SMETER      4   // S Meter 0-255
+#define CAT_IX_SQUELCH     4   // Squelch 0=close, 1= open
+#define CAT_IX_ID          5
+#define CAT_IX_DATA        4   // Data following sub-comand
+
+// Lentgth of commands that request data 
+#define CAT_RD_LEN_NOSUB   3   //  3 bytes - 56 E0 cc
+#define CAT_RD_LEN_SUB     4   //  4 bytes - 56 E0 cc ss  (cmd, sub command)
+
+// Length of data responses
+#define CAT_SZ_SMETER      6   //  6 bytes - E0 56 15 02 nn nn 
+#define CAT_SZ_SQUELCH     5   //  5 bytes - E0 56 15 01 nn
+#define CAT_SZ_PTT         5   //  5 bytes - E0 56 1C 00 nn
+#define CAT_SZ_FREQ        8   //  8 bytes - E0 56 03 ff ff ff ff ff  (frequency in little endian BCD)
+#define CAT_SZ_MODE        5   //  5 bytes - E0 56 04 mm ff  (mode, then filter)
+#define CAT_SZ_IF_FILTER   5   //  5 bytes - E0 56 1A 03 nn
+#define CAT_SZ_TUNE_STEP   4   //  4 bytes - E0 56 10 nn
+#define CAT_SZ_ANT_SEL     4   //  4 bytes - E0 56 12 nn
+#define CAT_SZ_ID          5   //  5 bytes - E0 56 19 00 56    (returns RIG ID)
+#define CAT_SZ_UNIMP_1B    5   //  5 bytes - E0 56 NN SS 00    (unimplemented commands that require 1 data byte
+#define CAT_SZ_UNIMP_2B    6   //  6 bytes - EO 56 NN SS 00 00 (unimplemented commandds that required 2 data bytes
+
+
+ 
+byte cmdBuf[CAT_CMD_BUF_LENGTH];
+byte rcvState    = CAT_RCV_WAITING;
+boolean cmdRcvd  = false;
+int bytesRcvd    = 0;
+int cmdLength    = 0;
 
 
 
@@ -1536,6 +1569,11 @@ void serialEvent() {
 
 #endif //IC746
 
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   TS480 CAT PROTOCOL SUBSYSTEM                                              *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
 #ifdef TS480
 /*-----------------------------------------------------------------------------------------------------*
  *                                    TS480 CAT SubSystem                                              *
@@ -1983,14 +2021,16 @@ void serialEvent(){
 }
 #endif //TS480
 #endif //CAT
-/**********************************************************************************************/
-/*                                   Si5351 Management                                        */
-/**********************************************************************************************/
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   SI5351 MANAGEMENT SUBSYSTEM                                               *
+//* Most of the work is actually performed by the Si5351 Library used                           *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+Si5351 si5351;
 
 /*--------------------------------------------------------------------------------------------*
  * Initialize DDS SI5351 object
  *--------------------------------------------------------------------------------------------*/
-Si5351 si5351;
 
 void setup_si5351() {
 //------------------------------- SET SI5351 VFO -----------------------------------  
@@ -2012,86 +2052,11 @@ long cal = XT_CAL_F;
   #endif //DEBUG
 
 }
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   LED MANAGEMENT SUBSYSTEM                                                  *
+//* Functions to operate the 5 LED the ADX board has                                            *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
-/*---------------------------------------------------------------------------------------------*
- * Switch between RX and TX
- *---------------------------------------------------------------------------------------------*/
-void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
-
-#ifdef DEBUG
-  if (t != getWord(SSW,TXON)) {
-      _INFOLIST("%s (%s)\n",__func__,BOOL2CHAR(t));
-  } 
-#endif //DEBUG  
-  
-  if (t) {    //Set to TX
-
-/*-----------------------------------*
- * if Watchdog enabled avoid to turn *
- * TX on if the watchdog mark hasn't *
- * been cleared.                     *
- *-----------------------------------*/
- #ifdef WDT
- 
-      if (getWord(TSW,TX_WDT)==HIGH) {       
-         return;
-      }
-      
- #endif //WDT     
-/*-----------------------------------*
- *               TX                  *
- *-----------------------------------*/
-     setGPIO(RX,LOW);
-     si5351.output_enable(SI5351_CLK1, 0);   //RX off
-     
-#ifdef CW
-     long int freqtx=(getWord(SSW,CWMODE)==false ? freq : freq+cwshift);
-#else
-     long int freqtx=freq;
-#endif //CW          
-     
-#ifdef DEBUG     
-     _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
-#endif //DEBUG
-     
-     si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
-     si5351.output_enable(SI5351_CLK0, 1);   // TX on
-     setGPIO(TX,HIGH);
-     setWord(&SSW,TXON,HIGH);
-
-#ifdef WDT
-     wdt_tout=millis();
-#endif //WDT
-              
-     return;
-  }
-
-/*------------------------------------*
- *                RX                  *
- *------------------------------------*/
-#ifdef CAT
-    if (getWord(SSW,CATTX)==true) { return;}  //if the PTT is managed by the CAT subsystem get out of the way.
-#endif //CAT
-
-    setGPIO(RX,HIGH);
-    si5351.output_enable(SI5351_CLK0, 0);   //TX off    
-    
-#ifdef DEBUG
-    if (getWord(SSW,TXON)==HIGH) {
-       _TRACELIST("%s RX+ f=%ld\n",__func__,freq);
-    }
-#endif //DEBUG
-    
-    si5351.set_freq(freq*100ULL, SI5351_CLK1);
-    si5351.output_enable(SI5351_CLK1, 1);   //RX on
-    setGPIO(TX,0); 
-    setWord(&SSW,TXON,LOW);
-    setWord(&SSW,VOX,LOW);
-/*---------------------------------------------------------*
- * set to master frequency                                 *
- *---------------------------------------------------------*/
-  
-}
 /**********************************************************************************************/
 /*                                      LED Management                                        */
 /**********************************************************************************************/
@@ -2174,7 +2139,13 @@ void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
 
 }
 
-#ifndef PICO
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   BUTTON MANAGEMENT SUBSYSTEM                                               *
+//* Functions to operate the 3 push buttons the ADX board has                                   *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+#ifdef ADX 
 /**********************************************************************************************/
 /*                               PushButton Management                                        */
 /**********************************************************************************************/
@@ -2240,7 +2211,7 @@ ISR (PCINT2_vect) {
       }
   }
 }
-#endif
+#endif //ADX
 
 
 /*-----------------------------------------------------------------------------*
@@ -2287,6 +2258,92 @@ bool detectKey(uint8_t k, bool v, bool w) {
    }   
    return !v;
 }
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   TRANSCEIVER MANAGEMENT SUBSYSTEM                                          *
+//* Functions related to the overall operation of the transceiver                               *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+/*---------------------------------------------------------------------------------------------*
+ * Switch between RX and TX
+ *---------------------------------------------------------------------------------------------*/
+void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
+
+#ifdef DEBUG
+  if (t != getWord(SSW,TXON)) {
+      _INFOLIST("%s (%s)\n",__func__,BOOL2CHAR(t));
+  } 
+#endif //DEBUG  
+  
+  if (t) {    //Set to TX
+
+/*-----------------------------------*
+ * if Watchdog enabled avoid to turn *
+ * TX on if the watchdog mark hasn't *
+ * been cleared.                     *
+ *-----------------------------------*/
+ #ifdef WDT
+ 
+      if (getWord(TSW,TX_WDT)==HIGH) {       
+         return;
+      }
+      
+ #endif //WDT     
+/*-----------------------------------*
+ *               TX                  *
+ *-----------------------------------*/
+     setGPIO(RX,LOW);
+     si5351.output_enable(SI5351_CLK1, 0);   //RX off
+     
+#ifdef CW
+     long int freqtx=(getWord(SSW,CWMODE)==false ? freq : freq+cwshift);
+#else
+     long int freqtx=freq;
+#endif //CW          
+     
+#ifdef DEBUG     
+     _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
+#endif //DEBUG
+     
+     si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
+     si5351.output_enable(SI5351_CLK0, 1);   // TX on
+     setGPIO(TX,HIGH);
+     setWord(&SSW,TXON,HIGH);
+
+#ifdef WDT
+     wdt_tout=millis();
+#endif //WDT
+              
+     return;
+  }
+
+/*------------------------------------*
+ *                RX                  *
+ *------------------------------------*/
+#ifdef CAT
+    if (getWord(SSW,CATTX)==true) { return;}  //if the PTT is managed by the CAT subsystem get out of the way.
+#endif //CAT
+
+    setGPIO(RX,HIGH);
+    si5351.output_enable(SI5351_CLK0, 0);   //TX off    
+    
+#ifdef DEBUG
+    if (getWord(SSW,TXON)==HIGH) {
+       _TRACELIST("%s RX+ f=%ld\n",__func__,freq);
+    }
+#endif //DEBUG
+    
+    si5351.set_freq(freq*100ULL, SI5351_CLK1);
+    si5351.output_enable(SI5351_CLK1, 1);   //RX on
+    setGPIO(TX,0); 
+    setWord(&SSW,TXON,LOW);
+    setWord(&SSW,VOX,LOW);
+/*---------------------------------------------------------*
+ * set to master frequency                                 *
+ *---------------------------------------------------------*/
+  
+}
+
+
 /*----------------------------------------------------------*
  * Manually turn TX while pressed                           *
  *----------------------------------------------------------*/
@@ -2411,117 +2468,7 @@ bool getTXSW() {
     return HIGH;
 }
 
-/*--------
- * Old (legacy) Calibration procedure for testing purposes
- * must be removed once debugged
- *-------*/
-#ifdef LEGACY
 
-void legacy_Calibration() {
-
-int UP_State;
-int DOWN_State;
-
-setGPIO(FT8, LOW);
-setGPIO(FT4, LOW);
-setGPIO(JS8, LOW);
-setGPIO(WSPR, LOW);
-
-setGPIO(WSPR, HIGH); 
-setGPIO(FT8, HIGH);
-delay(100);        
- 
-setGPIO(WSPR, LOW); 
-setGPIO(FT8, LOW);
-delay(100);                 
-
-
-setGPIO(WSPR, HIGH); 
-setGPIO(FT8, HIGH);
-delay(100);        
- 
-setGPIO(WSPR, LOW); 
-setGPIO(FT8, LOW);
-delay(100);                       
-
-setGPIO(WSPR, HIGH); 
-setGPIO(FT8, HIGH);
-delay(100);        
- 
-setGPIO(WSPR, LOW); 
-setGPIO(FT8, LOW);
-delay(100);                       
-
-setGPIO(WSPR, HIGH); 
-setGPIO(FT8, HIGH);
-delay(100);        
- 
-setGPIO(WSPR, LOW); 
-setGPIO(FT8, LOW);
-delay(100);                       
-
-setGPIO(WSPR, HIGH); 
-setGPIO(FT8, HIGH);
-
-/*
-addr = 10;
-EEPROM.get(addr, cal_factor); 
-*/
-//Serial.print("cal factor= ");
-
-Calibrate:
-
-    UP_State = getGPIO(UP);
-
-if (UP_State == LOW) {
-   delay(50); 
-     
-UP_State = getGPIO(UP);
-if (UP_State == LOW) {
-
-cal_factor = cal_factor - 100;
-/*
- EEPROM.put(addr, cal_factor); 
-*/
-  si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
-  
-  
-  // Set CLK2 output
-  si5351.set_freq(Cal_freq * 100, SI5351_CLK2);
-  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
-  si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
-
-  
-  }} 
-   
-    DOWN_State = getGPIO(DOWN);
-
-if (DOWN_State == LOW) {
-   delay(50);   
-   
-         DOWN_State = getGPIO(DOWN);
-if (DOWN_State == LOW) {
-
-cal_factor = cal_factor + 100;
-/*
-EEPROM.put(addr, cal_factor); 
-*/    
-  si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
-  
-  // Set CLK2 output
-  si5351.set_freq(Cal_freq * 100, SI5351_CLK2);
-  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
-  si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable clock2 
-
-  }} 
-
-   goto Calibrate;
-/*--------------------------
- * end of legacy test code
- *-------------------------*/
-  
-}
-#endif //LEGACY
 /*----------------------------------------------------------*
  * Calibration function
  *----------------------------------------------------------*/
@@ -2532,11 +2479,6 @@ void Calibration(){
      _INFO;
   #endif //DEBUG
 
-#ifdef LEGACY
-  legacy_Calibration();
-  return;
-#endif //LEGACY    
-  
   resetLED();
   uint8_t  n=4;
 
@@ -3252,175 +3194,10 @@ void keepAlive() {
    
 }
 
-/**********************************************************************************************/
-/*                            Initialization and Setup                                        */
-/**********************************************************************************************/
-
-/*----------------------------------------------------------*
- * Initialization function from EEPROM                      *
- *----------------------------------------------------------*/
-void INIT(){
-
-
-#ifdef EE
-
- uint16_t temp=0;
- uint16_t save=EEPROM_SAVED;
- uint16_t build=0;
-
- 
- EEPROM.get(EEPROM_TEMP,temp);
- EEPROM.get(EEPROM_BUILD,build);
- 
- #ifdef EEPROM_CLR
-    temp=-1;
- #endif //EEPROM_CLR  
-
- 
- if (build != uint16_t(BUILD)) {
-    resetEEPROM();
-    #ifdef DEBUG
-       _INFOLIST("%s EEPROM Reset Build<> cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
-    #endif //DEBUG
-    
- }
- 
- if (temp != save){
-
-    updateEEPROM();
-    
-    #ifdef DEBUG
-       _INFOLIST("%s EEPROM Reset cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
-    #endif //DEBUG
-    
- } else {
-
-   /*-----------------------------------------------*
-    * get configuration initialization from EEPROM  *            *
-    ------------------------------------------------*/
-   
-  EEPROM.get(EEPROM_CAL,cal_factor);
-
-/*---- Kludge Fix   
- *     to overcome wrong initial values, should not difficult calibration
- */
-  if (cal_factor < -31000) {
-      cal_factor=0;
-  }
-/* end of kludge */
-   
-  EEPROM.get(EEPROM_MODE,mode);
-  EEPROM.get(EEPROM_BAND,Band_slot);
-
-#ifdef TERMINAL
-
-#ifdef ATUCTL
-   EEPROM.get(EEPROM_ATU,atu);
-   EEPROM.get(EEPROM_ATU_DELAY,atu_delay);
-#endif //ATUCTL
-   
-   EEPROM.get(EEPROM_BOUNCE_TIME,bounce_time);
-   EEPROM.get(EEPROM_SHORT_TIME,short_time);
-   EEPROM.get(EEPROM_MAX_BLINK,max_blink);
-   EEPROM.get(EEPROM_EEPROM_TOUT,eeprom_tout);
-
-#ifdef ANTIVOX
-   EEPROM.get(EEPROM_AVOXTIME,avoxtime);
-#endif //ANTIVOX   
-
-#ifdef CW
-   EEPROM.get(EEPROM_CW_SHIFT,cw_shift);
-   EEPROM.get(EEPROM_CW_STEP,cw_step);
-#endif //CW
-
-   
-#endif //TERMINAL
- 
-
-  setup_si5351();
-  
-  #ifdef DEBUG
-     _INFOLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
-  #endif //DEBUG   
-}  
-
-#endif // EE
-
-  Band_assign();
-  Freq_assign();
-  Mode_assign();
-  switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
-
-#ifdef DEBUG
-   _INFOLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
-#endif //DEBUG      
-}
-/*--------------------------------------------------------------------------*
- * definePinOut
- * isolate pin definition on a board conditional procedure out of the main
- * setup() flow
- *--------------------------------------------------------------------------*/
-void definePinOut() {
-
-#ifdef PICO
-   
-   gpio_init(TX);
-   gpio_init(UP);
-   gpio_init(DOWN);
-   gpio_init(TXSW);
-   gpio_init(RX);
-   gpio_init(WSPR);
-   gpio_init(JS8);
-   gpio_init(FT4);
-   gpio_init(FT8);
-   gpio_init(AIN0);
-   gpio_init(AIN1);
-
-
-   gpio_set_dir(UP, GPIO_IN);
-   gpio_set_dir(DOWN,GPIO_IN);
-   gpio_set_dir(TXSW,GPIO_IN);
-   
-   gpio_set_dir(RX,GPIO_OUT);
-   gpio_set_dir(TX, GPIO_OUT);
-   gpio_set_dir(WSPR,GPIO_OUT);
-   gpio_set_dir(JS8,GPIO_OUT);
-   gpio_set_dir(FT4,GPIO_OUT);
-   gpio_set_dir(FT8,GPIO_OUT);
-   
-   gpio_set_dir(AIN0,GPIO_IN);
-   gpio_set_dir(AIN1,GPIO_IN);
-
-#ifdef ATUCTL
-   gpio_init(uint8_t(atu));
-   gpio_set_dir (uint8_t(atu), GPIO_OUT);
-   flipATU();
-#endif //ATUCTL      
-   
-#else
-   pinMode(UP,   INPUT);
-   pinMode(DOWN, INPUT);
-   pinMode(TXSW, INPUT);
-   pinMode(RX,   OUTPUT);
-   pinMode(WSPR, OUTPUT);
-   pinMode(JS8,  OUTPUT);
-   pinMode(FT4,  OUTPUT);
-   pinMode(FT8,  OUTPUT);  
-   pinMode(TX,   OUTPUT);
-   pinMode(AIN0, INPUT);  //PD6=AN0 must be grounded
-   pinMode(AIN1, INPUT);  //PD7=AN1=HiZ
-
-#ifdef ATUCTL
-   pinMode(uint8_t(atu),  OUTPUT);
-   flipATU();
-#endif //ATUCTL      
-
-#ifdef DEBUG
-   _INFO;
-#endif //DEBUG      
-#endif //PICO
-}
-
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   Configuration Terminal Function                                           *
+//* This is an optional function allowing to modify operational parameters without recompiling  *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
 #ifdef TERMINAL
 /*====================================================================================================*/
@@ -3711,8 +3488,189 @@ void execTerminal() {
  
 }
 #endif //TERMINAL
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   Board Initialization and Support                                          *
+//* Perform all the functions to initialize the default operation                               *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+/**********************************************************************************************/
+/*                            Initialization and Setup                                        */
+/**********************************************************************************************/
+
+/*----------------------------------------------------------*
+ * Initialization function from EEPROM                      *
+ *----------------------------------------------------------*/
+void initADX(){
+
+
+#ifdef EE
+
+ uint16_t temp=0;
+ uint16_t save=EEPROM_SAVED;
+ uint16_t build=0;
+
+ 
+ EEPROM.get(EEPROM_TEMP,temp);
+ EEPROM.get(EEPROM_BUILD,build);
+ 
+ #ifdef EEPROM_CLR
+    temp=-1;
+ #endif //EEPROM_CLR  
+
+ 
+ if (build != uint16_t(BUILD)) {
+    resetEEPROM();
+    #ifdef DEBUG
+       _INFOLIST("%s EEPROM Reset Build<> cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+    #endif //DEBUG
+    
+ }
+ 
+ if (temp != save){
+
+    updateEEPROM();
+    
+    #ifdef DEBUG
+       _INFOLIST("%s EEPROM Reset cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+    #endif //DEBUG
+    
+ } else {
+
+   /*-----------------------------------------------*
+    * get configuration initialization from EEPROM  *            *
+    ------------------------------------------------*/
    
-//*************************************[ SETUP FUNCTION ]************************************** 
+  EEPROM.get(EEPROM_CAL,cal_factor);
+
+/*---- Kludge Fix   
+ *     to overcome wrong initial values, should not difficult calibration
+ */
+  if (cal_factor < -31000) {
+      cal_factor=0;
+  }
+/* end of kludge */
+   
+  EEPROM.get(EEPROM_MODE,mode);
+  EEPROM.get(EEPROM_BAND,Band_slot);
+
+#ifdef TERMINAL
+
+#ifdef ATUCTL
+   EEPROM.get(EEPROM_ATU,atu);
+   EEPROM.get(EEPROM_ATU_DELAY,atu_delay);
+#endif //ATUCTL
+   
+   EEPROM.get(EEPROM_BOUNCE_TIME,bounce_time);
+   EEPROM.get(EEPROM_SHORT_TIME,short_time);
+   EEPROM.get(EEPROM_MAX_BLINK,max_blink);
+   EEPROM.get(EEPROM_EEPROM_TOUT,eeprom_tout);
+
+#ifdef ANTIVOX
+   EEPROM.get(EEPROM_AVOXTIME,avoxtime);
+#endif //ANTIVOX   
+
+#ifdef CW
+   EEPROM.get(EEPROM_CW_SHIFT,cw_shift);
+   EEPROM.get(EEPROM_CW_STEP,cw_step);
+#endif //CW
+
+   
+#endif //TERMINAL
+ 
+
+  setup_si5351();
+  
+  #ifdef DEBUG
+     _INFOLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+  #endif //DEBUG   
+}  
+
+#endif // EE
+
+  Band_assign();
+  Freq_assign();
+  Mode_assign();
+  switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
+
+#ifdef DEBUG
+   _INFOLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
+#endif //DEBUG      
+}
+/*--------------------------------------------------------------------------*
+ * definePinOut
+ * isolate pin definition on a board conditional procedure out of the main
+ * setup() flow
+ *--------------------------------------------------------------------------*/
+void definePinOut() {
+
+
+#ifdef ADX
+   pinMode(UP,   INPUT);
+   pinMode(DOWN, INPUT);
+   pinMode(TXSW, INPUT);
+   pinMode(RX,   OUTPUT);
+   pinMode(WSPR, OUTPUT);
+   pinMode(JS8,  OUTPUT);
+   pinMode(FT4,  OUTPUT);
+   pinMode(FT8,  OUTPUT);  
+   pinMode(TX,   OUTPUT);
+   pinMode(AIN0, INPUT);  //PD6=AN0 must be grounded
+   pinMode(AIN1, INPUT);  //PD7=AN1=HiZ
+
+#ifdef ATUCTL
+   pinMode(uint8_t(atu),  OUTPUT);
+   flipATU();
+#endif //ATUCTL      
+
+#ifdef DEBUG
+   _INFO;
+#endif //DEBUG      
+#endif //ADX
+
+#ifdef PDX
+   gpio_init(TX);
+   gpio_init(UP);
+   gpio_init(DOWN);
+   gpio_init(TXSW);
+   gpio_init(RX);
+   gpio_init(WSPR);
+   gpio_init(JS8);
+   gpio_init(FT4);
+   gpio_init(FT8);
+   gpio_init(AIN0);
+   gpio_init(AIN1);
+
+
+   gpio_set_dir(UP, GPIO_IN);
+   gpio_set_dir(DOWN,GPIO_IN);
+   gpio_set_dir(TXSW,GPIO_IN);
+   
+   gpio_set_dir(RX,GPIO_OUT);
+   gpio_set_dir(TX, GPIO_OUT);
+   gpio_set_dir(WSPR,GPIO_OUT);
+   gpio_set_dir(JS8,GPIO_OUT);
+   gpio_set_dir(FT4,GPIO_OUT);
+   gpio_set_dir(FT8,GPIO_OUT);
+   
+   gpio_set_dir(AIN0,GPIO_IN);
+   gpio_set_dir(AIN1,GPIO_IN);
+
+#ifdef ATUCTL
+   gpio_init(uint8_t(atu));
+   gpio_set_dir (uint8_t(atu), GPIO_OUT);
+   flipATU();
+#endif //ATUCTL      
+#endif //PDX
+   
+
+
+}
+
+/*---------------------------------------------------------------------------------------------
+ * setup()
+ * This is the main setup cycle executed once on the Arduino architecture
+ *---------------------------------------------------------------------------------------------*/
 void setup()
 {
 
@@ -3752,19 +3710,19 @@ void setup()
    #endif //DEBUG   
    
 
-#ifndef PICO
+#ifdef ADX
    PCICR  |= B00000100; // Enable interrupts at PD port
    PCMSK2 |= B00011100; // Signal interrupts for D2,D3 and D4 pins (UP/DOWN/TX)
    setWord(&button[INT0],PUSHSTATE,HIGH);
    setWord(&button[INT1],PUSHSTATE,HIGH);
    setWord(&button[INT2],PUSHSTATE,HIGH);
-#endif
+#endif //ADX
 
    #ifdef DEBUG
       _INFOLIST("%s INT ok\n",__func__);
    #endif //DEBUG   
 
-   INIT();
+   initADX();
    #ifdef DEBUG
       _INFOLIST("%s INIT ok\n",__func__);
    #endif //DEBUG   
@@ -3796,7 +3754,7 @@ void setup()
  */
    if (detectKey(DOWN,LOW,WAIT)==LOW) {Calibration();}
   
-#ifndef PICO
+#ifdef ADX
 /*--------------------------------------------------------*
  * initialize the timer1 as an analog comparator          *
  * this is the main feature of the VOX/Modulation scheme  *
@@ -3812,7 +3770,7 @@ void setup()
   #ifdef DEBUG
      _INFOLIST("%s Timer1 set Ok\n",__func__);
   #endif //DEBUG   
-#endif
+#endif //ADX
   
   switch_RXTX(LOW);
   #ifdef DEBUG
@@ -3846,11 +3804,9 @@ void setup()
 #endif //DEBUG   
   
 }
-//*=*=*=*=*=*=*=*=*=*=*=*=*=[ END OF SETUP FUNCTION ]*=*=*=*=*=*=*=*=*=*=*=*=
-//***************************[ Main LOOP Function ]**************************
-//*                                                                         *
-//*                                                                         *
-//***************************************************************************
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   Board Main Dispatched and operational loop                                *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 void loop()
 {  
 
@@ -3943,7 +3899,7 @@ uint16_t n = VOX_MAXTRY;
 
     #endif //WDT
     
-#ifndef PICO
+#ifdef ADX
     TCNT1 = 0;                                  //While this iteration is performed if the TX is off 
     
     while (ACSR &(1<<ACO)){                     //the receiver is operating with autonomy
@@ -4011,7 +3967,7 @@ uint16_t n = VOX_MAXTRY;
     } else {
        n--;
     }
-#endif
+#endif //ADX
     
     #ifdef CAT 
 //*--- if CAT enabled check for serial events (again)
