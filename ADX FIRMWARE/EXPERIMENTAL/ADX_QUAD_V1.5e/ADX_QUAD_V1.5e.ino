@@ -95,8 +95,8 @@
  * Define the runtime platform either PICO (Raspberry Pi Pico) *
  * or !PICO (Arduino ATMega328p)                               *
  *-------------------------------------------------------------*/
-//#define ADX              1   //This is the standard ADX Arduino based board 
-#define PDX            1   //Compile for Raspberry Pi Pico board
+#define ADX              1   //This is the standard ADX Arduino based board 
+//#define PDX            1   //Compile for Raspberry Pi Pico board
 
  
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
