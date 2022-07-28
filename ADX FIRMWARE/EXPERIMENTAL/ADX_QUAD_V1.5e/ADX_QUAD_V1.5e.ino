@@ -170,14 +170,15 @@
 /*
  * The following definitions are disabled but can be enabled selectively
  */
-//#define CAL_RESET    1      //If enabled reset cal_factor when performing a new calibration()
-//#define DEBUG        1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
-//#define TERMINAL     1      //Serial configuration terminal
-//#define IC746        1      //CAT Protocol is ICOM 746
-//#define CW           1      //Enable CW operation
-//#define SHIFTLIMIT   1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
-//#define CAT_FULL     1      //Extend CAT support to the entire CAT command set (valid only for TS480)
-//#define LEGACY       1      //Enable code AS IS version 1.1 for testing purposes
+   //#define CAL_RESET      1      //If enabled reset cal_factor when performing a new calibration()
+   //#define DEBUG          1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
+   //#define TERMINAL       1      //Serial configuration terminal
+   //#define IC746          1      //CAT Protocol is ICOM 746
+   //#define FT817          1      //CAT Protocol is FT 817
+   //#define CW             1      //Enable CW operation
+   //#define SHIFTLIMIT     1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
+   //#define CAT_FULL       1      //Extend CAT support to the entire CAT command set (valid only for TS480)
+   //#define LEGACY         1      //Enable code AS IS version 1.1 for testing purposes
 
 #endif //PICO
 
@@ -185,7 +186,6 @@
    //#define WDT            1      //Hardware and TX watchdog enabled
    #define CAT            1      //Enable CAT protocol over serial port
    #define FT817          1
-    /* No special configuration options for the PICO yet */
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
@@ -211,6 +211,8 @@
 #define NOWAIT        false         //Debouncing constant
 #define SERIAL_TOUT   50
 #define SERIAL_WAIT   2
+#define CAT_RECEIVE_TIMEOUT      500
+
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      PIN ASSIGNMENTS                                                        *
@@ -310,6 +312,7 @@ char hi[80];
 //*--- This is a transient rule, the porting to Pico is incomplete so no functions are allowed
 
 #ifdef PDX
+/*
     #undef EE
     #undef QUAD
     #undef ATUCTL
@@ -324,16 +327,8 @@ char hi[80];
     #undef SHIFTLIMIT
     #undef CAT_FULL
     #undef LEGACY
+*/    
 #endif //PICO
-
-//*--- Two CAT protocols are supported but just one of them are allowed at any given time
-//*--- IC746 is more efficient in terms of memory, so it's selected
-
-#if (defined(CAT) && !defined(TS480) && !defined(IC746) && !defined(FT817))
-    #define IC746      1
-#endif
-
-//*--- If any usage of the serial port is made then serial constants needs to be set
     
 
 //*--- If a QUAD multiband board is defined then the transceiver must not be a single band one
@@ -358,20 +353,6 @@ char hi[80];
 #endif // CAT && DEBUG
 
 //*--- if both supported CAT protocols are simultaneously selected then keep one
-
-#if (defined(TS480) && defined(IC746))
-   #undef TS840
-   
-#endif   
-
-#if (defined(TS480) && defined(FT817))
-   #undef TS840
-   
-#endif   
-
-#if (defined(IC746) && defined(FT817))
-   #undef IC746
-#endif   
 
 
 #ifdef TERMINAL
@@ -447,11 +428,9 @@ const char *endList         = "XXX";
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-//#define DEBUG 1
-
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
-   #define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 /*-------------------------------------------------------------------------*
@@ -811,8 +790,6 @@ void setupQUAD() {
 #endif //QUAD
 
 #ifdef CAT
-
-
 /*---
  *  Forward reference prototypes
  *---*/
@@ -943,17 +920,7 @@ static byte cat[5];
 static byte insideCat                   = 0;
 unsigned int skipTimeCount              = 0;
 
-//extern unsigned long frequency;
-//extern char isUSB, inTx;
-//extern void startTx();
-//extern void stopTx();
-//extern unsigned long freq;
-//void switch_RXTX(bool t);
-//extern uint8_t SSW;
-//void setWord(uint8_t* SysWord,uint8_t v, bool val);
-
 // for broken protocol
-#define CAT_RECEIVE_TIMEOUT      500
 #define CAT_MODE_LSB            0x00
 #define CAT_MODE_USB            0x01
 #define CAT_MODE_CW             0x02
@@ -1535,8 +1502,10 @@ void send(byte *buf, int len) {
     Serial.write(buf[i]);
   }
   Serial.write(CAT_EOM);
-  Serial.flush();              //WSJT-X seems to like (need) it
-  delay(50);                   //WSJT-X seems to like (need) it
+  #ifdef ADX
+     Serial.flush();              //WSJT-X seems to like (need) it
+     delay(50);                   //WSJT-X seems to like (need) it
+  #endif //ADX
 
 }
 /*
@@ -1950,7 +1919,6 @@ void serialEvent() {
 
 #endif //IC746
 
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   TS480 CAT PROTOCOL SUBSYSTEM                                              *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -2116,7 +2084,6 @@ void Command_GETFreqB()          //Get Frequency VFO (B) -- fallback to VFO (A) 
 {
   sprintf(hi,"FB%011ld;",freq);
   Serial.print(hi);
- 
 }
 //*--- Set Freq VFO B
 void Command_SETFreqB()          //Set Frequency VFO (B) -- fallback to VFO (B) until implementation for VFOA/B pair
@@ -2128,10 +2095,8 @@ void Command_SETFreqB()          //Set Frequency VFO (B) -- fallback to VFO (B) 
 //*--- Prepare and send response to IF; command
 void Command_IF()               //General purpose status information command (IF), needs to be modified if RIT is implemented
 {
-
   sprintf(hi,"IF%011ld00000+000000000%c%c0000000;",freq,txstatus(),modeTS480());   //Freq & mode the rest is constant (fake)
   Serial.print(hi);
-
 }
 
 //*--- Get current Mode (only 2=USB and 3=CW are supported)
@@ -4107,8 +4072,7 @@ void setup()
  * has been given proper initialization based on the protocol used
  *-----*/
 
-   #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL))
-     
+   #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL))   
       Serial.begin(BAUD,SERIAL_8N2);
       while (!Serial) {
       #ifdef WDT      
@@ -4126,16 +4090,22 @@ void setup()
           const char * proc = "RP2040";     
       #endif         
       _EXCPLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n",__func__,VERSION,BUILD,proc);
+      #ifdef DEBUG
+          #ifdef TS480
+             _EXCPLIST("%s: CAT subsystem TS480\n",__func__);
+          #endif
+          #ifdef IC746
+             _EXCPLIST("%s: CAT subsystem IC746\n",__func__);
+          #endif
+          #ifdef FT817
+             _EXCPLIST("%s: CAT subsystem FT817\n",__func__);
+          #endif
+      #endif //DEBUG    
+
    #endif //DEBUG
-
-#ifdef CAT
-   _EXCPLIST("%s CAT sub-system initialized\n",__func__);
-#endif //CAT   
    
-
    definePinOut();
    blinkLED(TX);
-
    setup_si5351();   
    
    #ifdef DEBUG
@@ -4249,6 +4219,7 @@ void setup()
 void loop()
 {  
 
+  
  //*--- Debug hook
     keepAlive();
 
