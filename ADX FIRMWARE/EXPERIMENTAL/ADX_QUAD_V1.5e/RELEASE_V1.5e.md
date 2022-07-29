@@ -49,6 +49,11 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 		- This has no effect if the current mode is CW.
 - Now the last WSJT-X mode prior to the switch into CW is stored and recovered when CW is de-activated.
 - Watchdog inhibits TX to be on for more than two consecutive minutes (activated with the **#define WDT 1** statement, default: enabled).
+- Support for CAT FT817 (experimental) (activated with the **#define FT817 1** statement, default: disabled). This initial implementation is still incomplete and might
+  require FlRig to be used as an intermediate host. Settings:
+	COM Port: As assigned.
+	BAUD: 19200
+	8N1
 - Serial (simple) command line configuration facility (activated with the **#define TERMINAL 1** statement, default: disabled).
 	- Enter the terminal mode by held the UP key pressed while booting the board.
 		- Terminal parameters are 115200 8N2.
