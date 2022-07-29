@@ -906,21 +906,12 @@ int getMode(int s,uint32_t f) {
    July-2022 by Dhiru (VU3CER).
 
    Reference: http://www.ka7oei.com/ft817_meow.html
+   
 */
-//void serialEvent();
-//void checkCAT();
-unsigned char doingCAT = 0;
-bool txCAT             = false;        // turned on if the transmitting due to a CAT command
-char inTx              = 0;                // it is set to 1 if in transmit mode (whatever the reason : cw, ptt or cat)
-char isUSB             = 0;
 
-static unsigned long rxBufferArriveTime = 0;
-static byte rxBufferCheckCount          = 0;
-static byte cat[5];
-static byte insideCat                   = 0;
-unsigned int skipTimeCount              = 0;
-
-// for broken protocol
+/*---
+ * Protocol constant definitions
+ *---*/
 #define CAT_MODE_LSB            0x00
 #define CAT_MODE_USB            0x01
 #define CAT_MODE_CW             0x02
@@ -932,6 +923,21 @@ unsigned int skipTimeCount              = 0;
 #define CAT_MODE_FMN            0x88
 #define ACK                     0x00
 
+
+unsigned char doingCAT = 0;
+bool txCAT             = false;        // turned on if the transmitting due to a CAT command
+char inTx              = 0;                // it is set to 1 if in transmit mode (whatever the reason : cw, ptt or cat)
+char isUSB             = 0;
+
+static unsigned long rxBufferArriveTime = 0;
+static byte rxBufferCheckCount          = 0;
+static byte cat[5];
+static byte insideCat                   = 0;
+unsigned int skipTimeCount              = 0;
+
+/*---
+ * Nibble Format routines
+ * --*/
 byte setHighNibble(byte b, byte v) {
   // Clear the high nibble
   b &= 0x0f;
@@ -953,9 +959,10 @@ byte getHighNibble(byte b) {
 byte getLowNibble(byte b) {
   return b & 0x0f;
 }
-
-// Takes a number and produces the requested number of decimal digits, staring
-// from the least significant digit.
+/*----
+  Takes a number and produces the requested number of decimal digits, staring
+  from the least significant digit.
+ *----*/ 
 void getDecimalDigits(unsigned long number, byte* result, int digits) {
   for (int i = 0; i < digits; i++) {
     // "Mask off" (in a decimal sense) the LSD and return it
@@ -964,15 +971,18 @@ void getDecimalDigits(unsigned long number, byte* result, int digits) {
     number /= 10;
   }
 }
-
-// Takes a frequency and writes it into the CAT command buffer in BCD form.
+/*---
+  Takes a frequency and writes it into the CAT command buffer in BCD form.
+ *---*/ 
 void writeFreq(unsigned long freq, byte* cmd) {
   // Convert the frequency to a set of decimal digits. We are taking 9 digits
   // so that we can get up to 999 MHz. But the protocol doesn't care about the
   // LSD (1's place), so we ignore that digit.
   byte digits[9];
   getDecimalDigits(freq, digits, 9);
+  
   // Start from the LSB and get each nibble
+  
   cmd[3] = setLowNibble(cmd[3],  digits[1]);
   cmd[3] = setHighNibble(cmd[3], digits[2]);
   cmd[2] = setLowNibble(cmd[2],  digits[3]);
@@ -982,11 +992,12 @@ void writeFreq(unsigned long freq, byte* cmd) {
   cmd[0] = setLowNibble(cmd[0],  digits[7]);
   cmd[0] = setHighNibble(cmd[0], digits[8]);
 }
-
+/*---
 // This function takes a frequency that is encoded using 4 bytes of BCD
 // representation and turns it into an long measured in Hz.
 //
 // [12][34][56][78] = 123.45678? Mhz
+*----*/
 unsigned long readFreq(byte* cmd) {
   // Pull off each of the digits
   byte d7 = getHighNibble(cmd[0]);
@@ -1008,6 +1019,10 @@ unsigned long readFreq(byte* cmd) {
     (unsigned long)d0 * 10L;
 }
 
+/*---
+ * This function is to falsify some readings performed
+ * into the volatile memory of a typical FT817 radio 
+ *---*/
 void catReadEEPRom(void)
 {
   byte temp0 = cat[0];
@@ -1093,50 +1108,163 @@ void catReadEEPRom(void)
 
   }
 
-  // sent the data
+  // send the data
+  
   Serial.write(cat, 2);
-}
+  #ifdef ADX
+     delay(SERIAL_WAIT);
+     Serial.flush();
+     delay(50);
+  #endif //ADX   
 
+}
+/*---
+ * Main FT817 CAT protocol command processor and dispatcher
+ *----*/
 void processCATCommand2(byte* cmd) {
   byte response[5];
   unsigned long f;
 
   switch (cmd[4]) {
-    case 0x01:
-      // set frequency
+    case 0x01:   // set frequency
+    {
       f = readFreq(cmd);
-      freq = f;
-      response[0] = 0;
-      Serial.write(response, 1);
-      break;
+      /*---
+       * operate band switching if necessary and the
+       * selection of the QUAD filter if enabled
+       */
+    /*   
+ int   b=setSlot(uint32_t(f));
+ */
+ /*
+       if (b<0) {
+          response[0] = 0;
+          Serial.write(response, 1);
+          #ifdef ADX
+            delay(SERIAL_WAIT);
+            Serial.flush();
+            delay(50);
+          #endif   
+          break;
+          }
+  */
+       freq=f;
 
-    case 0x02:
-      // split on
-      break;
-    case 0x82:
-      // split off
-      break;
+ /*--- 
+  * If a band change is detected switch to the new band
+  *---*/
+    /*
+       if (b!=Band_slot) { //band change
+           Band_slot=b;
+           Freq_assign();
+           freq=f;
+        }
+    */
+  /*---
+   * Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
+   */
 
-    case 0x03:
-      writeFreq(freq, response); // Put the frequency into the buffer
-      if (isUSB)
+        #ifndef CW
+           setWord(&SSW,CWMODE,false);
+        #endif //CW
+     
+    /*
+        int i=getBand(freq);
+        if ( i<0 ) {
+           break;
+        }
+        
+        int j=findSlot(i);
+        if (j<0 || j>3) {
+           break;
+        }
+        int k=Bands[j];
+        int q=band2Slot(k);
+        int m=getMode(q,freq);
+  */
+  /*
+        #ifdef DEBUG
+           _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
+        #endif //DEBUG  
+
+        if (getWord(SSW,CWMODE)==false) {   
+  
+           if (mode != m) {
+              mode = m;
+              Mode_assign();
+           }
+        }
+   */     
+/*----
+ * if enabled change filter from the LPF filter bank
+ *----*/
+    /*
+        #ifdef QUAD  //Set the PA & LPF filter board settings if defined
+           int x=band2QUAD(k);
+           if (x != -1) {
+              setQUAD(x);
+           }   
+        #endif //QUAD    
+
+        #ifdef DEBUG
+          _INFOLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n",__func__,Catbuffer,freq,b,k,q,x);
+        #endif //DEBUG 
+*/
+        //freq = uint32_t(f);
+        response[0] = 0;
+        Serial.write(response, 1);
+        #ifdef ADX
+           delay(SERIAL_WAIT);
+           Serial.flush();
+           delay(50);
+        #endif   
+        break;
+  }
+    case 0x02: // split on
+    {
+      break;
+    }  
+    case 0x82: // split off
+    {
+      break;
+    }
+    case 0x03: 
+    {
+      unsigned long fx=freq;
+      writeFreq(fx, response); // Put the frequency into the buffer
+      if (isUSB) {
         response[4] = 0x01; // USB
-      else
+      } else {
         response[4] = 0x00; // LSB
+      }  
       Serial.write(response, 5);
-      break;
+      #ifdef ADX
+         delay(SERIAL_WAIT);
+         Serial.flush();
+         delay(50);
+      #endif   
 
+      break;
+    }
     case 0x07: // set mode
-      if (cmd[0] == 0x00 || cmd[0] == 0x03)
+      {
+      if (cmd[0] == 0x00 || cmd[0] == 0x03) {
         isUSB = 0;
-      else
+      } else {
         isUSB = 1;
+      }  
       response[0] = 0x00;
       Serial.write(response, 1);
+      #ifdef ADX
+         delay(SERIAL_WAIT);
+         Serial.flush();
+         delay(50);
+      #endif   
       // setFrequency(frequency);
       break;
-
+      }
     case 0x08: // PTT On
+    {
       if (!inTx) {
         response[0] = 0;
         inTx = 1;
@@ -1146,9 +1274,16 @@ void processCATCommand2(byte* cmd) {
         response[0] = 0xf0;
       }
       Serial.write(response, 1);
-      break;
+      #ifdef ADX
+         delay(SERIAL_WAIT);
+         Serial.flush();
+         delay(50);
+      #endif   
 
-    case 0x88: // PTT OFF
+      break;
+    }
+    case 0x88: // PTT Off
+    {
       if (inTx) {
         inTx = 0;
         setWord(&SSW,CATTX,false);
@@ -1156,25 +1291,44 @@ void processCATCommand2(byte* cmd) {
       }
       response[0] = 0;
       Serial.write(response, 1);
+      #ifdef ADX
+         delay(SERIAL_WAIT);
+         Serial.flush();
+         delay(50);
+      #endif   
       break;
-
-    case 0x81:
-      // toggle the VFOs
+    }
+    case 0x81: // toggle the VFOs
+  {
       response[0] = 0;
       Serial.write(response, 1);
-      break;
+      #ifdef ADX
+         delay(SERIAL_WAIT);
+         Serial.flush();
+         delay(50);
+      #endif   
 
+      break;
+  }
     case 0xBB: // Read FT-817 EEPROM Data
+  {
       catReadEEPRom();
       break;
-
+  }
     case 0xe7:
+       {
       // Get receiver status, we have hardcoded this as
       // as we don't support ctcss, etc.
       response[0] = 0x09;
       Serial.write(response, 1);
-      break;
+      #ifdef ADX
+         delay(SERIAL_WAIT);
+         Serial.flush();
+         delay(50);
+      #endif   
 
+      break;
+       }
     case 0xf7:
       {
         boolean isHighSWR = false;
@@ -1185,17 +1339,31 @@ void processCATCommand2(byte* cmd) {
                       (0 << 4) + // dummy data
                       0x08; // P0 meter data
         Serial.write(response, 1);
+        #ifdef ADX
+           delay(SERIAL_WAIT);
+           Serial.flush();
+           delay(50);
+        #endif   
+
       }
       break;
 
     default:
+    {
       response[0] = 0x00;
       Serial.write(response[0]);
+      #ifdef ADX
+         delay(SERIAL_WAIT);
+         Serial.flush();
+         delay(50);
+      #endif   
+    }
   }
-
   insideCat = false;
 }
-
+/*---
+ * serialEvent() handler
+ *---*/
 void serialEvent() {
   byte i;
 
@@ -4079,6 +4247,7 @@ void setup()
          wdt_reset();
       #endif //WDT              
       }
+      delay(SERIAL_WAIT);
       Serial.flush();
       Serial.setTimeout(SERIAL_TOUT);    
    #endif //DEBUG or CAT or Terminal
