@@ -130,7 +130,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "1.5e"
-#define BUILD          131
+#define BUILD          132
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
@@ -428,6 +428,7 @@ const char *endList         = "XXX";
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
+//#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
    //#define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
@@ -3196,7 +3197,7 @@ uint16_t build=BUILD;
 
    mode=0;
    Band_slot=0;
-   cal_factor=0;
+   //* Retain calibration cal_factor=0;
 
 #ifdef TERMINAL
 
