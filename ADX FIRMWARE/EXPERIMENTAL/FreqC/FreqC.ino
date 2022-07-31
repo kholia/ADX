@@ -106,6 +106,7 @@ void loop() {
         float f = measure_frequency(MEASURE_PIN);
         sprintf(hi,"Frequency = %8.2f%\n",f*100.f);
         Serial.print(hi);
+        delay(50);
     }
 
 }
