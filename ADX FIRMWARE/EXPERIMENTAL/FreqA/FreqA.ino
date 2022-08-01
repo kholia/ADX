@@ -37,7 +37,7 @@ void gpio_callback(uint gpio, uint32_t events)
 }
  
 bool repeating_timer_callback(struct repeating_timer *t) {
-    uint32_t tmp = counter*100;
+    uint32_t tmp = counter;
     counter = 0;
     
     sprintf(hi,"f=%ld\n", tmp);
@@ -49,13 +49,11 @@ void setup() {
 
 //    associate gpio 5 IRQ
 
-    //gpio_set_irq_enabled_with_callback(5, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
-    gpio_set_irq_enabled_with_callback(5, GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(5, GPIO_IRQ_LEVEL_LOW, true, &gpio_callback);
  
 //   struct repeating_timer timer;   
 
-//    success = add_repeating_timer_ms( MILLIS, repeating_timer_callback, NULL, &timers[timer] );
-    success = add_repeating_timer_ms( -10, repeating_timer_callback, NULL, &timers[timer] );
+    success = add_repeating_timer_ms( MILLIS, repeating_timer_callback, NULL, &timers[timer] );
     
     pinMode(led, OUTPUT);
     Serial.begin(19200,SERIAL_8N2);

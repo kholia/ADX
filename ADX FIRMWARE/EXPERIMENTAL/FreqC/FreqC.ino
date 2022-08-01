@@ -10,12 +10,30 @@
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 
+#include <Arduino.h>
+#include <stdint.h>
+#include "Wire.h"
+#include <EEPROM.h>
+
+#include "hardware/gpio.h"
+#include "pico/binary_info.h"
+#include "hardware/sync.h"
+#include "hardware/structs/ioqspi.h"
+#include "hardware/structs/sio.h"
+#include "hardware/watchdog.h"
+
+
 // This example drives a PWM output at a range of duty cycles, and uses
 // another PWM slice in input mode to measure the duty cycle. You'll need to
 // connect these two pins with a jumper wire:
 const uint OUTPUT_PIN = 2;
 const uint MEASURE_PIN = 5;
 char hi[80];
+
+int led = LED_BUILTIN; // the PWM pin the LED is attached to
+int brightness = 0;    // how bright the LED is
+int fadeAmount = 5;    // how many points to fade the LED
+
 
 // Frequency measured in kHz
 float measure_frequency(uint gpio) {
@@ -35,7 +53,7 @@ float measure_frequency(uint gpio) {
     pwm_set_enabled(slice_num, false);
     
     uint16_t counter = (uint16_t) pwm_get_counter(slice_num);
-    float freq =   counter / 10.f;
+    float freq =   counter / 4.0; // / 10.f;
     return freq;
 
 }
@@ -87,10 +105,16 @@ const float test_duty_cycles[] = {
 
 void setup() {
   // put your setup code here, to run once:
+
+    pinMode(led, OUTPUT);
+
     Serial.begin(19200);
+    while (!Serial) {
+      
+    }
     Serial.flush();
     delay(50);
-    sprintf(hi,"\nFrequency measurement example\n");
+    sprintf(hi,"\nFrequency measurement algorithm\n");
     Serial.print(hi);
 
 
@@ -102,11 +126,22 @@ void loop() {
     // For each of our test duty cycles, drive the output pin at that level,
     // and read back the actual output duty cycle using the other pin. The two
     // values should be very close!
-    while (true) {
-        float f = measure_frequency(MEASURE_PIN);
-        sprintf(hi,"Frequency = %8.2f%\n",f*100.f);
-        Serial.print(hi);
-        delay(50);
-    }
+    float f = measure_frequency(MEASURE_PIN);
+    sprintf(hi,"Frequency = %8.2f%\n",f*100.f);
+    Serial.print(hi);
+       // set the brightness
+  analogWrite(led, brightness);
+
+  // change the brightness for next time through the loop:
+  brightness = brightness + fadeAmount;
+
+  // reverse the direction of the fading at the ends of the fade:
+  if (brightness <= 0 || brightness >= 255) {
+    fadeAmount = -fadeAmount;
+  }
+
+  // wait for 30 milliseconds to see the dimming effect
+  delay(30);
+
 
 }
