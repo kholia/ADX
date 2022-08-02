@@ -32,7 +32,9 @@ void setup() {
       pwm_config cfg=pwm_get_default_config();
       pwm_config_set_clkdiv_int(&cfg,pre);
       pwm_init(0,&cfg,true);
+      
       uint32_t wrap = 100000000 / pre / f;
+      
       pwm_set_wrap(0,wrap-1);
       pwm_set_gpio_level(0,wrap/2);
       pwm_set_enabled(0,true);
