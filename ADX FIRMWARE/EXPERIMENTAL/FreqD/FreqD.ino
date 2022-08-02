@@ -99,7 +99,7 @@ void setup() {
  
 //   struct repeating_timer timer;   
 
-    success = add_repeating_timer_ms( -5, repeating_timer_callback, NULL, &timers[timer] );
+    success = add_repeating_timer_ms( -10, repeating_timer_callback, NULL, &timers[timer] );
 
 //  Just a "I'm alive" beacon 
     
