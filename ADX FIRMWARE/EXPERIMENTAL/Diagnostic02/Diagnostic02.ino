@@ -26,11 +26,11 @@
 #define setGPIO(x,y) gpio_put(x,y)
 #define BOOL2CHAR(x)  (x==true ? "True" : "False")
 
-uint8_t led=2;
-char    hi[80];
-Si5351  si5351;       
-int     frequency =  7074000 * 100UL; // CHANGE THIS PLEASE
-uint8_t key=2;
+uint8_t  led=2;
+char     hi[80];
+Si5351   si5351;       
+uint32_t frequency =  7074000 * 100UL; //Fixed frequency
+uint8_t  key=2;
 
 /*-----------------------------------------------------------------------------*
  * resetLED                                                                    *
