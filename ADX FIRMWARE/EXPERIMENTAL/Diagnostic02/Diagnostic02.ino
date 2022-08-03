@@ -1,7 +1,7 @@
 
 /*------
- * Diagnostic01
- * Program to test LED and Switches connection on the ADX board
+ * Diagnostic02
+ * Program to test Si5351 Clock with LED and Switches connection on the ADX board
  * PDX Project
  * 
  */
