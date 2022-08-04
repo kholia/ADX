@@ -95,8 +95,8 @@
  * Define the runtime platform either PICO (Raspberry Pi Pico) *
  * or !PICO (Arduino ATMega328p)                               *
  *-------------------------------------------------------------*/
-#define ADX              1   //This is the standard ADX Arduino based board 
-//#define PDX            1   //Compile for Raspberry Pi Pico board
+//#define ADX              1   //This is the standard ADX Arduino based board 
+#define PDX            1   //Compile for Raspberry Pi Pico board
 
  
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -184,8 +184,9 @@
 
 #ifdef PDX
    //#define WDT            1      //Hardware and TX watchdog enabled
-   #define CAT            1      //Enable CAT protocol over serial port
-   #define FT817          1
+   #define CAT             1      //Enable CAT protocol over serial port
+   #define FT817           1
+
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
@@ -218,22 +219,22 @@
 //*                      PIN ASSIGNMENTS                                                        *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #ifdef ADX
-   #define UP             2           //UP Switch
-   #define DOWN           3           //DOWN Switch
-   #define TXSW           4           //TX Switch
+   #define UP              2           //UP Switch
+   #define DOWN            3           //DOWN Switch
+   #define TXSW            4           //TX Switch
 
-   #define AIN0           6           //(PD6)
-   #define AIN1           7           //(PD7)
+   #define AIN0            6           //(PD6)
+   #define AIN1            7           //(PD7)
 
-   #define RX             8           //RX Switch
-   #define TX            13           //(PB5) TX LED
+   #define RX              8           //RX Switch
+   #define TX             13           //(PB5) TX LED
 
-   #define WSPR           9           //WSPR LED 
-   #define JS8           10           //JS8 LED
-   #define FT4           11           //FT4 LED
-   #define FT8           12           //FT8 LED
+   #define WSPR            9           //WSPR LED 
+   #define JS8            10           //JS8 LED
+   #define FT4            11           //FT4 LED
+   #define FT8            12           //FT8 LED
 #ifdef ATUCTL
-   #define ATU            5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+   #define ATU             5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
 #endif //ATUCTL
 
 #endif //ADX
@@ -264,6 +265,12 @@
 #ifdef ATUCTL
    #define ATU            21     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
 #endif //ATUCTL 
+
+
+
+#define PDX_I2C_SDA      16
+#define PDX_I2C_SCL      17
+
 #endif //PDX
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -4222,6 +4229,14 @@ void definePinOut() {
    gpio_set_dir (uint8_t(atu), GPIO_OUT);
    flipATU();
 #endif //ATUCTL      
+
+
+   Wire.setSDA(PDX_I2C_SDA);
+   Wire.setSCL(PDX_I2C_SCL);
+   Wire.begin();
+
+
+
 #endif //PDX
    
 
