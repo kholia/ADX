@@ -119,8 +119,8 @@ void setup() {
    gpio_set_dir(FT4,GPIO_OUT);
    gpio_set_dir(FT8,GPIO_OUT);
 
-   Wire.setSDA(0);
-   Wire.setSCL(1);
+   Wire.setSDA(16);
+   Wire.setSCL(17);
    Wire.begin();
 
    Serial.begin(115200);
