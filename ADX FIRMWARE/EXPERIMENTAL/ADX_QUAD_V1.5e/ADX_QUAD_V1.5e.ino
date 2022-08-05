@@ -129,7 +129,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "1.5e"
-#define BUILD          132
+#define BUILD          133
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
@@ -165,10 +165,10 @@
    #define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
    #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
    #define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
-
 /*
  * The following definitions are disabled but can be enabled selectively
  */
+   //#define CW             1      //CW support
    //#define CAL_RESET      1      //If enabled reset cal_factor when performing a new calibration()
    //#define DEBUG          1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
    //#define TERMINAL       1      //Serial configuration terminal
@@ -182,6 +182,7 @@
 #ifdef PDX
    #define WDT             1      //Hardware and TX watchdog enabled
    #define EE              1      //Save in Flash emulation of EEPROM the configuration
+   #define CW              1      //CW support
    //#define CAT             1      //Enable CAT protocol over serial port
    //#define FT817           1      //CAT protocol is Yaesu FT817
    //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
@@ -202,10 +203,10 @@
 #define BDLY           200          //Delay when blinking LED
 #define DELAY_WAIT     BDLY*2       //Double Delay
 #define DELAY_CAL      DELAY_WAIT/10
-#define MAXMODE        4            //Max number of digital modes
+#define MAXMODE        5            //Max number of digital modes
 #define MAX_BLINK      4            //Max number of blinks
 #define BANDS          4            //Max number of bands allowed
-#define MAXBAND       10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
+#define MAXBAND       9            //Max number of bands defined (actually uses BANDS out of MAXBAND)
 #define XT_CAL_F      33000         //Si5351 Calibration constant 
 #define CAL_STEP      500           //Calibration factor step up/down while in calibration (sweet spot experimentally found by Barb)
 #define REPEAT_KEY    30            //Key repetition period while in calibration
@@ -291,7 +292,7 @@
 #define TXPUSH      0B00010000    //TXSW button pressed
 #define CATTX       0B00100000    //TX turned on via CAT (disable VOX)
 #define SAVEEE      0B01000000    //Mark of EEPROM updated
-#define NOTUSED     0B10000000    //
+#define CWMODE      0B10000000    //CW Mode active
 /*----------------------------------------------------------------*
  * Operating switch                                               *
  * ---------------------------------------------------------------*/
@@ -478,6 +479,15 @@ const char *endList         = "XXX";
    uint32_t tavox    =   0;
 #endif //ANTIVOX   
 
+
+#ifdef CW
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*       CW FEATURE IF PTT IS ACTIVATED BY BUTTON/CAT THE TX FREQUENCY WILL BE SHIFT UP        *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+   #define CWSHIFT       600
+   uint16_t cwshift=CWSHIFT;
+#endif //CW
+
 #ifdef EE
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*       DEFINITIONS RELATED TO THE USAGE OF EEPROM AS A PERMANENT STORAGE                     *
@@ -520,17 +530,17 @@ uint16_t Band_slot      = 0;          //Default to Bands[0]=40
 int32_t  cal_factor     = 0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
-unsigned long f[MAXMODE]                   = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
-const unsigned long slot[MAXBAND][MAXMODE] ={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
-                                             { 5357000, 5357000, 5357000, 5287200},   //60m [1] 
-                                             { 7074000, 7047500, 7078000, 7038600},   //40m [2]
-                                             {10136000,10140000,10130000,10138700},   //30m [3]
-                                             {14074000,14080000,14078000,14095600},   //20m [4]
-                                             {18100000,18104000,18104000,18104600},   //17m [5]
-                                             {21074000,21140000,21078000,21094600},   //15m [6]                                                                      
-                                             {28074000,28074000,28078000,28124600}};  //10m [7]                           
-
-                                                      
+unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
+const unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
+                                            { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
+                                            { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
+                                            {10136000,10140000,10130000,10138700,10106000},   //30m [3]
+                                            {14074000,14080000,14078000,14095600,14060000},   //20m [4]
+                                            {18100000,18104000,18104000,18104600,18096000},   //17m [5]
+                                            {21074000,21140000,21078000,21094600,21060000},   //15m [6]  
+                                            {24915000,24915000,24922000,24924600,24906000},   //12m [7]                                                                     
+                                            {28074000,28074000,28078000,28124600,28060000}};  //10m [8]                           
+                                                     
 unsigned long freq      = f[mode]; 
 const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};
 
@@ -670,7 +680,6 @@ void setWord(uint8_t* SysWord,uint8_t v, bool val) {
 //*                    ATU DEVICE MANAGEMENT                                                     *
 //*this is an optional function that creates a brief pulse aimed to reset the ATU on band changes*
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-
 #ifdef ATUCTL
 void flipATU() {
   
@@ -2699,9 +2708,6 @@ bool detectKey(uint8_t k, bool v, bool w) {
       if (getGPIO(k)==v) { //confirmed as v value now wait for the inverse, if not return the inverse      
           
           if (w==false) {
-             #ifdef DEBUG
-                _INFOLIST("%s switch(%d) value(%s)\n",__func__,k,BOOL2CHAR(v));
-             #endif //DEBUG   
              return v;
           }
           
@@ -2764,7 +2770,22 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
  *-----------------------------------*/
      setGPIO(RX,LOW);
      si5351.output_enable(SI5351_CLK1, 0);   //RX off    
-     long int freqtx=freq;
+     uint32_t freqtx=freq;
+     #ifdef CW
+     if (mode==MAXMODE-1) {
+        freqtx=freq+uint32_t(cwshift);
+     } else {
+        freqtx=freq;
+     }
+     #ifdef DEBUG     
+     _INFOLIST("%s TX+ (CW On) ftx=%ld f=%ld\n",__func__,freqtx,freq);
+     #endif //DEBUG
+     #else
+     freqtx=freq;
+     #ifdef DEBUG     
+     _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
+     #endif //DEBUG
+     #endif //CW
      
 #ifdef DEBUG     
      _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
@@ -3221,8 +3242,17 @@ uint16_t changeBand(uint16_t c) {
 void Mode_assign(){
 
    freq=f[mode];
-   setLED(LED[mode],true);
-
+   #ifdef CW
+      if (mode==MAXMODE-1) {
+        resetLED();
+        setLED(JS8,false);
+        setLED(FT4,false);
+      } else {
+        setLED(LED[mode],true);
+      }
+   #else
+      setLED(LED[mode],true);
+   #endif //CW
 /*---------------------------------------*          
  * Change the DDS frequency              *
  *---------------------------------------*/
@@ -3513,7 +3543,11 @@ void checkMode() {
       while (detectKey(DOWN,LOW,NOWAIT) == LOW) {}
       
       if (mode==0) {
-        mode=3;
+        #ifdef CW
+           mode=MAXMODE-1;
+        #else   
+           mode=MAXMODE-2;
+        #endif //CW   
       } else {
         mode--;
       }
@@ -3536,8 +3570,25 @@ void checkMode() {
    
   if ((detectKey(UP,LOW,NOWAIT) == LOW) && (getWord(SSW,TXON)==false)) {
       while (detectKey(UP,LOW,NOWAIT)==LOW) {}
-      
-      mode=(mode+1)%4;
+      mode++;
+      /*---
+       * CW enables a 5th mode
+       */
+      #ifdef CW
+         if (mode==MAXMODE-1) {
+            setWord(&SSW,CWMODE,true);
+         } else {
+            setWord(&SSW,CWMODE,false);   
+         }
+         if (mode>MAXMODE-1) {
+            mode=0;
+         }
+      #else
+         if (mode>MAXMODE-2) {
+            mode=0;
+         }
+         setWord(&SSW,CWMODE,false);
+      #endif //CW   
 
       #ifdef EE
          tout=millis();
