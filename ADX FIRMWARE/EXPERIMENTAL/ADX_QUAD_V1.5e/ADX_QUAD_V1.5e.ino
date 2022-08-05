@@ -49,7 +49,6 @@
 //*     X re-style of the code to facilitate customization for multiple boards
 //*     X Add all frequency definitions for HF bands
 //*     X Optimize EEPROM read/write cycles
-//*     X add CW support (includes keyer support)
 //*     X add CAT support (TS-440), thru FLRig (see README.md)
 //*     X add timeout & watchdog support (both hardware glitches and extended PTT time)
 //*     X support for the QUAD/OCTO band filter boards
@@ -95,8 +94,8 @@
  * Define the runtime platform either PICO (Raspberry Pi Pico) *
  * or !PICO (Arduino ATMega328p)                               *
  *-------------------------------------------------------------*/
-//#define ADX              1   //This is the standard ADX Arduino based board 
-#define PDX            1   //Compile for Raspberry Pi Pico board
+#define ADX              1   //This is the standard ADX Arduino based board 
+//#define PDX            1   //Compile for Raspberry Pi Pico board
 
  
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -175,17 +174,19 @@
    //#define TERMINAL       1      //Serial configuration terminal
    //#define IC746          1      //CAT Protocol is ICOM 746
    //#define FT817          1      //CAT Protocol is FT 817
-   //#define CW             1      //Enable CW operation
-   //#define SHIFTLIMIT     1      //Enforces tunning shift range into +/- 15 KHz when in CW mode
    //#define CAT_FULL       1      //Extend CAT support to the entire CAT command set (valid only for TS480)
    //#define LEGACY         1      //Enable code AS IS version 1.1 for testing purposes
 
 #endif //PICO
 
 #ifdef PDX
-   //#define WDT            1      //Hardware and TX watchdog enabled
-   #define CAT             1      //Enable CAT protocol over serial port
-   #define FT817           1
+   #define WDT             1      //Hardware and TX watchdog enabled
+   #define EE              1      //Save in Flash emulation of EEPROM the configuration
+   //#define CAT             1      //Enable CAT protocol over serial port
+   //#define FT817           1      //CAT protocol is Yaesu FT817
+   //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
+   //#define ANTIVOX         1      //Anti-VOX enabled
+   //#define QUAD            1      //Support for QUAD board
 
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -201,7 +202,7 @@
 #define BDLY           200          //Delay when blinking LED
 #define DELAY_WAIT     BDLY*2       //Double Delay
 #define DELAY_CAL      DELAY_WAIT/10
-#define MAXMODE        5            //Max number of digital modes
+#define MAXMODE        4            //Max number of digital modes
 #define MAX_BLINK      4            //Max number of blinks
 #define BANDS          4            //Max number of bands allowed
 #define MAXBAND       10            //Max number of bands defined (actually uses BANDS out of MAXBAND)
@@ -242,35 +243,39 @@
 
 #ifdef PDX
 
-   #define AIN0            0      //Reserved To implement zero crossing detection algorithm
-   #define AIN1            1      //Reserved To implement zero crossing detection algorithm
-   #define RX             18      //RX Switch
-   #define WSPR            9      //WSPR LED 
-   #define JS8            10      //JS8 LED
-   #define FT4            11      //FT4 LED
-   #define FT8             8      //FT8 LED
-   #define TX             25      //TX LED  //should be changed to 22 once the initial debugging is completed
-
-#ifdef PICODISPLAY
-   #define UP             15      //UP Switch Mapped to GPIO15 which is Y on the PicoDisplay Board
-   #define DOWN           13      //DOWN Switch Mapped to GPIO13 which is A on the PicoDisplay Board
-   #define TXSW           14      //TX Switch Mapped to GPIO14 which is X on the PicoDisplay Board 
-#else
-   #define UP             19      //UP Switch (this must be set to GPIO19 when running on a PDX board)
-   #define DOWN           20      //DOWN Switch (this must be set to GPIO20 when running on a PDX board) 
-   #define TXSW           14      //TX Switch
-#endif //PICODISPLAY   
-
-
+/*---- 
+ * Output control lines
+ */
+   #define RX              2      //RX Switch
 #ifdef ATUCTL
-   #define ATU            21     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+   #define ATU            15     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
 #endif //ATUCTL 
 
 
-
-#define PDX_I2C_SDA      16
-#define PDX_I2C_SCL      17
-
+/*---
+ * LED
+ */   
+   #define WSPR            7      //WSPR LED 
+   #define JS8             6      //JS8 LED
+   #define FT4             5      //FT4 LED
+   #define FT8             4      //FT8 LED
+   #define TX              3      //TX LED  
+/*---
+ * Switches
+ */
+   #define UP             10      //UP Switch (this must be set to GPIO19 when running on a PDX board)
+   #define DOWN           11      //DOWN Switch (this must be set to GPIO20 when running on a PDX board) 
+   #define TXSW            9      //TX Switch
+/*---
+ *  I2C
+ */
+   #define PDX_I2C_SDA    16      //I2C SDA
+   #define PDX_I2C_SCL    17      //I2C SCL
+/*---
+ *  Input lines
+ */
+   #define FSK            27      //Frequency counter algorithm
+   #define CAL             8      //Automatic calibration entry
 #endif //PDX
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -286,7 +291,7 @@
 #define TXPUSH      0B00010000    //TXSW button pressed
 #define CATTX       0B00100000    //TX turned on via CAT (disable VOX)
 #define SAVEEE      0B01000000    //Mark of EEPROM updated
-#define CWMODE      0B10000000    //CW Active
+#define NOTUSED     0B10000000    //
 /*----------------------------------------------------------------*
  * Operating switch                                               *
  * ---------------------------------------------------------------*/
@@ -314,29 +319,7 @@ char hi[80];
 //* Feature definition might conflict among them so some consistency rules are applied to remove*
 //* potential inconsistencies on the definitions                                                *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-
-
-//*--- This is a transient rule, the porting to Pico is incomplete so no functions are allowed
-
-#ifdef PDX
-/*
-    #undef EE
-    #undef QUAD
-    #undef ATUCTL
-    #undef RESET
-    #undef ANTIVOX
-    #undef ONEBAND
-
-    #undef CAL_RESET
-    #undef DEBUG
-    #undef TERMINAL
-    #undef CW
-    #undef SHIFTLIMIT
-    #undef CAT_FULL
-    #undef LEGACY
-*/    
-#endif //PICO
-    
+   
 
 //*--- If a QUAD multiband board is defined then the transceiver must not be a single band one
    
@@ -399,11 +382,6 @@ const char *avoxtime_Token  = "*vxt";
 const char *eeprom_toutToken= "*eet";
 const char *eeprom_listToken= "*list";
 #endif //EE
-
-#ifdef CW
-const char *cw_shiftToken   = "*cws";
-const char *cw_stepToken    = "*cwt";
-#endif //CW
 
 
 const char *saveToken       = "*save"; 
@@ -517,8 +495,6 @@ const char *endList         = "XXX";
       #define EEPROM_SHORT_TIME   90
       #define EEPROM_MAX_BLINK   120
       #define EEPROM_EEPROM_TOUT 130
-      #define EEPROM_CW_SHIFT    140
-      #define EEPROM_CW_STEP     150
       #define EEPROM_AVOXTIME    170
       #define EEPROM_END         200
    #endif //TERMINAL
@@ -526,27 +502,9 @@ const char *endList         = "XXX";
    uint32_t tout=0;
 
    //#define EEPROM_CLR     1   //Initialize EEPROM (only to be used to initialize contents)
-   #define EEPROM_SAVED 100     //Signature of EEPROM being updated at least once
-   #define EEPROM_TOUT  500     //Timeout in mSecs to wait till commit to EEPROM any change
+   #define EEPROM_SAVED  100     //Signature of EEPROM being updated at least once
+   #define EEPROM_TOUT  2000     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
-
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*       DEFINITIONS RELATED TO THE IMPLEMENTATION OF CW MODE                                  *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-
-#ifdef CW
-   #define CWSHIFT        600
-   #define CWSTEP         500
-   #define MAXSHIFT     15000
-   #define CWSLOT           5
-   
-   uint16_t cwshift = CWSHIFT;
-   uint16_t cwstep  = CWSTEP;
-   uint16_t maxshift= MAXSHIFT;
-   uint16_t lastmode=       0;
-   
-#endif //CW
-
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*       GLOBAL VARIABLE DEFINITION                                                            *
@@ -562,15 +520,15 @@ uint16_t Band_slot      = 0;          //Default to Bands[0]=40
 int32_t  cal_factor     = 0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 
-unsigned long f[MAXMODE]                   = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
-const unsigned long slot[MAXBAND][MAXMODE] ={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
-                                             { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
-                                             { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
-                                             {10136000,10140000,10130000,10138700,10106000},   //30m [3]
-                                             {14074000,14080000,14078000,14095600,14060000},   //20m [4]
-                                             {18100000,18104000,18104000,18104600,18096000},   //17m [5]
-                                             {21074000,21140000,21078000,21094600,21060000},   //15m [6]                                                                      
-                                             {28074000,28074000,28078000,28124600,28060000}};  //10m [7]                           
+unsigned long f[MAXMODE]                   = { 7074000, 7047500, 7078000, 7038600};   //Default frequency assignment   
+const unsigned long slot[MAXBAND][MAXMODE] ={{ 3573000, 3575000, 3578000, 3568600},   //80m [0]
+                                             { 5357000, 5357000, 5357000, 5287200},   //60m [1] 
+                                             { 7074000, 7047500, 7078000, 7038600},   //40m [2]
+                                             {10136000,10140000,10130000,10138700},   //30m [3]
+                                             {14074000,14080000,14078000,14095600},   //20m [4]
+                                             {18100000,18104000,18104000,18104600},   //17m [5]
+                                             {21074000,21140000,21078000,21094600},   //15m [6]                                                                      
+                                             {28074000,28074000,28078000,28124600}};  //10m [7]                           
 
                                                       
 unsigned long freq      = f[mode]; 
@@ -582,8 +540,6 @@ const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};
 uint8_t       button[3]   ={0,0,0};
 unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
 
-
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*       GLOBAL VARIABLE DEFINITION CONDITIIONAL TO DIFFERENT OPTIONAL FUNCTIONS               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -592,10 +548,6 @@ unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
 uint16_t eeprom_tout = EEPROM_TOUT;
 #endif //EE
 
-
-#ifdef CW
-unsigned long freqCW      = f[CWSLOT]; //default assignment consistent with digital mode's default, 40m
-#endif //CW
 
 #if (defined(ATUCTL) || defined(WDT))
 uint8_t  TSW=0;               //System timer variable (to be used with getWord/setWord);
@@ -727,7 +679,7 @@ void flipATU() {
    tATU=millis();
    
    #ifdef DEBUG
-      _TRACELIST("%s()\n",__func__);
+      _INFO;
    #endif //DEBUG    
 }
 #endif //ATUCTL
@@ -866,7 +818,7 @@ int setSlot(uint32_t f) {
    int s=findSlot(b);
 
 #ifdef DEBUG
-   _TRACELIST("%s() f=%ld band=%d slot=%d\n",__func__,f,band,s);
+   _INFOLIST("%s() f=%ld band=%d slot=%d\n",__func__,f,band,s);
 #endif //DEBUG
 
    return s;
@@ -1119,6 +1071,7 @@ void catReadEEPRom(void)
   // send the data
   
   Serial.write(cat, 2);
+  
   #ifdef ADX
      delay(SERIAL_WAIT);
      Serial.flush();
@@ -1172,10 +1125,7 @@ void processCATCommand2(byte* cmd) {
    * Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
    */
 
-        #ifndef CW
-           setWord(&SSW,CWMODE,false);
-        #endif //CW
-     
+    
     /*
         int i=getBand(freq);
         if ( i<0 ) {
@@ -1847,9 +1797,6 @@ void doSetFreq() { //ADDITIONAL CONTROL FOR LEGAL BAND NEEDED
      freq=f;
   }
 
-#ifndef CW
-   setWord(&SSW,CWMODE,false);
-#endif //CW  
   /*---
    * Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
    */
@@ -1869,12 +1816,10 @@ void doSetFreq() { //ADDITIONAL CONTROL FOR LEGAL BAND NEEDED
      _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
    #endif //DEBUG  
 
-   if (getWord(SSW,CWMODE)==false) {      //If CW is enabled check if CW mode is activated or it's working on WSJT modes before analyze a mode change based on frequency change
-
-      if (mode != m) {
-         mode = m;
-         Mode_assign();
-      }
+ 
+   if (mode != m) {
+      mode = m;
+      Mode_assign();
    }
 
   #ifdef QUAD  //Set the PA & LPF filter board settings if defined
@@ -1912,13 +1857,6 @@ void doSetMode() {
         mode=0;
         Mode_assign();
         break;
-#ifdef CW        
-     case CAT_MODE_CW:
-        setWord(&SSW,CWMODE,true);
-        mode=4;
-        Mode_assign();
-        break;
-#endif //CW        
   }
   sendAck();
 }
@@ -1928,13 +1866,6 @@ void doSetMode() {
 void doReadMode() {
 
   cmdBuf[CAT_IX_MODE]   = CAT_MODE_USB;
-
-  #ifdef CW
-     if (getWord(SSW,CWMODE)==true) {
-        cmdBuf[CAT_IX_MODE]   = CAT_MODE_CW;     
-     }
-  #endif //CW  
-  
   cmdBuf[CAT_IX_MODE+1] = CAT_MODE_FILTER1;  // protocol filter - return reasonable value
   sendResponse(cmdBuf, CAT_SZ_MODE);
 }
@@ -2204,10 +2135,6 @@ void setFreqCAT() {
   /*---
    * Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
    */
-
-#ifndef CW
-  setWord(&SSW,CWMODE,false);
-#endif //CW
      
     
   int i=getBand(freq);
@@ -2290,15 +2217,7 @@ void Command_SetMD()      //Set MODE command, only USB (2) and CW (3) are suppor
      mode=0;
      Mode_assign();
      sprintf(hi,"%s",cMD2);    // at this time only USB is allowed, needs to be modified when CW is added
-     
-#ifdef CW     
-  } else {
-     setWord(&SSW,CWMODE,true);
-     mode=4;
-     Mode_assign();
-     sprintf(hi,"%s",cMD3);
-#endif //CW
-        
+             
   }
   Serial.print(hi);
 }
@@ -2581,14 +2500,18 @@ long cal = XT_CAL_F;
 //*                   LED MANAGEMENT SUBSYSTEM                                                  *
 //* Functions to operate the 5 LED the ADX board has                                            *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-
 /**********************************************************************************************/
 /*                                      LED Management                                        */
 /**********************************************************************************************/
 void clearLED(uint8_t LEDpin) {
   setGPIO(LEDpin,LOW);
+
+#ifdef PDX
+  if (LEDpin==uint8_t(TX)) {setGPIO(LED_BUILTIN,LOW);}
+#endif //PDX    
+
   #ifdef DEBUG
-     _TRACELIST("%s pin=%d",__func__,LEDpin);
+     _EXCPLIST("%s pin=%d\n",__func__,LEDpin);
   #endif //DEBUG   
 }
 /*----- 
@@ -2600,9 +2523,13 @@ void resetLED() {               //Turn-off all LEDs
    clearLED(JS8);
    clearLED(FT4);
    clearLED(FT8);
+   
+#ifdef PDX   
+   clearLED(LED_BUILTIN);
+#endif //PDX   
 
    #ifdef DEBUG
-   _TRACE;
+   _EXCP;
    #endif //DEBUG   
 
  
@@ -2616,8 +2543,12 @@ void setLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
    (clrLED==true ? resetLED() : void(_NOP)); 
    setGPIO(LEDpin,HIGH);
 
+#ifdef PDX
+  if (LEDpin==uint8_t(TX)) {setGPIO(LED_BUILTIN,HIGH);}
+#endif //PDX    
+
 #ifdef DEBUG
-   _INFOLIST("%s(%d)\n",__func__,LEDpin);
+   _EXCPLIST("%s(%d)\n",__func__,LEDpin);
 #endif //DEBUG   
 
 }
@@ -2628,15 +2559,24 @@ void setLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
 void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 
 #ifdef DEBUG
-   _TRACELIST("%s (%d)\n",__func__,LEDpin);
+   _EXCPLIST("%s (%d)\n",__func__,LEDpin);
 #endif //DEBUG   
    
    uint8_t n=(max_blink-1);
 
    while (n>0) {
        setGPIO(LEDpin,HIGH);
+       
+       #ifdef PDX
+         if (LEDpin==uint8_t(TX)) {setGPIO(LED_BUILTIN,HIGH);}
+       #endif //PDX    
+
        delay(BDLY);
        setGPIO(LEDpin,LOW);
+       #ifdef PDX
+         if (LEDpin==uint8_t(TX)) {setGPIO(LED_BUILTIN,LOW);}
+       #endif //PDX    
+
        delay(BDLY);
        n--;
 
@@ -2653,7 +2593,10 @@ void calibrateLED(){           //Set callibration mode
 
    setGPIO(WSPR, HIGH); 
    setGPIO(FT8, HIGH);
-   delay(DELAY_CAL);        
+   delay(DELAY_CAL);    
+   #ifdef DEBUG   
+   _INFO;
+   #endif //DEBUG
 }
 /*-----
  * Signal band selection with LED   (THIS NEEDS TO BE REVIEWED TO ACTUALLY SHOW MORE THAN 4 BANDS
@@ -2678,7 +2621,6 @@ void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
  * ISR Handler
  * Handle push button interrupt
  */
-
 ISR (PCINT2_vect) {
 
   uint32_t timerDown=0;
@@ -2687,7 +2629,7 @@ ISR (PCINT2_vect) {
   for (byte p=INT0;p<=INT2;p++){ 
 
       #ifdef DEBUG
-         _TRACELIST("%s check pin(%d)\n",__func__,p);
+         _INFOLIST("%s check pin(%d)\n",__func__,p);
       #endif //DEBUG      
 
       switch (p) {
@@ -2701,7 +2643,7 @@ ISR (PCINT2_vect) {
 //*--- Change detected
 
          #ifdef DEBUG
-            _TRACELIST("%s pin(%d) [%d]->[%d]\n",__func__,p,getWord(button[p],PUSHSTATE),pstate);
+            _INFOLIST("%s pin(%d) [%d]->[%d]\n",__func__,p,getWord(button[p],PUSHSTATE),pstate);
          #endif //DEBUG         
          
          setWord(&button[p],PUSHSTATE,pstate);
@@ -2711,7 +2653,7 @@ ISR (PCINT2_vect) {
            timerDown=millis()-downTimer[p];
            if (timerDown<bounce_time) {
               #ifdef DEBUG
-                 _TRACELIST("%s pin(%d) too short, ignored!\n",__func__,p);
+                 _INFOLIST("%s pin(%d) too short, ignored!\n",__func__,p);
               #endif //DEBUG   
               downTimer[p]=millis();  //fix weird Barb pushbutton with a 2nd train of bouncing signals
             
@@ -2722,14 +2664,14 @@ ISR (PCINT2_vect) {
               setWord(&button[p],LONGPUSH,false);
               
               #ifdef DEBUG
-                 _TRACELIST("%s pin(%d) <SP>\n",__func__,p);
+                 _INFOLIST("%s pin(%d) <SP>\n",__func__,p);
               #endif //DEBUG
 
            } else {
               setWord(&button[p],SHORTPUSH,false);
               setWord(&button[p],LONGPUSH,true);       
               #ifdef DEBUG
-                 _TRACELIST("%s pin(%d) <LP>\n",__func__,p);
+                 _INFOLIST("%s pin(%d) <LP>\n",__func__,p);
               #endif //DEBUG   
            }       
          }
@@ -2737,8 +2679,6 @@ ISR (PCINT2_vect) {
   }
 }
 #endif //ADX
-
-
 /*-----------------------------------------------------------------------------*
  * detectKey                                                                   *
  * detect if a push button is pressed                                          *
@@ -2750,13 +2690,18 @@ bool detectKey(uint8_t k, bool v, bool w) {
 
       
       while (millis()-tdown<REPEAT_KEY) {
+
 #ifdef WDT
           wdt_reset();
 #endif //WDT                        
+
       }
       if (getGPIO(k)==v) { //confirmed as v value now wait for the inverse, if not return the inverse      
           
           if (w==false) {
+             #ifdef DEBUG
+                _INFOLIST("%s switch(%d) value(%s)\n",__func__,k,BOOL2CHAR(v));
+             #endif //DEBUG   
              return v;
           }
           
@@ -2773,6 +2718,10 @@ bool detectKey(uint8_t k, bool v, bool w) {
 #endif //WDT                                          
                  }
                  if (getGPIO(k)!=v) {
+                 #ifdef DEBUG
+                   _INFOLIST("%s switch(%d) value(%s)\n",__func__,k,BOOL2CHAR(v));
+                 #endif //DEBUG   
+                  
                     return v;
                  }
               }
@@ -2800,30 +2749,22 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 #endif //DEBUG  
   
   if (t) {    //Set to TX
-
 /*-----------------------------------*
  * if Watchdog enabled avoid to turn *
  * TX on if the watchdog mark hasn't *
  * been cleared.                     *
  *-----------------------------------*/
  #ifdef WDT
- 
       if (getWord(TSW,TX_WDT)==HIGH) {       
          return;
       }
-      
  #endif //WDT     
 /*-----------------------------------*
  *               TX                  *
  *-----------------------------------*/
      setGPIO(RX,LOW);
-     si5351.output_enable(SI5351_CLK1, 0);   //RX off
-     
-#ifdef CW
-     long int freqtx=(getWord(SSW,CWMODE)==false ? freq : freq+cwshift);
-#else
+     si5351.output_enable(SI5351_CLK1, 0);   //RX off    
      long int freqtx=freq;
-#endif //CW          
      
 #ifdef DEBUG     
      _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
@@ -2831,7 +2772,13 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
      
      si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
      si5351.output_enable(SI5351_CLK0, 1);   // TX on
+     
      setGPIO(TX,HIGH);
+
+#ifdef PDX
+     setGPIO(LED_BUILTIN,HIGH);
+#endif //PDX
+          
      setWord(&SSW,TXON,HIGH);
 
 #ifdef WDT
@@ -2859,16 +2806,20 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     
     si5351.set_freq(freq*100ULL, SI5351_CLK1);
     si5351.output_enable(SI5351_CLK1, 1);   //RX on
+    
     setGPIO(TX,0); 
+
+#ifdef PDX
+    setGPIO(LED_BUILTIN,LOW);
+#endif //PDX    
+
     setWord(&SSW,TXON,LOW);
     setWord(&SSW,VOX,LOW);
 /*---------------------------------------------------------*
  * set to master frequency                                 *
  *---------------------------------------------------------*/
-  
+ 
 }
-
-
 /*----------------------------------------------------------*
  * Manually turn TX while pressed                           *
  *----------------------------------------------------------*/
@@ -2877,6 +2828,11 @@ void ManualTX(){
    
     bool buttonTX=getTXSW();
     switch_RXTX(HIGH);
+    
+    #ifdef DEBUG
+       _INFOLIST("%s ManualTX(HIGH)\n",__func__);
+    #endif //DEBUG   
+    
     while(buttonTX==LOW) {
 
        #ifdef WDT      
@@ -2898,13 +2854,16 @@ void ManualTX(){
                 
     }
     switch_RXTX(LOW);
+    #ifdef DEBUG
+       _INFOLIST("%s ManualTX(LOW)\n",__func__);
+    #endif //DEBUG   
+
     
     #ifdef ANTIVOX
       tavox=millis();
       setWord(&TSW,AVOX,true);
     #endif //ANTIVOX   
 }
-
 /*---------------------------------------------------------------------*
  * getSwitchPL
  * Detect and clear the Long push condition on both UP/DOWN buttons 
@@ -2960,7 +2919,7 @@ bool getSwitch(uint8_t pin) {
     if (getWord(SSW,v) == true && getWord(button[p],SHORTPUSH)==true) {
 
        #ifdef DEBUG
-          _TRACELIST("%s (%d): <SP>\n",__func__,p);
+          _INFOLIST("%s (%d): <SP>\n",__func__,p);
        #endif //DEBUG
 
        setWord(&SSW,v,false);
@@ -3089,10 +3048,7 @@ void Calibration(){
 #endif //DEBUG
   
   while (true) {
-
- bool upButton     = getUPSSW();
- bool downButton   = getDOWNSSW();
-
+    
      #ifdef WDT
         wdt_reset();
      #endif //WDT
@@ -3176,19 +3132,21 @@ uint16_t build=BUILD;
 #ifdef ANTIVOX
    EEPROM.put(EEPROM_AVOXTIME,avoxtime);
 #endif //ANTIVOX
-
-#ifdef CW
-   EEPROM.put(EEPROM_CW_SHIFT,cw_shift);
-   EEPROM.put(EEPROM_CW_STEP,cw_step);
-#endif //CW
    
 #endif //TERMINAL
 
+#ifdef PDX
+   EEPROM.commit();
+   #ifdef DEBUG
+      _INFOLIST("%s commit()\n",__func__)
+   #endif //DEBUG
+#endif //PDX
+   
    setWord(&SSW,SAVEEE,false);
 
-   #ifdef DEBUG
-      _TRACELIST("%s save(%d) cal(%d) m(%d) slot(%d)\n",__func__,save,cal_factor,mode,Band_slot);
-   #endif //DEBUG
+#ifdef DEBUG
+   _INFOLIST("%s save(%d) cal(%d) m(%d) slot(%d) save=%d build=%d\n",__func__,save,cal_factor,mode,Band_slot,save,build)
+#endif //DEBUG
    
 
 
@@ -3223,12 +3181,6 @@ uint16_t build=BUILD;
    avoxtime   = AVOXTIME;
 #endif //ANTIVOX
 
-#ifdef CW   
-   cw_shift   = CW_SHIFT;
-   cw_step    = CW_STEP;
-#endif //CW
-
-
 #endif //TERMINAL
 
    updateEEPROM();
@@ -3240,9 +3192,13 @@ uint16_t build=BUILD;
 void checkEEPROM() {
     
     if((millis()-tout)>eeprom_tout && getWord(SSW,SAVEEE)==true ) {
+       #ifdef DEBUG
+          _INFOLIST("%s() Saving EEPROM...\n",__func__);
+       #endif //DEBUG 
+      
        updateEEPROM();
     }
-  
+ 
 }
 
 #endif //EE
@@ -3255,33 +3211,17 @@ void checkEEPROM() {
 uint16_t changeBand(uint16_t c) {
     uint16_t b=(Band_slot+c)%BANDS;
     #ifdef DEBUG
-       _TRACELIST("%s() change=%d Band_slot=%d b=%d\n",__func__,c,Band_slot,b);
+       _INFOLIST("%s() change=%d Band_slot=%d b=%d\n",__func__,c,Band_slot,b);
     #endif //DEBUG 
     return b;
 }
 /*----------------------------------------------------------*
  * Mode assign                                              *
  *----------------------------------------------------------*/
-#ifdef CW
-void displayFrequencyCW();
-#endif //CW
-
 void Mode_assign(){
 
    freq=f[mode];
-   if (mode==4) {
-      setWord(&SSW,CWMODE,true);
-
-#ifdef CW
-      freqCW=freq;    
-      displayFrequencyCW();
-#endif //CW
-      
-   } else {
-      setWord(&SSW,CWMODE,false);
-      setLED(LED[mode],true);
-
-   }
+   setLED(LED[mode],true);
 
 /*---------------------------------------*          
  * Change the DDS frequency              *
@@ -3433,15 +3373,24 @@ void Band_Select(){
 
       if ((millis()-t) > uint32_t(BDLY)) {
          t=millis();
-         (l==false ? setLED(TX,false) : clearLED(TX));
+         #ifdef DEBUG
+         _EXCPLIST("%s blink TX led\n",__func__);
+         #endif //DEBUG
+         (l==false ? setLED(TX,false) : clearLED(TX));    
          l=!l;
       }
-      
-      bool upButton   = getUPSSW();
-      bool downButton = getDOWNSSW();
-      bool txButton   = getTXSW();
+                
+      if (detectKey(UP,LOW,NOWAIT)==LOW) {
+          #ifdef DEBUG
+          _INFOLIST("%s Key UP detected\n",__func__);
+          #endif //DEBUG
           
-      if (detectKey(UP,LOW,WAIT)==LOW) {        
+          while (detectKey(UP,LOW,WAIT)==LOW){}        
+          
+          #ifdef DEBUG
+          _INFOLIST("%s Key UP released\n",__func__);
+          #endif //DEBUG
+          
           Band_slot=changeBand(-1);
           setLED(LED[3-Band_slot],true);
 
@@ -3451,6 +3400,17 @@ void Band_Select(){
       } 
    
       if (detectKey(DOWN,LOW,WAIT)==LOW) {
+
+          #ifdef DEBUG
+          _INFOLIST("%s Key DOWN detected\n",__func__);
+          #endif //DEBUG
+
+         while (detectKey(DOWN,LOW,WAIT)==LOW){}
+
+         #ifdef DEBUG
+         _INFOLIST("%s Key DOWN released\n",__func__);
+         #endif //DEBUG
+
          Band_slot=changeBand(+1);
          setLED(LED[3-Band_slot],true);
 
@@ -3459,7 +3419,18 @@ void Band_Select(){
          #endif //DEBUG   
 
       }                                               
-      if (txButton == LOW) {
+      if (detectKey(TXSW,LOW,NOWAIT) == LOW) {
+        
+          #ifdef DEBUG
+          _INFOLIST("%s Key TX detected\n",__func__);
+          #endif //DEBUG
+
+         while (detectKey(TXSW,LOW,WAIT)==LOW){}
+
+          #ifdef DEBUG
+          _INFOLIST("%s Key TX released\n",__func__);
+          #endif //DEBUG
+
          setGPIO(TX,LOW);
 
 #ifdef RESET      
@@ -3497,205 +3468,50 @@ void Band_Select(){
    } 
 }
 }
-#ifdef CW
-/*----------------------------------------------------------------*
- * select LED representation according with the frequency shift   *
- * with the center (initial) qrp calling frequency                *
- *----------------------------------------------------------------*/
-void displayFrequencyCW() {
 
-  if (freq==freqCW) {
-     setLED(JS8,true);
-     setLED(FT4,false);
-     #ifdef DEBUG
-        _TRACELIST("%s set QRP QRG f=%ld\n",__func__,freq);
-     #endif //DEBUG   
-     return;
-  }
-
-  long int df=freq-freqCW;
-
-/*-----------------------------------------------------------*
- * compute a fancy LED lighting to signal where the frequency*
- * is located compared with the QRP calling frequency (only  *
- * valid for CW mode when activated                          *
- *-----------------------------------------------------------*/
-  if ((df>     0) && (df<= 5000)) {setLED(FT4,true);}
-  if ((df>  5000) && (df<=10000)) {setLED(FT4,true);setLED(FT8,false);}
-  if ((df> 10000)) {setLED(FT8,true);}
-  if (df<0) {
-     df=abs(df);
-     if ((df>     0) && (df<= 5000)) {setLED(JS8,true);}
-     if ((df>  5000) && (df<=10000)) {setLED(JS8,true);setLED(WSPR,false);}
-     if ((df> 10000)) {setLED(WSPR,true);}
-  }
-}
-#endif //CW
-
-#ifdef CW
-/*-------------------------------------------------------------*
- * setFrequencyCW tuning function when CW mode is active       *
- *-------------------------------------------------------------*/
-void setFrequencyCW(int f) {
-
-  long int step=f*cwstep;
-  
-  #ifdef DEBUG
-     _TRACELIST("%s f=%ld\n",__func__,freq+step);
-  #endif //DEBUG   
-
-#ifdef SHIFTLIMIT
-
-  if ((freq+step)>(freqCW+maxshift)) {
-
-     #ifdef DEBUG
-        _TRACELIST("%s (%d): %ld out of band\n",__func__,step,freq+step);
-     #endif //DEBUG   
-
-     blinkLED(FT8);
-     setLED(FT8,true);
-     return;
-  }
-  if ((freq+step)<(freqCW-maxshift)) {
-
-     #ifdef DEBUG
-        _TRACELIST("%s step=%ld f=%ld out of band\n",__func__,step,freq+step);
-     #endif //DEBUG   
-     
-     blinkLED(WSPR);
-     setLED(WSPR,true);
-     return;
-  }
-  #ifdef DEBUG
-     _TRACELIST("%s f=%ld):\n",__func__,freq+step);
-  #endif //DEBUG
-     
-#endif //SHIFTLIMIT
-
-  freq=freq+step; 
-  displayFrequencyCW();
-  return;
-  
-}
-#endif //CW
 /*---------------------------------------------------------------------------*
  *  checkMode
  *  manage change in mode during run-time
  *---------------------------------------------------------------------------*/
 void checkMode() {
-
-
-bool txButton     = getTXSW();
-bool upButton     = getUPSSW();
-bool downButton   = getDOWNSSW();
-bool upButtonPL   = getSwitchPL(UP);
-bool downButtonPL = getSwitchPL(DOWN);
-
-/*------------------------------------------------------*
- * Manage change to and from CW mode by detecting a     *
- * long push press of the UP button (to enter CW) and a *
- * long push press of the DOWN button (to exit CW)      *
- *------------------------------------------------------*/
-  #ifdef CW
-
-/*--------------------------------*
- * UP button long press && !CW    *
- * Start CW mode                  *
- *--------------------------------*/
-  
-  if (upButtonPL == LOW && getWord(SSW,CWMODE)==false) {
-     lastmode=mode;
-     mode=4;
-     Mode_assign();
-        
-     #ifdef DEBUG
-        _INFOLIST("%s CW+ f=%ld\n",__func__,freq);
-     #endif //DEBUG   
-
-  }
-
-/*--------------------------------*
- * DN button long press && CW     *
- * Exit CW mode                   *
- *--------------------------------*/
-  if (downButtonPL == LOW && getWord(SSW,CWMODE)== true) {
-     mode=lastmode;
-     Mode_assign();
-     
-     #ifdef DEBUG
-        _INFOLIST("%s CW- f=%ld\n",__func__,freq);
-     #endif //DEBUG   
-     
-  }
-
-/*-----------------------------------------------------------*  
- * While in CW mode UP means frequency up by CWSTEP and DOWN *
- * means frequency down by CWSTEP Hz. The tunning range is   *
- * +/- MAXRIT                                                *
- *-----------------------------------------------------------*/
-  if (downButton == LOW && getWord(SSW,CWMODE)==true) {   
-     setFrequencyCW(-1);
-     
-     #ifdef DEBUG
-        _INFOLIST("%s f+ f=%ld\n",__func__,freq);      
-     #endif //DEBUG   
-  }
-
-  if (upButton == LOW && getWord(SSW,CWMODE)==true) {     
-     setFrequencyCW(+1);
-     
-     #ifdef DEBUG
-        _INFOLIST("%s f- f=%ld\n",__func__,freq);     
-     #endif //DEBUG   
-  }
-//*-------------------------[CW Implementation]------------------
-
-  #endif //CW  
-
 /*--------------------------------*
  * TX button short press          *
  * Transmit mode                  *
  *--------------------------------*/
- 
-    if ((txButton == LOW) && (getWord(SSW,TXON)==false)) {
+    if ((detectKey(TXSW,LOW,NOWAIT) == LOW) && (getWord(SSW,TXON)==false)) {
+      
        #ifdef DEBUG
-          _EXCPLIST("%s TX+\n",__func__);
+          _INFOLIST("%s TX+\n",__func__);
        #endif //DEBUG
         
        ManualTX(); 
      
        #ifdef DEBUG
-         _EXCPLIST("%s TX-\n",__func__);
+         _INFOLIST("%s TX-\n",__func__);
        #endif //DEBUG   
   }
-
-/*------------------------------------------------------------*
- * while in CW mode just block band and mode changes          *
- *------------------------------------------------------------*/
-
-#ifdef CW
-
-  if (getWord(SSW,CWMODE)==true) {
-     return;
-  }
-#endif //CW
 
 /*-------------------------------------------------------------*
  * manage band, mode and  calibration selections               *
  *-------------------------------------------------------------*/
 #ifndef ONEBAND
  
-  if ((upButton == LOW)&&(downButton == LOW)&&(getWord(SSW,TXON)==false)) {
+  if ((detectKey(UP,LOW,NOWAIT) == LOW)&&(detectKey(DOWN,LOW,NOWAIT) == LOW)&&(getWord(SSW,TXON)==false)) {
+     while (detectKey(UP,LOW,NOWAIT) == LOW) {}
+     while (detectKey(DOWN,LOW,NOWAIT)==LOW) {} //Wait till both switches are up
+     
      Band_Select();
      
      #ifdef DEBUG
-      _EXCPLIST("%s U+D f=%ld",__func__,freq);
+      _INFOLIST("%s U+D f=%ld",__func__,freq);
      #endif //DEBUG 
   }
+  
 #endif //ONEBAND
 
-  if ((upButton == HIGH)&&(downButton == LOW)&&(getWord(SSW,TXON)==false)) {
-
+  if ((detectKey(DOWN,LOW,NOWAIT) == LOW) && (getWord(SSW,TXON)==false)) {
+      while (detectKey(DOWN,LOW,NOWAIT) == LOW) {}
+      
       if (mode==0) {
         mode=3;
       } else {
@@ -3703,7 +3519,7 @@ bool downButtonPL = getSwitchPL(DOWN);
       }
       
       #ifdef DEBUG
-         _EXCPLIST("%s m+(%d)\n",__func__,mode);
+         _INFOLIST("%s m+(%d)\n",__func__,mode);
       #endif //DEBUG
       
       #ifdef EE
@@ -3713,16 +3529,15 @@ bool downButtonPL = getSwitchPL(DOWN);
       Mode_assign();
 
       #ifdef DEBUG
-         _EXCPLIST("%s mode assigned(%d)\n",__func__,mode);
+         _INFOLIST("%s mode assigned(%d)\n",__func__,mode);
       #endif //DEBUG   
   
   } 
    
-
-  if ((upButton == LOW) && (downButton == HIGH)&&(getWord(SSW,TXON)==false)) {
+  if ((detectKey(UP,LOW,NOWAIT) == LOW) && (getWord(SSW,TXON)==false)) {
+      while (detectKey(UP,LOW,NOWAIT)==LOW) {}
       
       mode=(mode+1)%4;
-      
 
       #ifdef EE
          tout=millis();
@@ -3730,19 +3545,16 @@ bool downButtonPL = getSwitchPL(DOWN);
       #endif //EE Avoid the tear and wear of the EEPROM because of successive changes
 
       #ifdef DEBUG
-         _EXCPLIST("%s m-(%d)\n",__func__,mode);
+         _INFOLIST("%s m-(%d)\n",__func__,mode);
       #endif //DEBUG   
 
       Mode_assign();
 
       #ifdef DEBUG
-         _EXCPLIST("%s mode assigned(%d)\n",__func__,mode);
+         _INFOLIST("%s mode assigned(%d)\n",__func__,mode);
       #endif //DEBUG   
 
   } 
-
-
- 
 }
 /*---------------------------------------------------------------------------------*
  * keepAlive()
@@ -3989,11 +3801,6 @@ void execCommand(char * commandLine) {
   if (strcmp(ptrToCommandName, avoxtime_Token+1)   == 0) {printCommand(ptrToCommandName,updateWord(&avoxtime));return;}
 #endif //ANTIVOX
 
-#ifdef CW
-  if (strcmp(ptrToCommandName, cw_shiftToken+1)    == 0) {printCommand(ptrToCommandName,updateWord(&cwshift));return;}
-  if (strcmp(ptrToCommandName, cw_stepToken+1)     == 0) {printCommand(ptrToCommandName,updateWord(&cwstep));return;}
-#endif //CW  
-
   if (strcmp(ptrToCommandName, saveToken+1)        == 0) {perform_saveToken();printMessage(msgSave);return;}
   if (strcmp(ptrToCommandName, quitToken+1)        == 0) {perform_quitToken();return;}
   if (strcmp(ptrToCommandName, helpToken+1)        == 0) {perform_helpToken();return;}
@@ -4077,6 +3884,11 @@ void initADX(){
  
  EEPROM.get(EEPROM_TEMP,temp);
  EEPROM.get(EEPROM_BUILD,build);
+
+ #ifdef DEBUG
+    _INFOLIST("%s EEPROM retrieved temp(%d) & Build(%d) BUILD=%d\n",__func__,temp,build,uint16_t(BUILD));
+ #endif //DEBUG
+ 
  
  #ifdef EEPROM_CLR
     temp=-1;
@@ -4133,12 +3945,6 @@ void initADX(){
 #ifdef ANTIVOX
    EEPROM.get(EEPROM_AVOXTIME,avoxtime);
 #endif //ANTIVOX   
-
-#ifdef CW
-   EEPROM.get(EEPROM_CW_SHIFT,cw_shift);
-   EEPROM.get(EEPROM_CW_STEP,cw_step);
-#endif //CW
-
    
 #endif //TERMINAL
  
@@ -4156,6 +3962,7 @@ void initADX(){
   Freq_assign();
   Mode_assign();
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
+  delay(100);
 
 #ifdef DEBUG
    _INFOLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
@@ -4194,6 +4001,7 @@ void definePinOut() {
 
 #ifdef PDX
    gpio_init(TX);
+   gpio_init(LED_BUILTIN);
    gpio_init(UP);
    gpio_init(DOWN);
    gpio_init(TXSW);
@@ -4202,8 +4010,8 @@ void definePinOut() {
    gpio_init(JS8);
    gpio_init(FT4);
    gpio_init(FT8);
-   gpio_init(AIN0);
-   gpio_init(AIN1);
+   gpio_init(FSK);
+   gpio_init(CAL);
 
 
    gpio_set_dir(UP, GPIO_IN);
@@ -4216,13 +4024,14 @@ void definePinOut() {
    
    gpio_set_dir(RX,GPIO_OUT);
    gpio_set_dir(TX, GPIO_OUT);
+   gpio_set_dir(LED_BUILTIN, GPIO_OUT);
    gpio_set_dir(WSPR,GPIO_OUT);
    gpio_set_dir(JS8,GPIO_OUT);
    gpio_set_dir(FT4,GPIO_OUT);
    gpio_set_dir(FT8,GPIO_OUT);
    
-   gpio_set_dir(AIN0,GPIO_IN);
-   gpio_set_dir(AIN1,GPIO_IN);
+   gpio_set_dir(FSK,GPIO_IN);
+   gpio_set_dir(CAL,GPIO_IN);
 
 #ifdef ATUCTL
    gpio_init(uint8_t(atu));
@@ -4274,27 +4083,78 @@ void setup()
       #else
           const char * proc = "RP2040";     
       #endif         
-      _EXCPLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n",__func__,VERSION,BUILD,proc);
+      _INFOLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n",__func__,VERSION,BUILD,proc);
       #ifdef DEBUG
           #ifdef TS480
-             _EXCPLIST("%s: CAT subsystem TS480\n",__func__);
+             _INFOLIST("%s: CAT subsystem TS480\n",__func__);
           #endif
           #ifdef IC746
-             _EXCPLIST("%s: CAT subsystem IC746\n",__func__);
+             _INFOLIST("%s: CAT subsystem IC746\n",__func__);
           #endif
           #ifdef FT817
-             _EXCPLIST("%s: CAT subsystem FT817\n",__func__);
+             _INFOLIST("%s: CAT subsystem FT817\n",__func__);
           #endif
       #endif //DEBUG    
 
    #endif //DEBUG
-   
+
+   #ifdef PDX
+      EEPROM.begin(512);
+      #ifdef DEBUG
+         _INFOLIST("%s: EEPROM reserved (%d)\n",__func__,EEPROM.length());     
+      #endif //DEBUG
+   #endif //PDX
+
+/*---
+ * List firmware properties at run time
+ */
+#ifdef PDX
+   #ifdef DEBUG
+      #ifdef EE
+      _INFOLIST("%s EEPROM Sub-system activated\n",__func__);
+      #endif //EE
+      
+      #ifdef WDT 
+      _INFOLIST("%s Watchdog Sub-system activated\n",__func__);
+      #endif //WDT
+      
+      #ifdef TERMINAL
+      _INFOLIST("%s Terminal Sub-system activated\n",__func__);
+      #endif //TERMINAL
+
+      #ifdef ANTIVOX
+      _INFOLIST("%s Anti-VOX feature activated\n",__func__);
+      #endif //TERMINAL
+
+      #ifdef RESET
+      _INFOLIST("%s Reset feature activated\n",__func__);
+      #endif //TERMINAL
+
+      #ifdef ATUCTL
+      _INFOLIST("%s ATU Reset Sub-system activated\n",__func__);
+      #endif //ATUCTL
+
+      #ifdef ONEBAND
+      _INFOLIST("%s ONE BAND feature activated\n",__func__);
+      #else
+      _INFOLIST("%s MULTI BAND feature activated\n",__func__);
+      #endif //ONEBAND
+
+      #ifdef QUAD
+      _INFOLIST("%s Quad Band filter support activated\n",__func__);
+      #else
+      _INFOLIST("%s Quad Band filter support activated\n",__func__);
+      #endif //ONEBAND
+     
+   #endif //DEBUG
+#endif //PDX   
+
    definePinOut();
-   blinkLED(TX);
+   blinkLED(TX);   
    setup_si5351();   
    
    #ifdef DEBUG
-      _EXCPLIST("%s setup_si5351 ok\n",__func__);
+      _INFOLIST("%s setup_si5351 ok\n",__func__);
    #endif //DEBUG   
    
 
@@ -4313,13 +4173,13 @@ void setup()
 
    initADX();
    #ifdef DEBUG
-      _EXCPLIST("%s INIT ok\n",__func__);
+      _INFOLIST("%s initADX ok\n",__func__);
    #endif //DEBUG   
    
    #ifdef QUAD
      setupQUAD();
      #ifdef DEBUG
-        _EXCPLIST("%s setupQUAD ok\n",__func__);
+        _INFOLIST("%s setupQUAD ok\n",__func__);
      #endif //DEBUG   
 
      /*---------
@@ -4332,7 +4192,7 @@ void setup()
         setQUAD(q);
      }   
      #ifdef DEBUG
-        _EXCPLIST("%s Bands[%d]=%d quad=%d\n",__func__,Band_slot,s,q);
+        _INFOLIST("%s Bands[%d]=%d quad=%d\n",__func__,Band_slot,s,q);
      #endif //DEBUG   
 
    #endif //QUAD      
@@ -4341,7 +4201,13 @@ void setup()
 /*------
  * Check if calibration is needed
  */
-   if (detectKey(DOWN,LOW,WAIT)==LOW) {Calibration();}
+ 
+   if (detectKey(DOWN,LOW,WAIT)==LOW) { 
+      #ifdef DEBUG
+        _INFOLIST("%s Calibration mode detected\n",__func__);
+      #endif //DEBUG       
+      Calibration();
+   }
   
 #ifdef ADX
 /*--------------------------------------------------------*
@@ -4357,13 +4223,14 @@ void setup()
   pinMode(AIN1, INPUT); //PD7 = AN1 = HiZ, PD6 = AN0 = 0
 
   #ifdef DEBUG
-     _EXCPLIST("%s Timer1 set Ok\n",__func__);
+     _INFOLIST("%s Counting algorithm TIMER1 set Ok\n",__func__);
   #endif //DEBUG   
+  
 #endif //ADX
   
   switch_RXTX(LOW);
   #ifdef DEBUG
-      _EXCPLIST("%s switch_RXTX Low ok\n",__func__);
+      _INFOLIST("%s switch_RXTX Low ok\n",__func__);
   #endif //DEBUG   
 
   Mode_assign(); 
@@ -4383,7 +4250,7 @@ void setup()
   #endif //WDT
 
   #ifdef DEBUG
-     _EXCPLIST("%s completed\n",__func__);
+     _INFOLIST("%s completed\n",__func__);
   #endif //DEBUG   
 
 

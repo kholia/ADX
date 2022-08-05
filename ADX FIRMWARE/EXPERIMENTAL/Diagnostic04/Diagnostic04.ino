@@ -32,6 +32,7 @@
    #define EEPROM_TEMP         30
    #define EEPROM_MODE         40
    #define EEPROM_BAND         50
+   
    uint32_t eeprom_tout=500;
    uint32_t tout=0;
 
