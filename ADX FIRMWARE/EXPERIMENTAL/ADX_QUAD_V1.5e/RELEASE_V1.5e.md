@@ -11,12 +11,13 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 -	Band expansion (still 4 bands supported), but all HF-6m bands can be selected
 -	EEPROM write cycle to reduce wear and tear.
 -	Watchdog reset
--	CW transceiver
-	- Tunning capability (+/- 20 KHz).
-	- (Somewhat crude) LED tunning indication.
+-	CW support (activated with the **define CW 1** sentence, default: disabled).
+	- On activation tune the QRP calling frequency of the band currently selected.
+	- Activation marked by two central LED lighting.
 	- Full break-in support.
 	- CW shift (600 Hz).
-	- CW step +/-500 Hz.
+	- Tuning thru CAT.
+	- Straight keyer supported.
 
 
 ## Mods by LU7DZ (version 1.3e)
@@ -90,10 +91,6 @@ Version ***"e"*** stands for *"experimental"*, ***use it as your own headache ri
 		** only if EEPROM support is defined **		
 		eet		EEPROM save timeout in mSecs
 		list		List EEPROM contents
-
-		** only if CW is defined **
-		cws		CW Shift in Hz
-		cwt		CW Step in Hz
 
 
 

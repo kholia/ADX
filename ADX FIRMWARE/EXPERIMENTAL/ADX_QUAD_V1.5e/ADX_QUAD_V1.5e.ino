@@ -123,7 +123,8 @@
    #include "hardware/structs/sio.h"
    #include <stdio.h>
    #include "hardware/watchdog.h"
-   
+   #include "hardware/pwm.h"
+   #include "pico/multicore.h"  
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            VERSION HEADER                                                   *
@@ -168,6 +169,7 @@
 /*
  * The following definitions are disabled but can be enabled selectively
  */
+      
    //#define CW             1      //CW support
    //#define CAL_RESET      1      //If enabled reset cal_factor when performing a new calibration()
    //#define DEBUG          1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
@@ -183,6 +185,7 @@
    #define WDT             1      //Hardware and TX watchdog enabled
    #define EE              1      //Save in Flash emulation of EEPROM the configuration
    #define CW              1      //CW support
+   //#define AUTOCAL         1      //Automatic calibration mode
    //#define CAT             1      //Enable CAT protocol over serial port
    //#define FT817           1      //CAT protocol is Yaesu FT817
    //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
@@ -345,7 +348,10 @@ char hi[80];
 
 //*--- if both supported CAT protocols are simultaneously selected then keep one
 
-
+#if (defined(ADX))
+   #undef AUTOCAL
+#endif //AUTOCAL only supported on PDX
+   
 #ifdef TERMINAL
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO THE CONFIGURATION TERMINAL FUNCTION                   *
@@ -406,6 +412,18 @@ const char *endList         = "XXX";
 
 #endif //TS480
 
+
+#ifdef AUTOCAL
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*               DEFINITIONS SPECIFIC TO AUTOCAL FEATURE                                       *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+uint32_t f_hi;
+int32_t cal_factor = 0;
+int32_t old_cal = 0;
+int64_t existing_error = 0;
+int64_t error = 0;
+int count = 15; /* reverse count */
+#endif //AUTOCAL
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEBUG SUPPORT MACRO DEFINITIONS                                               *
@@ -542,7 +560,7 @@ const unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600
                                             {28074000,28074000,28078000,28124600,28060000}};  //10m [8]                           
                                                      
 unsigned long freq      = f[mode]; 
-const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};
+const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};  //A 5th virtual mode is handled if CW enabled, LEDS are managed in that case not using this table
 
 /*-------------------------------------*
  * Manage button state                 *
@@ -2998,8 +3016,20 @@ bool getTXSW() {
 }
 
 
+/*==================================================================================================*
+ * Clock (Si5351) Calibration methods                                                               *
+ * Legacy method (ADX) || !(AUTOCAL)                                                                *
+ *     Clock (CLK2) is set to 1MHz output , calibration factor is increased (UP) or decreased (DOWN)*
+ *     until a frequency counter shows 1 MHz, this way any offset on the clock will be compensated  *
+ *     calibration factor will be stored in EEPROM and saved till next calibration                  *
+ *  Automatic method (PDX) && (AUTOCAL)                                                             *
+ *     Clock (CLK2) is set to 10MHz output, the board connects this value to the GPIO8 (CAL) pin.   *
+ *     An iteration is made automatically until the read value is 10MHz.                            *
+ *     The calibration factor will be store                                                         *
+ *==================================================================================================*/
+#if defined(ADX) || !defined(AUTOCAL)
 /*----------------------------------------------------------*
- * Calibration function
+ * Calibration function (LEGACY, Manual)
  *----------------------------------------------------------*/
 void Calibration(){
   
@@ -3121,7 +3151,202 @@ void Calibration(){
 
   }
 }
+#endif //Legacy calibration method (ADX) || (!AUTOCALL)
 
+
+#if defined(PDX) && defined(AUTOCAL)
+/*----------------------------------------------------------*
+ * Calibration function (AutomaticLEGACY, Manual)
+ *----------------------------------------------------------*/
+/*
+void setup()
+{
+  gpio_set_function(9, GPIO_FUNC_PWM); // GP9
+
+  // Start serial and initialize the Si5351
+  Serial.begin(115200);
+
+  Serial.println("Check 1 2 3...");
+
+  // Wire = I2C0 => SDA can be {0, 4, 8, 12, 16, 20, 24, 28}, for example
+  Wire.setSDA(16);
+  Wire.setSCL(17);
+  Wire.begin();
+
+  // The crystal load value needs to match in order to have an accurate calibration
+  si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
+
+  Serial.println("Check 5 6 7...");
+
+  // Start on target frequency
+  si5351.set_correction(old_cal, SI5351_PLL_INPUT_XO);
+  si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
+  si5351.set_freq(target_freq, SI5351_CLK2);
+  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for minimum power
+}
+
+void loop()
+{
+  si5351.update_status();
+  if (si5351.dev_status.SYS_INIT == 1)
+  {
+    Serial.println(F("Initialising Si5351, you shouldn't see many of these!"));
+    delay(500);
+  }
+  else
+  {
+    Serial.println();
+    Serial.println(F("Adjust until your frequency counter reads as close to 10 MHz as possible."));
+    Serial.println(F("Press 'q' when complete."));
+    Serial.println(F("Press 'S' to automatically set calibration.")); // ATTENTION: This can be done automatically ;)
+    vfo_interface();
+  }
+}
+
+void pwm_int() {
+  pwm_clear_irq(4);
+  f_hi++;
+}
+
+void setup1() {
+  uint32_t f = 0;
+  delay(5000);
+
+  // Frequency counter
+  while (true) {
+    count = count - 1;
+    pwm_config cfg = pwm_get_default_config();
+    pwm_config_set_clkdiv_mode(&cfg, PWM_DIV_B_RISING);
+    pwm_init(4, &cfg, false);
+    gpio_set_function(9, GPIO_FUNC_PWM);
+    pwm_set_irq_enabled(4, true);
+    irq_set_exclusive_handler(PWM_IRQ_WRAP, pwm_int);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+    f_hi = 0;
+    uint32_t t = time_us_32() + 2;
+    while (t > time_us_32());
+    pwm_set_enabled(4, true);
+    t += 3000000; // Gate time (in uSeconds), 3 seconds
+    // t += 100000; // Gate time (in uSeconds), 100 ms
+    while (t > time_us_32());
+    pwm_set_enabled(4, false);
+    f = pwm_get_counter(4);
+    f += f_hi << 16;
+    Serial.print(f / 3.0); // Divide by gate time in seconds
+    Serial.println(" Hz");
+    error = ((f / 3.0) * 100ULL) - target_freq;
+    Serial.print("Current calibration correction value is ");
+    Serial.printf("%" PRId64 "\n", error);
+    Serial.print("Total calibration value is ");
+    Serial.println(error + existing_error);
+
+    if (count <= 0) { // Auto-calibration logic
+      flush_input();
+      Serial.println();
+      Serial.print(F("Calibration factor is "));
+      Serial.println(error);
+      Serial.println(F("Setting calibration factor automatically"));
+      si5351.set_correction(error + existing_error, SI5351_PLL_INPUT_XO);
+      existing_error = existing_error + error;
+      si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
+      Serial.println(F("Resetting target frequency"));
+      si5351.set_freq(target_freq, SI5351_CLK2);
+
+      count = 15;
+    }
+  }
+}
+
+void loop1() {
+}
+
+static void flush_input(void)
+{
+  while (Serial.available() > 0)
+    Serial.read();
+}
+
+static void vfo_interface(void)
+{
+  rx_freq = target_freq;
+  cal_factor = old_cal;
+  Serial.println(F("   Up:   r   t  y  u  i   o  p"));
+  Serial.println(F(" Down:   f   g  h  j  k   l  ;"));
+  Serial.println(F("   Hz: 0.01 0.1 1 10 100 1K 10k"));
+  while (1)
+  {
+    if (Serial.available() > 0)
+    {
+      char c = Serial.read();
+      switch (c)
+      {
+        case 'q':
+          flush_input();
+          Serial.println();
+          Serial.print(F("Calibration factor is "));
+          Serial.println(cal_factor);
+          Serial.println(F("Setting calibration factor"));
+          si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
+          si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
+          Serial.println(F("Resetting target frequency"));
+          si5351.set_freq(target_freq, SI5351_CLK2);
+          old_cal = cal_factor;
+          return;
+        case 'S':
+          flush_input();
+          Serial.println();
+          Serial.print(F("Calibration factor is "));
+          Serial.println(error);
+          Serial.println(F("Setting calibration factor"));
+          si5351.set_correction(error + existing_error, SI5351_PLL_INPUT_XO);
+          existing_error = existing_error + error;
+          si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
+          Serial.println(F("Resetting target frequency"));
+          si5351.set_freq(target_freq, SI5351_CLK2);
+          old_cal = cal_factor;
+          return;
+        case 'r': rx_freq += 1; break;
+        case 'f': rx_freq -= 1; break;
+        case 't': rx_freq += 10; break;
+        case 'g': rx_freq -= 10; break;
+        case 'y': rx_freq += 100; break;
+        case 'h': rx_freq -= 100; break;
+        case 'u': rx_freq += 1000; break;
+        case 'j': rx_freq -= 1000; break;
+        case 'i': rx_freq += 10000; break;
+        case 'k': rx_freq -= 10000; break;
+        case 'o': rx_freq += 100000; break;
+        case 'l': rx_freq -= 100000; break;
+        case 'p': rx_freq += 1000000; break;
+        case ';': rx_freq -= 1000000; break;
+        case '?':
+          Serial.println(F("   Up:   r   t  y  u  i   o  p"));
+          Serial.println(F(" Down:   f   g  h  j  k   l  ;"));
+          Serial.println(F("   Hz: 0.01 0.1 1 10 100 1K 10k"));
+          break;
+        default:
+          // Do nothing
+          continue;
+      }
+
+      cal_factor = (int32_t)(target_freq - rx_freq) + old_cal;
+      si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
+      si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
+      si5351.pll_reset(SI5351_PLLA);
+      si5351.set_freq(target_freq, SI5351_CLK2);
+      Serial.print(F("Current difference:"));
+      Serial.println(cal_factor);
+    }
+    delay(10);
+  }
+}
+
+*/
+void calibration()
+{
+
+#endif //Auto Calibration 
+/*==========================================================================================================*/
 #ifdef EE
 /*------------------------------------------------------------------------------*
  * updateEEPROM                                                                 *
@@ -4062,7 +4287,6 @@ void definePinOut() {
    gpio_init(FT4);
    gpio_init(FT8);
    gpio_init(FSK);
-   gpio_init(CAL);
 
 
    gpio_set_dir(UP, GPIO_IN);
@@ -4082,7 +4306,6 @@ void definePinOut() {
    gpio_set_dir(FT8,GPIO_OUT);
    
    gpio_set_dir(FSK,GPIO_IN);
-   gpio_set_dir(CAL,GPIO_IN);
 
 #ifdef ATUCTL
    gpio_init(uint8_t(atu));
@@ -4116,7 +4339,7 @@ void setup()
  * has been given proper initialization based on the protocol used
  *-----*/
 
-   #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL))   
+   #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) || defined(AUTOCAL))   
       Serial.begin(BAUD,SERIAL_8N2);
       while (!Serial) {
       #ifdef WDT      
