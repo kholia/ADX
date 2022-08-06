@@ -185,7 +185,7 @@
    #define WDT             1      //Hardware and TX watchdog enabled
    #define EE              1      //Save in Flash emulation of EEPROM the configuration
    #define CW              1      //CW support
-   //#define AUTOCAL         1      //Automatic calibration mode
+   #define AUTOCAL         1      //Automatic calibration mode
    //#define CAT             1      //Enable CAT protocol over serial port
    //#define FT817           1      //CAT protocol is Yaesu FT817
    //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
@@ -269,7 +269,7 @@
  */
    #define UP             10      //UP Switch (this must be set to GPIO19 when running on a PDX board)
    #define DOWN           11      //DOWN Switch (this must be set to GPIO20 when running on a PDX board) 
-   #define TXSW            9      //TX Switch
+   #define TXSW            8      //TX Switch
 /*---
  *  I2C
  */
@@ -279,7 +279,7 @@
  *  Input lines
  */
    #define FSK            27      //Frequency counter algorithm
-   #define CAL             8      //Automatic calibration entry
+   #define CAL             9      //Automatic calibration entry
 #endif //PDX
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -306,6 +306,14 @@
 #define ATUCLK      0B00010000    //control the width of the ATU pulse
 #define TX_WDT      0B00100000    //TX Watchdog has been activated
 #define AVOX        0B01000000    //ANTI-VOX has been activated
+#define UNUSED      0B10000000    //Counter mode semaphore
+
+/*----------------------------------------------------------------*
+ * IPC Management                                               *
+ * ---------------------------------------------------------------*/
+#define QWAIT       0B00000001    //Semaphore Wait
+#define QCAL        0B00000010    //Calibration (using 2 cores)
+#define QFSK        0B00000100    //FSK detection
 
 /*----------------------------------------------------------------*
  * Miscellaneour definitions                                              *
@@ -412,19 +420,22 @@ const char *endList         = "XXX";
 
 #endif //TS480
 
+#ifdef PDX
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*               DEFINITIONS SPECIFIC TO THE RP2040 ARCHITECTURE                               *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+#define  CAL_COMMIT      12
+#define  CAL_ERROR        1
 
-#ifdef AUTOCAL
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*               DEFINITIONS SPECIFIC TO AUTOCAL FEATURE                                       *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+uint32_t fclk = 0;
 uint32_t f_hi;
-int32_t cal_factor = 0;
-int32_t old_cal = 0;
-int64_t existing_error = 0;
-int64_t error = 0;
-int count = 15; /* reverse count */
-#endif //AUTOCAL
+int32_t  old_cal = 0;
+int64_t  existing_error = 0;
+int32_t  error = 0;
+int      count = 15; /* reverse count */
+int      pwm_slice;  
 
+#endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEBUG SUPPORT MACRO DEFINITIONS                                               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -543,10 +554,14 @@ uint16_t vox_maxtry     = VOX_MAXTRY;
 int      cnt_max        = CNT_MAX;
 uint16_t max_blink      = MAX_BLINK;
 uint8_t  SSW            = 0;          //System SSW variable (to be used with getWord/setWord)
+uint8_t  TSW            = 0;          //System timer variable (to be used with getWord/setWord);
+uint8_t  QSW            = 0;
 uint16_t mode           = 0;          //Default to mode=0 (FT8)
 uint16_t Band_slot      = 0;          //Default to Bands[0]=40
 int32_t  cal_factor     = 0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
+//unsigned long target_freq=100000000UL;
+
 
 unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
 const unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
@@ -578,7 +593,6 @@ uint16_t eeprom_tout = EEPROM_TOUT;
 
 
 #if (defined(ATUCTL) || defined(WDT))
-uint8_t  TSW=0;               //System timer variable (to be used with getWord/setWord);
 #endif //Either ATU or WDT has been defined
 
 #ifdef WDT
@@ -2565,6 +2579,20 @@ void resetLED() {               //Turn-off all LEDs
 /*-----
  * Set a particular LED ON
  */
+void rstLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
+   
+   (clrLED==true ? resetLED() : void(_NOP)); 
+   setGPIO(LEDpin,LOW);
+
+#ifdef DEBUG
+   _EXCPLIST("%s(%d)\n",__func__,LEDpin);
+#endif //DEBUG   
+
+}
+
+/*-----
+ * Set a particular LED ON
+ */
 void setLED(uint8_t LEDpin,bool clrLED) {      //Turn-on LED {pin}
    
    (clrLED==true ? resetLED() : void(_NOP)); 
@@ -3154,112 +3182,224 @@ void Calibration(){
 #endif //Legacy calibration method (ADX) || (!AUTOCALL)
 
 
-#if defined(PDX) && defined(AUTOCAL)
-/*----------------------------------------------------------*
- * Calibration function (AutomaticLEGACY, Manual)
- *----------------------------------------------------------*/
-/*
-void setup()
-{
-  gpio_set_function(9, GPIO_FUNC_PWM); // GP9
+#if defined(PDX)
 
-  // Start serial and initialize the Si5351
-  Serial.begin(115200);
-
-  Serial.println("Check 1 2 3...");
-
-  // Wire = I2C0 => SDA can be {0, 4, 8, 12, 16, 20, 24, 28}, for example
-  Wire.setSDA(16);
-  Wire.setSCL(17);
-  Wire.begin();
-
-  // The crystal load value needs to match in order to have an accurate calibration
-  si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
-
-  Serial.println("Check 5 6 7...");
-
-  // Start on target frequency
-  si5351.set_correction(old_cal, SI5351_PLL_INPUT_XO);
-  si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
-  si5351.set_freq(target_freq, SI5351_CLK2);
-  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for minimum power
+void pwm_int_cal() {
+   pwm_clear_irq(pwm_slice);
+   f_hi++;
 }
-
-void loop()
-{
-  si5351.update_status();
-  if (si5351.dev_status.SYS_INIT == 1)
-  {
-    Serial.println(F("Initialising Si5351, you shouldn't see many of these!"));
-    delay(500);
-  }
-  else
-  {
-    Serial.println();
-    Serial.println(F("Adjust until your frequency counter reads as close to 10 MHz as possible."));
-    Serial.println(F("Press 'q' when complete."));
-    Serial.println(F("Press 'S' to automatically set calibration.")); // ATTENTION: This can be done automatically ;)
-    vfo_interface();
-  }
-}
-
-void pwm_int() {
-  pwm_clear_irq(4);
-  f_hi++;
-}
-
+  
 void setup1() {
-  uint32_t f = 0;
-  delay(5000);
-
-  // Frequency counter
-  while (true) {
-    count = count - 1;
-    pwm_config cfg = pwm_get_default_config();
-    pwm_config_set_clkdiv_mode(&cfg, PWM_DIV_B_RISING);
-    pwm_init(4, &cfg, false);
-    gpio_set_function(9, GPIO_FUNC_PWM);
-    pwm_set_irq_enabled(4, true);
-    irq_set_exclusive_handler(PWM_IRQ_WRAP, pwm_int);
-    irq_set_enabled(PWM_IRQ_WRAP, true);
-    f_hi = 0;
+/*-----------------------------------------------------------------*
+ * Core #2 Setup procedure                                         *
+ * Enter processing on POR                                         *
+ *-----------------------------------------------------------------*/
+uint32_t t = 0;
+bool     b = false;
+ /*--------------------------------------------*
+  * Wait for overall initialization to complete*
+  *--------------------------------------------*/
+  while (getWord(QSW,QWAIT)==false) {
+    #ifdef WDT
+       wdt_reset();
+    #endif //WDT
     uint32_t t = time_us_32() + 2;
     while (t > time_us_32());
-    pwm_set_enabled(4, true);
-    t += 3000000; // Gate time (in uSeconds), 3 seconds
-    // t += 100000; // Gate time (in uSeconds), 100 ms
-    while (t > time_us_32());
-    pwm_set_enabled(4, false);
-    f = pwm_get_counter(4);
-    f += f_hi << 16;
-    Serial.print(f / 3.0); // Divide by gate time in seconds
-    Serial.println(" Hz");
-    error = ((f / 3.0) * 100ULL) - target_freq;
-    Serial.print("Current calibration correction value is ");
-    Serial.printf("%" PRId64 "\n", error);
-    Serial.print("Total calibration value is ");
-    Serial.println(error + existing_error);
-
-    if (count <= 0) { // Auto-calibration logic
-      flush_input();
-      Serial.println();
-      Serial.print(F("Calibration factor is "));
-      Serial.println(error);
-      Serial.println(F("Setting calibration factor automatically"));
-      si5351.set_correction(error + existing_error, SI5351_PLL_INPUT_XO);
-      existing_error = existing_error + error;
-      si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
-      Serial.println(F("Resetting target frequency"));
-      si5351.set_freq(target_freq, SI5351_CLK2);
-
-      count = 15;
-    }
   }
-}
+  /*-------------------------------------------*
+   * Semaphore QWAIT has been cleared, proceed *
+   * PWM counters operates as infinite loops   *
+   * therefore no loop1() is ever processed    *
+   *-------------------------------------------*/
+   #ifdef DEBUG
+      _INFOLIST("%s QWAIT semaphore released QCAL=%s QFSK=%s\n",__func__,BOOL2CHAR(QCAL),BOOL2CHAR(QFSK));
+   #endif //DEBUG
+   if (getWord(QSW,QCAL)==true) {
+      #ifdef DEBUG
+         _INFOLIST("%s CAL_counter() triggered\n",__func__);
+      #endif //DEBUG    
+   
+      delay(2000);
+      calibrateLED();
+      
+      /*----
+       * Prepare Si5351 CLK2 for calibration process
+       *---*/
+       #ifdef DEBUG
+         _INFOLIST("%s Automatic calibration procedure started\n",__func__);
+       #endif //DEBUG
+  
+       switch_RXTX(LOW);
 
+       gpio_set_function(CAL, GPIO_FUNC_PWM); // GP9
+       si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA); // Set for lower power for calibration
+       si5351.set_clock_pwr(SI5351_CLK0, 0); // Enable the clock for calibration  
+       si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA); // Set for lower power for calibration
+       si5351.set_clock_pwr(SI5351_CLK1, 0); // Enable the clock for calibration
+       si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
+       si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
+       si5351.set_correction(old_cal, SI5351_PLL_INPUT_XO);
+       si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
+       si5351.set_freq(Cal_freq * 100UL, SI5351_CLK2);
+
+       #ifdef DEBUG
+         _INFOLIST("%s si5351 initialization ok target freq=%ld cal_factor=%ld\n",__func__,Cal_freq,old_cal);
+       #endif //DEBUG
+
+      /*--------------------------------------------*
+       * PWM counter used for automatic calibration *
+       * -------------------------------------------*/
+      fclk=0;
+      int16_t n=int16_t(CAL_COMMIT);
+      cal_factor=0;
+      pwm_slice=pwm_gpio_to_slice_num(CAL);      
+      while (true) {
+          /*-------------------------*
+           * setup PWM counter       *
+           *-------------------------*/
+          pwm_config cfg=pwm_get_default_config();
+          pwm_config_set_clkdiv_mode(&cfg,PWM_DIV_B_RISING);
+          pwm_init(pwm_slice,&cfg,false);
+          gpio_set_function(CAL,GPIO_FUNC_PWM);
+          
+          pwm_set_irq_enabled(pwm_slice,true);
+          irq_set_exclusive_handler(PWM_IRQ_WRAP,pwm_int_cal);
+          irq_set_enabled(PWM_IRQ_WRAP,true);
+          f_hi=0;
+
+          /*---------------------------*
+           * PWM counted during 1 sec  *
+           *---------------------------*/
+          t=time_us_32()+2;
+          while (t>time_us_32());
+          pwm_set_enabled(pwm_slice,true);         
+          t+=1000000;
+          while (t>time_us_32());
+          pwm_set_enabled(pwm_slice,false);
+
+          /*----------------------------*
+           * recover frequency in Hz    *
+           *----------------------------*/
+          fclk=pwm_get_counter(pwm_slice);
+          fclk+=f_hi<<16;
+          error=fclk-Cal_freq;
+          #ifdef DEBUG
+            _INFOLIST("%s Calibration VFO=%ld Hz target_freq=%ld error=%ld cal_factor=%ld\n",__func__,fclk,Cal_freq,error,cal_factor);
+          #endif //DEBUG            
+          if (labs(error) > int32_t(CAL_ERROR)) {
+             
+             b=!b;
+             if (b) {
+                setLED(TX,false);
+             } else {
+                rstLED(TX,false);               
+             }
+             if (error < 0) {
+                cal_factor=cal_factor - CAL_STEP;
+             } else {
+                cal_factor=cal_factor + CAL_STEP;
+             }
+             si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
+          } else {
+            n--;
+            if (n==0) {
+              
+               #ifdef DEBUG
+                 _INFOLIST("%s Convergence achieved cal_factor=%ld\n",__func__,cal_factor);
+               #endif //DEBUG   
+               
+               #ifdef EE
+                  updateEEPROM();                 
+               #endif //EE
+                  
+               while (true) {
+                 #ifdef WDT
+                    wdt_reset();
+                 #endif //WDT 
+                 #ifdef EE
+                    checkEEPROM();    
+                 #endif //EE   
+               }
+               while (true) {
+                 resetLED();
+                 setLED(JS8,true);
+                 setLED(FT4,false);
+                 delay(1000);
+               }
+                      
+            }
+          }
+        }
+/*        
+          count = count - 1;
+          pwm_config cfg = pwm_get_default_config();
+          pwm_config_set_clkdiv_mode(&cfg, PWM_DIV_B_RISING);
+          pwm_init(4, &cfg, false);
+          gpio_set_function(CAL, GPIO_FUNC_PWM);
+          pwm_set_irq_enabled(4, true);
+          irq_set_exclusive_handler(PWM_IRQ_WRAP, pwm_int_cal);
+          irq_set_enabled(PWM_IRQ_WRAP, true);
+          
+          f_hi = 0;
+          t = time_us_32() + 2;
+          while (t > time_us_32());
+          
+          pwm_set_enabled(4, true);
+          t += 3000000; // Gate time (in uSeconds), 3 seconds
+          while (t > time_us_32());
+          
+          pwm_set_enabled(4, false);
+          fclk = pwm_get_counter(4);
+          fclk += f_hi << 16;
+ 
+          
+          //Serial.print(f / 3.0); // Divide by gate time in seconds
+          //Serial.println(" Hz");
+          
+          error = ((fclk / 3.0) * 100ULL) - target_freq;
+          #ifdef DEBUG
+            _INFOLIST("%s Calibration VFO=%" PRId64 " Hz target_freq=%ld error=%ld\n",__func__,(fclk/3.0),target_freq,error);
+          #endif //DEBUG          
+          
+          //Serial.print("Current calibration correction value is ");
+          //Serial.printf("%" PRId64 "\n", error);
+          //Serial.print("Total calibration value is ");
+          //Serial.println(error + existing_error);
+
+          //if (count <= 0) { // Auto-calibration logic
+             //flush_input();
+             //Serial.println();
+             //Serial.print(F("Calibration factor is "));
+             //Serial.println(error);
+             //Serial.println(F("Setting calibration factor automatically"));
+             
+             //si5351.set_correction(error + existing_error, SI5351_PLL_INPUT_XO);
+             //existing_error = existing_error + error;
+             //si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
+             
+             //Serial.println(F("Resetting target frequency"));
+             
+             //si5351.set_freq(target_freq, SI5351_CLK2);
+             //count = 15;
+         //}
+      } //while (true)
+      */
+   }
+//*------------------------------------------------------------------------*/
+   if (getWord(QSW,QFSK)==true) {
+      #ifdef DEBUG
+         _INFOLIST("%s FSK_counter() triggered\n",__func__);
+      #endif //DEBUG    
+      //FSK_counter();   
+   }  
+}
+/*-----------------------------------------------------------*
+ * loop1()                                                   *
+ * dummy loop on core#2 processor (never executed)           *
+ *-----------------------------------------------------------*/
 void loop1() {
 }
-
+/*
 static void flush_input(void)
 {
   while (Serial.available() > 0)
@@ -3340,10 +3480,7 @@ static void vfo_interface(void)
     delay(10);
   }
 }
-
 */
-void calibration()
-{
 
 #endif //Auto Calibration 
 /*==========================================================================================================*/
@@ -4475,12 +4612,22 @@ void setup()
 /*------
  * Check if calibration is needed
  */
- 
+
    if (detectKey(DOWN,LOW,WAIT)==LOW) { 
       #ifdef DEBUG
         _INFOLIST("%s Calibration mode detected\n",__func__);
-      #endif //DEBUG       
-      Calibration();
+      #endif //DEBUG
+      #ifdef AUTOCAL       //Automatic calibration
+          setWord(&QSW,QCAL,true);       
+          setWord(&QSW,QWAIT,true);
+          while (true) {
+            #ifdef WDT
+               wdt_reset();
+            #endif //WDT   
+          }
+      #else   //Manual calibration
+         calibration();
+      #endif //AUTOCAL   
    }
   
 #ifdef ADX
