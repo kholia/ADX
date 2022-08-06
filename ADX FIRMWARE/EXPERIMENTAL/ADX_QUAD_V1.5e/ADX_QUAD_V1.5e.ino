@@ -3214,6 +3214,13 @@ bool     b = false;
    #ifdef DEBUG
       _INFOLIST("%s QWAIT semaphore released QCAL=%s QFSK=%s\n",__func__,BOOL2CHAR(QCAL),BOOL2CHAR(QFSK));
    #endif //DEBUG
+
+
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//* AUTOCAL                                                                                                     *
+//* Automatic calibration procedure                                                                             *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*   
    if (getWord(QSW,QCAL)==true) {
       #ifdef DEBUG
          _INFOLIST("%s CAL_counter() triggered\n",__func__);
@@ -3330,157 +3337,16 @@ bool     b = false;
             }
           }
         }
-/*        
-          count = count - 1;
-          pwm_config cfg = pwm_get_default_config();
-          pwm_config_set_clkdiv_mode(&cfg, PWM_DIV_B_RISING);
-          pwm_init(4, &cfg, false);
-          gpio_set_function(CAL, GPIO_FUNC_PWM);
-          pwm_set_irq_enabled(4, true);
-          irq_set_exclusive_handler(PWM_IRQ_WRAP, pwm_int_cal);
-          irq_set_enabled(PWM_IRQ_WRAP, true);
-          
-          f_hi = 0;
-          t = time_us_32() + 2;
-          while (t > time_us_32());
-          
-          pwm_set_enabled(4, true);
-          t += 3000000; // Gate time (in uSeconds), 3 seconds
-          while (t > time_us_32());
-          
-          pwm_set_enabled(4, false);
-          fclk = pwm_get_counter(4);
-          fclk += f_hi << 16;
- 
-          
-          //Serial.print(f / 3.0); // Divide by gate time in seconds
-          //Serial.println(" Hz");
-          
-          error = ((fclk / 3.0) * 100ULL) - target_freq;
-          #ifdef DEBUG
-            _INFOLIST("%s Calibration VFO=%" PRId64 " Hz target_freq=%ld error=%ld\n",__func__,(fclk/3.0),target_freq,error);
-          #endif //DEBUG          
-          
-          //Serial.print("Current calibration correction value is ");
-          //Serial.printf("%" PRId64 "\n", error);
-          //Serial.print("Total calibration value is ");
-          //Serial.println(error + existing_error);
+   } //Auto calibration mode
 
-          //if (count <= 0) { // Auto-calibration logic
-             //flush_input();
-             //Serial.println();
-             //Serial.print(F("Calibration factor is "));
-             //Serial.println(error);
-             //Serial.println(F("Setting calibration factor automatically"));
-             
-             //si5351.set_correction(error + existing_error, SI5351_PLL_INPUT_XO);
-             //existing_error = existing_error + error;
-             //si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
-             
-             //Serial.println(F("Resetting target frequency"));
-             
-             //si5351.set_freq(target_freq, SI5351_CLK2);
-             //count = 15;
-         //}
-      } //while (true)
-      */
-   }
-//*------------------------------------------------------------------------*/
-   if (getWord(QSW,QFSK)==true) {
-      #ifdef DEBUG
-         _INFOLIST("%s FSK_counter() triggered\n",__func__);
-      #endif //DEBUG    
-      //FSK_counter();   
-   }  
-}
-/*-----------------------------------------------------------*
- * loop1()                                                   *
- * dummy loop on core#2 processor (never executed)           *
- *-----------------------------------------------------------*/
-void loop1() {
-}
-/*
-static void flush_input(void)
-{
-  while (Serial.available() > 0)
-    Serial.read();
-}
 
-static void vfo_interface(void)
-{
-  rx_freq = target_freq;
-  cal_factor = old_cal;
-  Serial.println(F("   Up:   r   t  y  u  i   o  p"));
-  Serial.println(F(" Down:   f   g  h  j  k   l  ;"));
-  Serial.println(F("   Hz: 0.01 0.1 1 10 100 1K 10k"));
-  while (1)
-  {
-    if (Serial.available() > 0)
-    {
-      char c = Serial.read();
-      switch (c)
-      {
-        case 'q':
-          flush_input();
-          Serial.println();
-          Serial.print(F("Calibration factor is "));
-          Serial.println(cal_factor);
-          Serial.println(F("Setting calibration factor"));
-          si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
-          si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
-          Serial.println(F("Resetting target frequency"));
-          si5351.set_freq(target_freq, SI5351_CLK2);
-          old_cal = cal_factor;
-          return;
-        case 'S':
-          flush_input();
-          Serial.println();
-          Serial.print(F("Calibration factor is "));
-          Serial.println(error);
-          Serial.println(F("Setting calibration factor"));
-          si5351.set_correction(error + existing_error, SI5351_PLL_INPUT_XO);
-          existing_error = existing_error + error;
-          si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
-          Serial.println(F("Resetting target frequency"));
-          si5351.set_freq(target_freq, SI5351_CLK2);
-          old_cal = cal_factor;
-          return;
-        case 'r': rx_freq += 1; break;
-        case 'f': rx_freq -= 1; break;
-        case 't': rx_freq += 10; break;
-        case 'g': rx_freq -= 10; break;
-        case 'y': rx_freq += 100; break;
-        case 'h': rx_freq -= 100; break;
-        case 'u': rx_freq += 1000; break;
-        case 'j': rx_freq -= 1000; break;
-        case 'i': rx_freq += 10000; break;
-        case 'k': rx_freq -= 10000; break;
-        case 'o': rx_freq += 100000; break;
-        case 'l': rx_freq -= 100000; break;
-        case 'p': rx_freq += 1000000; break;
-        case ';': rx_freq -= 1000000; break;
-        case '?':
-          Serial.println(F("   Up:   r   t  y  u  i   o  p"));
-          Serial.println(F(" Down:   f   g  h  j  k   l  ;"));
-          Serial.println(F("   Hz: 0.01 0.1 1 10 100 1K 10k"));
-          break;
-        default:
-          // Do nothing
-          continue;
-      }
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//* FSK                                                                                                         *
+//* Procedure to measure the incoming frequency                                                                 *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*   
 
-      cal_factor = (int32_t)(target_freq - rx_freq) + old_cal;
-      si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
-      si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
-      si5351.pll_reset(SI5351_PLLA);
-      si5351.set_freq(target_freq, SI5351_CLK2);
-      Serial.print(F("Current difference:"));
-      Serial.println(cal_factor);
-    }
-    delay(10);
-  }
+     //*---> Place here counting algorithm
 }
-*/
 
 #endif //Auto Calibration 
 /*==========================================================================================================*/
