@@ -130,7 +130,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "1.5e"
-#define BUILD          133
+#define BUILD          134
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
@@ -314,6 +314,7 @@
 #define QWAIT       0B00000001    //Semaphore Wait
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
+#define MARKFSK     0B00001000    //FSK new datum
 
 /*----------------------------------------------------------------*
  * Miscellaneour definitions                                              *
@@ -427,12 +428,13 @@ const char *endList         = "XXX";
 #define  CAL_COMMIT      12
 #define  CAL_ERROR        1
 
+uint32_t ffsk = 0;
 uint32_t fclk = 0;
 uint32_t f_hi;
-int32_t  old_cal = 0;
-int64_t  existing_error = 0;
+//int32_t  old_cal = 0;
+//int64_t  existing_error = 0;
 int32_t  error = 0;
-int      count = 15; /* reverse count */
+//int      count = 15; /* reverse count */
 int      pwm_slice;  
 
 #endif //PDX
@@ -3184,7 +3186,7 @@ void Calibration(){
 
 #if defined(PDX)
 
-void pwm_int_cal() {
+void pwm_int() {
    pwm_clear_irq(pwm_slice);
    f_hi++;
 }
@@ -3245,13 +3247,10 @@ bool     b = false;
        si5351.set_clock_pwr(SI5351_CLK1, 0); // Enable the clock for calibration
        si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
        si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
-       si5351.set_correction(old_cal, SI5351_PLL_INPUT_XO);
+       si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
        si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
        si5351.set_freq(Cal_freq * 100UL, SI5351_CLK2);
 
-       #ifdef DEBUG
-         _INFOLIST("%s si5351 initialization ok target freq=%ld cal_factor=%ld\n",__func__,Cal_freq,old_cal);
-       #endif //DEBUG
 
       /*--------------------------------------------*
        * PWM counter used for automatic calibration *
@@ -3259,6 +3258,10 @@ bool     b = false;
       fclk=0;
       int16_t n=int16_t(CAL_COMMIT);
       cal_factor=0;
+      #ifdef DEBUG
+        _INFOLIST("%s si5351 initialization ok target freq=%ld cal_factor=%ld\n",__func__,Cal_freq,cal_factor);
+      #endif //DEBUG     
+      
       pwm_slice=pwm_gpio_to_slice_num(CAL);      
       while (true) {
           /*-------------------------*
@@ -3270,7 +3273,7 @@ bool     b = false;
           gpio_set_function(CAL,GPIO_FUNC_PWM);
           
           pwm_set_irq_enabled(pwm_slice,true);
-          irq_set_exclusive_handler(PWM_IRQ_WRAP,pwm_int_cal);
+          irq_set_exclusive_handler(PWM_IRQ_WRAP,pwm_int);
           irq_set_enabled(PWM_IRQ_WRAP,true);
           f_hi=0;
 
@@ -3338,7 +3341,58 @@ bool     b = false;
           }
         }
    } //Auto calibration mode
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//* FSK detection algorithm                                                                                     *
+//* Automatic input detection algorithm                                                                         *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*   
 
+   if (getWord(QSW,QFSK)==true) {
+      #ifdef DEBUG
+         _INFOLIST("%s FSK counter() triggered\n",__func__);
+      #endif //DEBUG    
+
+      ffsk=0;
+      uint16_t n=100;
+      /*gpio_set_function(0,GPIO_FUNC_PWM);
+      pwm_set_wrap(0,1); //PWM 62,5 MHz
+      pwm_set_gpio_level(0,1);
+      pwm_set_enabled(0,true);*
+      */
+      pwm_slice=pwm_gpio_to_slice_num(FSK);
+      
+      while (true) {
+          pwm_config cfg=pwm_get_default_config();
+          pwm_config_set_clkdiv_mode(&cfg,PWM_DIV_B_RISING);
+          pwm_init(pwm_slice,&cfg,false);
+          gpio_set_function(FSK,GPIO_FUNC_PWM);
+          pwm_set_irq_enabled(pwm_slice,true);
+          irq_set_exclusive_handler(PWM_IRQ_WRAP,pwm_int);
+          irq_set_enabled(PWM_IRQ_WRAP,true);
+          f_hi=0;
+          uint32_t t=time_us_32()+2;
+          while (t>time_us_32());
+          pwm_set_enabled(pwm_slice,true);
+          t+=10000;
+          while (t>time_us_32());
+          pwm_set_enabled(pwm_slice,false);
+          ffsk=pwm_get_counter(pwm_slice);
+          ffsk+=f_hi<<16;
+          setWord(&QSW,MARKFSK,true);  //Mark a new value has been obtained
+          //Serial.print(f);
+          //Serial.println(" Hz");
+          #ifdef DEBUG
+          n--;
+          if (n==0) {
+             n=100;
+             _INFOLIST("%s f=%ld Hz\n",__func__,ffsk);
+          }
+          #endif //DEBUG
+        }
+
+
+
+      
+   }
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //* FSK                                                                                                         *
@@ -4492,7 +4546,7 @@ void setup()
             #endif //WDT   
           }
       #else   //Manual calibration
-         calibration();
+         Calibration();
       #endif //AUTOCAL   
    }
   
@@ -4514,6 +4568,17 @@ void setup()
   #endif //DEBUG   
   
 #endif //ADX
+
+  /*------------------------------------*
+   * trigger counting algorithm         *
+   *------------------------------------*/
+  setWord(&QSW,MARKFSK,false);
+  setWord(&QSW,QFSK,true);
+  setWord(&QSW,QWAIT,true);
+  #ifdef DEBUG
+      _INFOLIST("%s FSK detection algorithm started ok\n",__func__);
+  #endif //DEBUG   
+
   
   switch_RXTX(LOW);
   #ifdef DEBUG
