@@ -130,7 +130,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "1.5e"
-#define BUILD          134
+#define BUILD          135
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
@@ -314,7 +314,9 @@
 #define QWAIT       0B00000001    //Semaphore Wait
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
-#define MARKFSK     0B00001000    //FSK new datum
+#define QDATA       0B00001000    //FSK new datum
+#define FSKMIN             200    //Minimum FSK frequency computed
+#define FSKMAX            2500    //Maximum FSK frequency computed
 
 /*----------------------------------------------------------------*
  * Miscellaneour definitions                                              *
@@ -3313,7 +3315,6 @@ bool     b = false;
           } else {
             n--;
             if (n==0) {
-              
                #ifdef DEBUG
                  _INFOLIST("%s Convergence achieved cal_factor=%ld\n",__func__,cal_factor);
                #endif //DEBUG   
@@ -3345,7 +3346,6 @@ bool     b = false;
 //* FSK detection algorithm                                                                                     *
 //* Automatic input detection algorithm                                                                         *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*   
-
    if (getWord(QSW,QFSK)==true) {
       #ifdef DEBUG
          _INFOLIST("%s FSK counter() triggered\n",__func__);
@@ -3353,11 +3353,6 @@ bool     b = false;
 
       ffsk=0;
       uint16_t n=100;
-      /*gpio_set_function(0,GPIO_FUNC_PWM);
-      pwm_set_wrap(0,1); //PWM 62,5 MHz
-      pwm_set_gpio_level(0,1);
-      pwm_set_enabled(0,true);*
-      */
       pwm_slice=pwm_gpio_to_slice_num(FSK);
       
       while (true) {
@@ -3377,32 +3372,24 @@ bool     b = false;
           pwm_set_enabled(pwm_slice,false);
           ffsk=pwm_get_counter(pwm_slice);
           ffsk+=f_hi<<16;
-          setWord(&QSW,MARKFSK,true);  //Mark a new value has been obtained
-          //Serial.print(f);
-          //Serial.println(" Hz");
+          setWord(&QSW,QDATA,true);  //Mark a new value has been obtained
           #ifdef DEBUG
           n--;
           if (n==0) {
              n=100;
-             _INFOLIST("%s f=%ld Hz\n",__func__,ffsk);
+             if (ffsk>=uint32_t(FSKMIN)){
+                #ifdef DEBUG
+                   _INFOLIST("%s f=%ld Hz\n",__func__,ffsk);
+                #endif //DEBUG
+             }
           }
           #endif //DEBUG
-        }
-
-
-
+        }  //end FSK loop
       
    }
 
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//* FSK                                                                                                         *
-//* Procedure to measure the incoming frequency                                                                 *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*   
-
-     //*---> Place here counting algorithm
 }
-
-#endif //Auto Calibration 
+#endif //Auto Calibration & Detection algorithm running on Core #2
 /*==========================================================================================================*/
 #ifdef EE
 /*------------------------------------------------------------------------------*
@@ -4572,13 +4559,12 @@ void setup()
   /*------------------------------------*
    * trigger counting algorithm         *
    *------------------------------------*/
-  setWord(&QSW,MARKFSK,false);
+  setWord(&QSW,QDATA,false);
   setWord(&QSW,QFSK,true);
   setWord(&QSW,QWAIT,true);
   #ifdef DEBUG
       _INFOLIST("%s FSK detection algorithm started ok\n",__func__);
   #endif //DEBUG   
-
   
   switch_RXTX(LOW);
   #ifdef DEBUG
@@ -4588,7 +4574,7 @@ void setup()
   Mode_assign(); 
 
   #ifdef WDT
-     
+    
      #ifdef ADX
         wdt_disable();
         wdt_enable(WDTO_8S);
@@ -4676,7 +4662,7 @@ void loop()
     #endif //WDT
 
 /*----------------------------------------------------------------------------------*
- * main transmission loop                                                           *
+ * main transmission loop       (ADX)                                               *
  * Timer1 (16 bits) with no pre-scaler (16 MHz) is checked to detect zero crossings *
  * if there is no overflow the frequency is calculated                              *
  * if activity is detected the TX is turned on                                      *
@@ -4783,6 +4769,109 @@ uint16_t n = VOX_MAXTRY;
     #endif //WDT
  }
 #endif //ADX
+
+#ifdef PDX
+/*-----------------------------------------------------------------------------------*
+ * main transmission loop   (PDX)                                                    *
+ * setup1() running as a different thread at core #2 is sampling the frequency at    *
+ * 10 mSec intervals. Whenever the measured frequency falls within an upper and lower*
+ * limits the transceiver is turned ON if (CAT is not on control) and remains until  *
+ * no further frequency can be measured.                                             *
+ *-----------------------------------------------------------------------------------*/
+uint16_t n = VOX_MAXTRY;
+    setWord(&SSW,VOX,false);
+    while ( n > 0 ){                                 //Iterate up to 10 times looking for signal to transmit
+
+    #ifdef WDT
+       wdt_reset();
+
+       if (getWord(TSW,TX_WDT)==HIGH) {
+           break;
+       }  //If watchdog has been triggered so no TX is allowed till a wdt_max timeout period has elapsed   
+       
+       if ((millis() > (wdt_tout+uint32_t(WDT_MAX))) && getWord(SSW,TXON) == HIGH) {
+          switch_RXTX(LOW);
+          setWord(&TSW,TX_WDT,HIGH);
+          wdt_tout=millis();
+          break;
+       }
+
+    #endif //WDT
+/*    
+    TCNT1 = 0;                                  //While this iteration is performed if the TX is off 
+    
+    while (ACSR &(1<<ACO)){                     //the receiver is operating with autonomy
+       if (TCNT1>CNT_MAX) break;
+    }
+    
+    while ((ACSR &(1<<ACO))==0){
+       if (TCNT1>CNT_MAX) break;
+    }
+    
+    TCNT1 = 0;
+    
+    while (ACSR &(1<<ACO)){
+      if (TCNT1>CNT_MAX) break;
+    }
+    
+    uint16_t d1 = ICR1;  
+    
+    while ((ACSR &(1<<ACO))==0){
+      if (TCNT1>CNT_MAX) break;
+    } 
+    
+    while (ACSR &(1<<ACO)){
+      if (TCNT1>CNT_MAX) break;
+    }
+    
+    uint16_t d2 = ICR1;
+*/
+/*-----------------------------------------------------*
+ * end of waveform measurement, now check what is the  *
+ * input frequency                                     *
+ *-----------------------------------------------------*/
+
+    if (getWord(QSW,QDATA)==true) {
+        uint32_t codefreq=ffsk;
+        setWord(&QSW,QDATA,false);
+        if (codefreq >= uint32_t(FSKMIN) && codefreq <= uint32_t(FSKMAX)) {
+           if (getWord(TSW,AVOX)==false) {
+               if (getWord(SSW,VOX)==false) {
+                  switch_RXTX(HIGH); 
+               }
+               si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
+               setWord(&SSW,VOX,true);
+
+           }
+           #ifdef ANTIVOX             
+           else {
+            if (millis()-tavox > uint32_t(avoxtime)) {
+               setWord(&TSW,AVOX,false);
+               tavox=0;
+            }
+          }
+#endif //ANTIVOX
+
+          #ifdef WDT
+             wdt_reset();
+          #endif //WDT
+
+        }
+    } else {
+    n--;
+  }
+
+    
+    #ifdef CAT 
+//*--- if CAT enabled check for serial events (again)
+       serialEvent();
+    #endif
+    
+    #ifdef WDT
+       wdt_reset();
+    #endif //WDT
+ }
+#endif //PDX
 /*---------------------------------------------------------------------------------*
  * when out of the loop no further TX activity is performed, therefore the TX is   *
  * turned off and the board is set into RX mode                                    *
