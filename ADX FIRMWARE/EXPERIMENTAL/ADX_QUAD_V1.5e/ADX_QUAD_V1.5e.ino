@@ -1,3 +1,4 @@
+
 //*********************************************************************************************************
 //********************* ADX - ARDUINO based DIGITAL MODES 4 BAND HF TRANSCEIVER ***************************
 //********************************* Write up start: 02/01/2022 ********************************************
@@ -97,6 +98,9 @@
 #define ADX              1   //This is the standard ADX Arduino based board 
 //#define PDX            1   //Compile for Raspberry Pi Pico board
 
+#ifdef PDX
+   #pragma GCC optimize (0)
+#endif //PDX
  
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            EXTERNAL LIBRARIES USED                                          *
@@ -162,14 +166,13 @@
    #define CAT            1      //Enable CAT protocol over serial port
    #define TS480          1      //CAT Protocol is Kenwood 480
    #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
-   #define ATUCTL         1      //Control external ATU device
-   #define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
    #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
-   #define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
 /*
  * The following definitions are disabled but can be enabled selectively
  */
-      
+   //#define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
+   //#define ATUCTL         1      //Control external ATU device
+   //#define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
    //#define CW             1      //CW support
    //#define CAL_RESET      1      //If enabled reset cal_factor when performing a new calibration()
    //#define DEBUG          1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
@@ -182,10 +185,10 @@
 #endif //PICO
 
 #ifdef PDX
-   #define WDT             1      //Hardware and TX watchdog enabled
-   #define EE              1      //Save in Flash emulation of EEPROM the configuration
-   #define CW              1      //CW support
-   #define AUTOCAL         1      //Automatic calibration mode
+   //#define WDT             1      //Hardware and TX watchdog enabled
+   //#define EE              1      //Save in Flash emulation of EEPROM the configuration
+   //#define CW              1      //CW support
+   //#define AUTOCAL         1      //Automatic calibration mode
    //#define CAT             1      //Enable CAT protocol over serial port
    //#define FT817           1      //CAT protocol is Yaesu FT817
    //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
@@ -430,6 +433,11 @@ const char *endList         = "XXX";
 #define  CAL_COMMIT      12
 #define  CAL_ERROR        1
 
+#define  FSK_WINDOW      40
+#define  FSK_WINDOW_USEC FSK_WINDOW*1000
+#define  FSK_MULT        1000/FSK_WINDOW
+#define  FSK_IDLE        1000*FSK_WINDOW*2
+
 uint32_t ffsk = 0;
 uint32_t fclk = 0;
 uint32_t f_hi;
@@ -438,6 +446,9 @@ uint32_t f_hi;
 int32_t  error = 0;
 //int      count = 15; /* reverse count */
 int      pwm_slice;  
+uint32_t tvox=0;
+uint32_t codefreq=0;
+uint32_t prevfreq=0;
 
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -564,9 +575,6 @@ uint16_t mode           = 0;          //Default to mode=0 (FT8)
 uint16_t Band_slot      = 0;          //Default to Bands[0]=40
 int32_t  cal_factor     = 0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
-//unsigned long target_freq=100000000UL;
-
-
 unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment   
 const unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600, 3560000},   //80m [0]
                                             { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1] 
@@ -2798,11 +2806,6 @@ bool detectKey(uint8_t k, bool v, bool w) {
  *---------------------------------------------------------------------------------------------*/
 void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
-#ifdef DEBUG
-  if (t != getWord(SSW,TXON)) {
-      _INFOLIST("%s (%s)\n",__func__,BOOL2CHAR(t));
-  } 
-#endif //DEBUG  
   
   if (t) {    //Set to TX
 /*-----------------------------------*
@@ -2822,25 +2825,21 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
      si5351.output_enable(SI5351_CLK1, 0);   //RX off    
      uint32_t freqtx=freq;
      #ifdef CW
-     if (mode==MAXMODE-1) {
-        freqtx=freq+uint32_t(cwshift);
-     } else {
-        freqtx=freq;
-     }
-     #ifdef DEBUG     
-     _INFOLIST("%s TX+ (CW On) ftx=%ld f=%ld\n",__func__,freqtx,freq);
-     #endif //DEBUG
+        if (mode==MAXMODE-1) {
+           freqtx=freq+uint32_t(cwshift);
+        } else {
+           freqtx=freq;
+        }
+        #ifdef DEBUG     
+        _INFOLIST("%s TX+ (CW=%s) TX=%s ftx=%ld f=%ld\n",__func__,BOOL2CHAR(getWord(SSW,CWMODE)),BOOL2CHAR(getWord(SSW,TXON)),freqtx,freq);
+        #endif //DEBUG
      #else
-     freqtx=freq;
-     #ifdef DEBUG     
-     _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
-     #endif //DEBUG
+        freqtx=freq;
+        #ifdef DEBUG     
+        _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
+        #endif //DEBUG
      #endif //CW
-     
-#ifdef DEBUG     
-     _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
-#endif //DEBUG
-     
+          
      si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
      si5351.output_enable(SI5351_CLK0, 1);   // TX on
      
@@ -3046,8 +3045,6 @@ bool getTXSW() {
 
 
 }
-
-
 /*==================================================================================================*
  * Clock (Si5351) Calibration methods                                                               *
  * Legacy method (ADX) || !(AUTOCAL)                                                                *
@@ -3059,7 +3056,7 @@ bool getTXSW() {
  *     An iteration is made automatically until the read value is 10MHz.                            *
  *     The calibration factor will be store                                                         *
  *==================================================================================================*/
-#if defined(ADX) || !defined(AUTOCAL)
+#if defined(ADX)
 /*----------------------------------------------------------*
  * Calibration function (LEGACY, Manual)
  *----------------------------------------------------------*/
@@ -3194,12 +3191,18 @@ void pwm_int() {
 }
   
 void setup1() {
+
 /*-----------------------------------------------------------------*
  * Core #2 Setup procedure                                         *
  * Enter processing on POR                                         *
  *-----------------------------------------------------------------*/
 uint32_t t = 0;
 bool     b = false;
+
+   #ifdef DEBUG
+      _INFOLIST("%s Waiting sync signal QCAL=%s QFSK=%s\n",__func__,BOOL2CHAR(QCAL),BOOL2CHAR(QFSK));
+   #endif //DEBUG
+
  /*--------------------------------------------*
   * Wait for overall initialization to complete*
   *--------------------------------------------*/
@@ -3207,6 +3210,7 @@ bool     b = false;
     #ifdef WDT
        wdt_reset();
     #endif //WDT
+    
     uint32_t t = time_us_32() + 2;
     while (t > time_us_32());
   }
@@ -3342,6 +3346,7 @@ bool     b = false;
           }
         }
    } //Auto calibration mode
+   
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //* FSK detection algorithm                                                                                     *
 //* Automatic input detection algorithm                                                                         *
@@ -3352,7 +3357,7 @@ bool     b = false;
       #endif //DEBUG    
 
       ffsk=0;
-      uint16_t n=100;
+      uint16_t cnt=100;
       pwm_slice=pwm_gpio_to_slice_num(FSK);
       
       while (true) {
@@ -3367,27 +3372,27 @@ bool     b = false;
           uint32_t t=time_us_32()+2;
           while (t>time_us_32());
           pwm_set_enabled(pwm_slice,true);
-          t+=10000;
+          t+=uint32_t(FSK_WINDOW_USEC);
           while (t>time_us_32());
           pwm_set_enabled(pwm_slice,false);
           ffsk=pwm_get_counter(pwm_slice);
           ffsk+=f_hi<<16;
           setWord(&QSW,QDATA,true);  //Mark a new value has been obtained
+          ffsk=ffsk*FSK_MULT;
           #ifdef DEBUG
-          n--;
-          if (n==0) {
-             n=100;
-             if (ffsk>=uint32_t(FSKMIN)){
-                #ifdef DEBUG
-                   _INFOLIST("%s f=%ld Hz\n",__func__,ffsk);
-                #endif //DEBUG
-             }
+          cnt--;
+          if (cnt==0) {
+             cnt=100;
+             //if (ffsk>=uint32_t(FSKMIN)){
+                //#ifdef DEBUG
+                //   _INFOLIST("%s f=%ld Hz\n",__func__,ffsk);
+                //#endif //DEBUG
+             //}
           }
           #endif //DEBUG
         }  //end FSK loop
       
    }
-
 }
 #endif //Auto Calibration & Detection algorithm running on Core #2
 /*==========================================================================================================*/
@@ -4402,6 +4407,7 @@ void setup()
           const char * proc = "RP2040";     
       #endif         
       _INFOLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n",__func__,VERSION,BUILD,proc);
+    
       #ifdef DEBUG
           #ifdef TS480
              _INFOLIST("%s: CAT subsystem TS480\n",__func__);
@@ -4533,7 +4539,9 @@ void setup()
             #endif //WDT   
           }
       #else   //Manual calibration
-         Calibration();
+         #ifdef ADX
+            Calibration();
+         #endif //ADX   
       #endif //AUTOCAL   
    }
   
@@ -4556,16 +4564,30 @@ void setup()
   
 #endif //ADX
 
+#ifdef PDX
   /*------------------------------------*
    * trigger counting algorithm         *
    *------------------------------------*/
+  //multicore_launch_core1(setup1);
+  //sleep_ms(500);
+
+  rp2040.idleOtherCore();
+  #ifdef DEBUG
+      _INFOLIST("%s Core #2 stopped ok\n",__func__);
+  #endif //DEBUG   
+
   setWord(&QSW,QDATA,false);
   setWord(&QSW,QFSK,true);
   setWord(&QSW,QWAIT,true);
   #ifdef DEBUG
-      _INFOLIST("%s FSK detection algorithm started ok\n",__func__);
+      _INFOLIST("%s FSK detection algorithm started QDATA=%s QFSK=%s QWAIT=%s ok\n",__func__,BOOL2CHAR(getWord(QSW,QDATA)),BOOL2CHAR(getWord(QSW,QFSK)),BOOL2CHAR(getWord(QSW,QWAIT)));
   #endif //DEBUG   
+  delay(500);
+  //rp2040.resumeOtherCore();
   
+
+#endif //PDX
+
   switch_RXTX(LOW);
   #ifdef DEBUG
       _INFOLIST("%s switch_RXTX Low ok\n",__func__);
@@ -4601,7 +4623,19 @@ void setup()
    }  
 #endif //TERMINAL   
 
+
+/*------------
+ * re-start the core1 where the FSK counting is performed
+ */
+  #ifdef PDX
+     rp2040.restartCore1();
+     delay(5000);
+  #endif //PDX
   
+  #ifdef DEBUG
+      _INFOLIST("%s Core #2 resumed ok\n",__func__);
+  #endif //DEBUG   
+
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   Board Main Dispatched and operational loop                                *
@@ -4609,7 +4643,7 @@ void setup()
 void loop()
 {  
 
-  
+
  //*--- Debug hook
     keepAlive();
 
@@ -4779,6 +4813,7 @@ uint16_t n = VOX_MAXTRY;
  * no further frequency can be measured.                                             *
  *-----------------------------------------------------------------------------------*/
 uint16_t n = VOX_MAXTRY;
+    uint16_t k=100;
     setWord(&SSW,VOX,false);
     while ( n > 0 ){                                 //Iterate up to 10 times looking for signal to transmit
 
@@ -4797,51 +4832,32 @@ uint16_t n = VOX_MAXTRY;
        }
 
     #endif //WDT
-/*    
-    TCNT1 = 0;                                  //While this iteration is performed if the TX is off 
-    
-    while (ACSR &(1<<ACO)){                     //the receiver is operating with autonomy
-       if (TCNT1>CNT_MAX) break;
-    }
-    
-    while ((ACSR &(1<<ACO))==0){
-       if (TCNT1>CNT_MAX) break;
-    }
-    
-    TCNT1 = 0;
-    
-    while (ACSR &(1<<ACO)){
-      if (TCNT1>CNT_MAX) break;
-    }
-    
-    uint16_t d1 = ICR1;  
-    
-    while ((ACSR &(1<<ACO))==0){
-      if (TCNT1>CNT_MAX) break;
-    } 
-    
-    while (ACSR &(1<<ACO)){
-      if (TCNT1>CNT_MAX) break;
-    }
-    
-    uint16_t d2 = ICR1;
-*/
 /*-----------------------------------------------------*
  * end of waveform measurement, now check what is the  *
  * input frequency                                     *
  *-----------------------------------------------------*/
-
+ 
     if (getWord(QSW,QDATA)==true) {
-        uint32_t codefreq=ffsk;
+        
+        codefreq=ffsk;
+        if (codefreq != prevfreq) {
+           #ifdef DEBUG
+              _INFOLIST("%s Freq sample changed f=%ld prev=%ld\n",__func__,codefreq,prevfreq);
+           #endif //DEBUG                                           
+           prevfreq=codefreq;
+        }
         setWord(&QSW,QDATA,false);
         if (codefreq >= uint32_t(FSKMIN) && codefreq <= uint32_t(FSKMAX)) {
+           n=VOX_MAXTRY;
            if (getWord(TSW,AVOX)==false) {
-               if (getWord(SSW,VOX)==false) {
+               if (getWord(SSW,VOX)==false) {                            
+                  #ifdef DEBUG
+                      _INFOLIST("%s VOX activated n=%d f=%ld\n",__func__,n,codefreq);
+                  #endif //DEBUG                                  
                   switch_RXTX(HIGH); 
                }
                si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
                setWord(&SSW,VOX,true);
-
            }
            #ifdef ANTIVOX             
            else {
@@ -4850,7 +4866,7 @@ uint16_t n = VOX_MAXTRY;
                tavox=0;
             }
           }
-#endif //ANTIVOX
+          #endif //ANTIVOX
 
           #ifdef WDT
              wdt_reset();
@@ -4858,10 +4874,13 @@ uint16_t n = VOX_MAXTRY;
 
         }
     } else {
-    n--;
-  }
 
-    
+
+      uint32_t tcnt = time_us_32() + uint32_t(FSK_IDLE);
+      while (tcnt > time_us_32());
+      n--;
+   
+  
     #ifdef CAT 
 //*--- if CAT enabled check for serial events (again)
        serialEvent();
@@ -4870,12 +4889,16 @@ uint16_t n = VOX_MAXTRY;
     #ifdef WDT
        wdt_reset();
     #endif //WDT
+   }
  }
+ 
+ 
 #endif //PDX
 /*---------------------------------------------------------------------------------*
  * when out of the loop no further TX activity is performed, therefore the TX is   *
  * turned off and the board is set into RX mode                                    *
  *---------------------------------------------------------------------------------*/
+ 
 #ifdef WDT
 
 /*-----------------------------------------------------------*
@@ -4888,6 +4911,8 @@ uint16_t n = VOX_MAXTRY;
  * it will stay ready for the next TX command                *
  *                                                           *
  *-----------------------------------------------------------*/
+ 
+
  if (getWord(TSW,TX_WDT)==HIGH) {
     blinkLED(TX);
  }
