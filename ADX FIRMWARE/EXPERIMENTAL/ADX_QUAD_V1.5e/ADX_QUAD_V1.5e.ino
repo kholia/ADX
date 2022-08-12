@@ -95,8 +95,8 @@
  * Define the runtime platform either PICO (Raspberry Pi Pico) *
  * or !PICO (Arduino ATMega328p)                               *
  *-------------------------------------------------------------*/
-#define ADX              1   //This is the standard ADX Arduino based board 
-//#define PDX            1   //Compile for Raspberry Pi Pico board
+//#define ADX              1   //This is the standard ADX Arduino based board 
+#define PDX            1   //Compile for Raspberry Pi Pico board
 
 #ifdef PDX
    #pragma GCC optimize (0)
@@ -318,7 +318,7 @@
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
 #define QDATA       0B00001000    //FSK new datum
-#define FSKMIN             200    //Minimum FSK frequency computed
+#define FSKMIN             400    //Minimum FSK frequency computed
 #define FSKMAX            2500    //Maximum FSK frequency computed
 
 /*----------------------------------------------------------------*
@@ -433,20 +433,32 @@ const char *endList         = "XXX";
 #define  CAL_COMMIT      12
 #define  CAL_ERROR        1
 
-#define  FSK_WINDOW      40
-#define  FSK_WINDOW_USEC FSK_WINDOW*1000
-#define  FSK_MULT        1000/FSK_WINDOW
-#define  FSK_IDLE        1000*FSK_WINDOW*2
+#define  FSK_PEG         1
+//#define  FSK_ZCD         1
+
+#if defined(FSK_PEG) && defined(FSK_ZCD)
+    #undef FSK_PEG
+#endif //Consistency rule 
+
+#if FSK_PEG
+    #define  FSK_WINDOW      10
+    #define  FSK_WINDOW_USEC FSK_WINDOW*1000
+    #define  FSK_MULT        1000/FSK_WINDOW
+    #define  FSK_IDLE        1000*FSK_WINDOW*2
+#endif //FSK_PEG
+
+#ifdef FSK_ZCD
+    #define FSK_USEC      1000000
+    #define FSK_SAMPLE       1000
+    #define FSK_IDLE      5*FSK_SAMPLE
+#endif //FSK_ZCD
 
 uint32_t ffsk = 0;
 uint32_t fclk = 0;
 uint32_t f_hi;
-//int32_t  old_cal = 0;
-//int64_t  existing_error = 0;
 int32_t  error = 0;
-//int      count = 15; /* reverse count */
 int      pwm_slice;  
-uint32_t tvox=0;
+//uint32_t tvox=0;
 uint32_t codefreq=0;
 uint32_t prevfreq=0;
 
@@ -458,9 +470,9 @@ uint32_t prevfreq=0;
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-//#define DEBUG  1
+#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-   //#define INFO  1   //Enable _INFO and _INFOLIST statements
+   #define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
@@ -3189,24 +3201,24 @@ void pwm_int() {
    pwm_clear_irq(pwm_slice);
    f_hi++;
 }
-  
+
+/*=========================================================================================*
+ * CORE1
+ * 
+ *=========================================================================================*/
 void setup1() {
 
 /*-----------------------------------------------------------------*
  * Core #2 Setup procedure                                         *
- * Enter processing on POR                                         *
+ * Enter processing on POR but restarted from core0 setup ()       *
  *-----------------------------------------------------------------*/
 uint32_t t = 0;
 bool     b = false;
-
-   #ifdef DEBUG
-      _INFOLIST("%s Waiting sync signal QCAL=%s QFSK=%s\n",__func__,BOOL2CHAR(QCAL),BOOL2CHAR(QFSK));
-   #endif //DEBUG
-
  /*--------------------------------------------*
   * Wait for overall initialization to complete*
   *--------------------------------------------*/
   while (getWord(QSW,QWAIT)==false) {
+    
     #ifdef WDT
        wdt_reset();
     #endif //WDT
@@ -3222,9 +3234,6 @@ bool     b = false;
    #ifdef DEBUG
       _INFOLIST("%s QWAIT semaphore released QCAL=%s QFSK=%s\n",__func__,BOOL2CHAR(QCAL),BOOL2CHAR(QFSK));
    #endif //DEBUG
-
-
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //* AUTOCAL                                                                                                     *
 //* Automatic calibration procedure                                                                             *
@@ -3352,14 +3361,18 @@ bool     b = false;
 //* Automatic input detection algorithm                                                                         *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*   
    if (getWord(QSW,QFSK)==true) {
-      #ifdef DEBUG
-         _INFOLIST("%s FSK counter() triggered\n",__func__);
-      #endif //DEBUG    
 
       ffsk=0;
       uint16_t cnt=100;
       pwm_slice=pwm_gpio_to_slice_num(FSK);
-      
+
+      #ifdef DEBUG
+         _INFOLIST("%s FSK counter() triggered\n",__func__);
+      #endif //DEBUG    
+
+/*--------------------------------------------------------------*      
+ * main counting algorithm cycle                                *
+ *--------------------------------------------------------------*/
       while (true) {
           pwm_config cfg=pwm_get_default_config();
           pwm_config_set_clkdiv_mode(&cfg,PWM_DIV_B_RISING);
@@ -3369,27 +3382,72 @@ bool     b = false;
           irq_set_exclusive_handler(PWM_IRQ_WRAP,pwm_int);
           irq_set_enabled(PWM_IRQ_WRAP,true);
           f_hi=0;
-          uint32_t t=time_us_32()+2;
-          while (t>time_us_32());
-          pwm_set_enabled(pwm_slice,true);
-          t+=uint32_t(FSK_WINDOW_USEC);
-          while (t>time_us_32());
-          pwm_set_enabled(pwm_slice,false);
-          ffsk=pwm_get_counter(pwm_slice);
-          ffsk+=f_hi<<16;
-          setWord(&QSW,QDATA,true);  //Mark a new value has been obtained
-          ffsk=ffsk*FSK_MULT;
-          #ifdef DEBUG
-          cnt--;
-          if (cnt==0) {
-             cnt=100;
-             //if (ffsk>=uint32_t(FSKMIN)){
-                //#ifdef DEBUG
-                //   _INFOLIST("%s f=%ld Hz\n",__func__,ffsk);
-                //#endif //DEBUG
-             //}
-          }
-          #endif //DEBUG
+          /*---------------------------------------*
+           * PEG algorithm                         *
+           * defined by FSK_PEG                    *
+           * this is based on a pure PWM counting  *
+           * over a defined window for counting    *
+           * it has a +/- 1 count error which      *
+           * translate into a FSK_MULT (Hz) of     *
+           * counting error                        *
+           * FSK_MULT must be larger compared with *
+           * actual bandwidth of a given signal    *
+           * to reduce counting error impact.      *
+           * Some heuristics might apply to correct*
+           * this error.                           *
+           *---------------------------------------*/
+          #ifdef FSK_PEG
+             uint32_t t=time_us_32()+2;                         //Wait 2 uSec for definitions to stabilize
+             while (t>time_us_32());                            //
+             pwm_set_enabled(pwm_slice,true);                   //Enable pwm count
+             t+=uint32_t(FSK_WINDOW_USEC);                      //Wait for the FSK WINDOW (uSec)
+             while (t>time_us_32());                            //This window will define the sample rate for frequency (every FSK_WINDOW uSec)
+             pwm_set_enabled(pwm_slice,false);                  //Disable pwm count
+             ffsk=pwm_get_counter(pwm_slice);                   //Obtain actual pwm count during the window
+             ffsk+=f_hi<<16;                                    //Add overflow if any
+             ffsk=ffsk*FSK_MULT;                                //Apply window multiplicator (1000/FSK_WINDOW)
+             if (ffsk > FSKMIN && ffsk <= FSKMAX) {             //If frequency is outside the allowed bandwidth ignore
+                setWord(&QSW,QDATA,true);                       //Mark a new value has been obtained             
+             }
+          #endif //FSK_PEG algorithm
+
+          #ifdef FSK_ZCD
+         /*----------------------------------------*
+           * ZCD algorithm                         *
+           * defined by FSK_ZCD                    *
+           * this is based on a pseudo cross detect*
+           * where the rising edge is taken as a   *
+           * false cross detection followed by next*
+           * edge which is also a false zcd but    *
+           * at the same level thus measuring the  *
+           * time between both will yield a period *
+           * measurement proportional to the real  *
+           * period of the signal as measured      *
+           * two sucessive rising edges            *
+           * Measurements are made every 1 mSec    *
+           *---------------------------------------*/             
+             uint32_t t=time_us_32()+2;                         //Allow all the settings to stabilize
+             while (t>time_us_32());                            //
+             uint32_t pwm_cnt=pwm_get_counter(pwm_slice);       //Get current pwm count
+             pwm_set_enabled(pwm_slice,true);                   //enable pwm count
+             while (pwm_get_counter(pwm_slice) == pwm_cnt) {}   //Wait till the count change
+             pwm_cnt=pwm_get_counter(pwm_slice);                //Measure that value
+             uint32_t t1=time_us_32();                          //Mark first tick (t1)
+             while (pwm_get_counter(pwm_slice) == pwm_cnt) {}   //Wait till the count change (a rise edge)
+             uint32_t t2=time_us_32();                          //Mark the second tick (t2)
+             pwm_set_enabled(pwm_slice,false);                  //Disable counting
+             if (t2 != t1) {                                    //Prevent noise to trigger a nul measurement
+                float f=FSK_USEC/(t2-t1);                       //Ticks are expressed in uSecs so convert to Hz
+                f=round(f);                                     //Round to the nearest integer 
+                ffsk=uint32_t(f);                               //Convert to long integer for actual usage
+                if (ffsk > FSKMIN && ffsk <= FSKMAX) {          //Only yield a value if within the baseband 
+                   setWord(&QSW,QDATA,true);                    //Mark a new value has been obtained
+                }                                               //
+             }                                                  //
+             t=time_us_32()+FSK_SAMPLE;                         //Now wait for 1 mSec till next sample
+             while (t>time_us_32()) ;
+          #endif //FSK_ZCD
+            
         }  //end FSK loop
       
    }
@@ -4296,7 +4354,7 @@ void initADX(){
 /*--------------------------------------------------------------------------*
  * definePinOut
  * isolate pin definition on a board conditional procedure out of the main
- * setup() flow
+ * setup flow
  *--------------------------------------------------------------------------*/
 void definePinOut() {
 
@@ -4629,12 +4687,11 @@ void setup()
  */
   #ifdef PDX
      rp2040.restartCore1();
-     delay(5000);
+     delay(1); 
+     #ifdef DEBUG
+        _INFOLIST("%s Core #2 resumed ok\n",__func__);
+     #endif //DEBUG   
   #endif //PDX
-  
-  #ifdef DEBUG
-      _INFOLIST("%s Core #2 resumed ok\n",__func__);
-  #endif //DEBUG   
 
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -4643,11 +4700,14 @@ void setup()
 void loop()
 {  
 
-
  //*--- Debug hook
+ 
     keepAlive();
 
-//*--- changes in mode, band, frequency and operational status
+/*---------------------------------------------------------------------------------*
+ *  Manage the user interface (UP/DOWN/TX switches & combinations)                 *
+ *  Change frequency, mode, band                                                   *
+ *---------------------------------------------------------------------------------*/  
     checkMode();
 
 //*--- Manage anti-VOX timeout after avoxtime (mSec) the anti-vox condition is cleared
@@ -4663,28 +4723,32 @@ void loop()
 
     #endif //ANTIVOX
 
+/*---------------------------------------------------------------------------------*
+ *  Save EEPROM if a change has been flagged anywhere in the logic                 *
+ *---------------------------------------------------------------------------------*/  
     #ifdef EE
 //*--- if EEPROM enabled check if timeout to write has been elapsed
     checkEEPROM();
     #endif //EEPROM
 
-    #ifdef ATUCTL
-
-//*--- ATU pulse width control
-
-    if ((millis()-tATU)>atu_delay && getWord(TSW,ATUCLK)==true) {
+/*---------------------------------------------------------------------------------*
+ *  ATU pulse width control, reset signal after the elapsed time elapsed happens   *
+ *---------------------------------------------------------------------------------*/  
+   #ifdef ATUCTL
+   if ((millis()-tATU)>atu_delay && getWord(TSW,ATUCLK)==true) {
        setWord(&TSW,ATUCLK,false);
        setGPIO(atu,LOW);
     }
     #endif //ATUCTL       
 
+/*---------------------------------------------------------------------------------*
+ *  Sample for CAT commands if enabled                                             *
+ *---------------------------------------------------------------------------------*/  
     #ifdef CAT 
-//*--- if CAT enabled check for serial events (TS480 & IC746)
        serialEvent();
     #endif //CAT
 
-    #ifdef WDT
-       
+    #ifdef WDT      
        if ((millis() > (wdt_tout+uint32_t(WDT_MAX))) && getWord(SSW,TXON) == HIGH && getWord(SSW,CATTX)==true) {
           switch_RXTX(LOW);
           setWord(&TSW,TX_WDT,HIGH);
@@ -4695,13 +4759,17 @@ void loop()
        wdt_reset();
     #endif //WDT
 
-/*----------------------------------------------------------------------------------*
- * main transmission loop       (ADX)                                               *
- * Timer1 (16 bits) with no pre-scaler (16 MHz) is checked to detect zero crossings *
- * if there is no overflow the frequency is calculated                              *
- * if activity is detected the TX is turned on                                      *
- * TX mode remains till no further activity is detected (operate like a VOX command)*
- *----------------------------------------------------------------------------------*/
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                                                                                *
+//*                      ADX Counting Algorithm                                    *
+//*                                                                                *
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+/*---------------------------------------------------------------------------------*
+ * Timer1 (16 bits) with no pre-scaler (16 MHz) is checked to detect zero crossings*
+ * if there is no overflow the frequency is calculated                             *
+ * if activity is detected the TX is turned on                                     *
+ * TX mode remains till no further activity is detected (operate like a VOX command*
+ *---------------------------------------------------------------------------------*/
 #ifdef ADX
 
 uint16_t n = VOX_MAXTRY;
@@ -4774,6 +4842,12 @@ uint16_t n = VOX_MAXTRY;
              si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
              setWord(&SSW,VOX,true);
 
+
+
+/*----------------------*
+ * ANTIVOX if enabled   *
+ *----------------------*/   
+
 #ifdef ANTIVOX             
           }  else {
             if (millis()-tavox > uint32_t(avoxtime)) {
@@ -4792,7 +4866,9 @@ uint16_t n = VOX_MAXTRY;
        n--;
     }
 
-    
+   /*----------------------*
+    * Sample CAT commands  *
+    *----------------------*/   
     #ifdef CAT 
 //*--- if CAT enabled check for serial events (again)
        serialEvent();
@@ -4805,18 +4881,46 @@ uint16_t n = VOX_MAXTRY;
 #endif //ADX
 
 #ifdef PDX
-/*-----------------------------------------------------------------------------------*
- * main transmission loop   (PDX)                                                    *
- * setup1() running as a different thread at core #2 is sampling the frequency at    *
- * 10 mSec intervals. Whenever the measured frequency falls within an upper and lower*
- * limits the transceiver is turned ON if (CAT is not on control) and remains until  *
- * no further frequency can be measured.                                             *
- *-----------------------------------------------------------------------------------*/
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                                                                                *
+//*                      PDX Counting Algorithm                                    *
+//*                                                                                *
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+/*---------------------------------------------------------------------------------*
+ * setup1 () is running on a different thread at core1 and sampling the frequency  *
+ * using either a pwm counting (FSK_PEG) or a pseudo zero crossing (FSK_ZCD) method*
+ * Whenever the frequency falls within the [FSKMIN,FSKMAX] limits it's FIFOed here *
+ * Additional heuristic of validation are also applied to manage counting common   *
+ * counting errors.                                                                *
+ * FSK_PEG                                                                         *
+ * The counting algorithm has a common error of +/- 1 count because of the moment  *
+ * the sampling starts (which might include or exclude one edge), because of the   *
+ * window measurement applied this is translated into a +/- FSK_MULT (Hz) error    *
+ * This value needs to be much larger than the maximum bandwidth of the signal to  *
+ * be decoded. i.e. With FSK_WINDOW at 10 mSec FSK_MULT is 100 thus the count      * 
+ * error can be up to +/- 100 Hz. As the FT8 signal occupies up to 50 Hz then the  *
+ * deviation is produced by a counting common error and not of a PSK tone change   *
+ * and thus ignored. Other counting errors can produce an actual shift of the      *
+ * transmitting frequency and thus a decoding issue on the other side. Actual      *
+ * measurement seems to point to error<0.2%                                        *
+ * FSK_ZCD                                                                         *
+ * The counting algorithm has rounding errors in the range of <500 uSec because the*
+ * error in the triggering level and the residual +/- 1 uSec counting error        *
+ * the frequency is filtered by the bandwidth level and also a rounding error of   *
+ * 1 Hz, thus if the sampled frequency is off by +/- 1 Hz the difference is less   *
+ * than the change on the PSK tone and thus ignored                                *
+ *---------------------------------------------------------------------------------*/
 uint16_t n = VOX_MAXTRY;
-    uint16_t k=100;
+uint32_t qBad=0;    
+uint32_t qTot=0;
+boolean  f=true;
+
     setWord(&SSW,VOX,false);
     while ( n > 0 ){                                 //Iterate up to 10 times looking for signal to transmit
 
+/*-----------------------------*
+ * if enabled manage watchdog  *
+ *-----------------------------*/
     #ifdef WDT
        wdt_reset();
 
@@ -4830,77 +4934,149 @@ uint16_t n = VOX_MAXTRY;
           wdt_tout=millis();
           break;
        }
-
     #endif //WDT
 /*-----------------------------------------------------*
- * end of waveform measurement, now check what is the  *
- * input frequency                                     *
+ * frequency measurements are pushed from core1 when   *
+ * a sample is available. If no signal is available    *
+ * no sample is provided. Thus it's wait for a number  *
+ * of cycles till extingish the TX mode and fallback   *
+ * into RX mode.                                       *
  *-----------------------------------------------------*/
- 
-    if (getWord(QSW,QDATA)==true) {
-        
+    if (getWord(QSW,QDATA)==true) {       
         codefreq=ffsk;
-        if (codefreq != prevfreq) {
-           #ifdef DEBUG
-              _INFOLIST("%s Freq sample changed f=%ld prev=%ld\n",__func__,codefreq,prevfreq);
-           #endif //DEBUG                                           
-           prevfreq=codefreq;
-        }
         setWord(&QSW,QDATA,false);
+        /*------------------------------------------------------*
+         * Filter out frequencies outside the allowed bandwidth *
+         *------------------------------------------------------*/
         if (codefreq >= uint32_t(FSKMIN) && codefreq <= uint32_t(FSKMAX)) {
            n=VOX_MAXTRY;
-           if (getWord(TSW,AVOX)==false) {
-               if (getWord(SSW,VOX)==false) {                            
-                  #ifdef DEBUG
-                      _INFOLIST("%s VOX activated n=%d f=%ld\n",__func__,n,codefreq);
-                  #endif //DEBUG                                  
-                  switch_RXTX(HIGH); 
-               }
-               si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
-               setWord(&SSW,VOX,true);
+           qTot++;
+
+           /*----------------------------------------------------*
+            * if VOX is off then pass into TX mode               *
+            * Frequency IS NOT changed on the first sample       *
+            *----------------------------------------------------*/
+           if (getWord(SSW,VOX)==false) {                            
+              #ifdef DEBUG
+                  _INFOLIST("%s VOX activated n=%d f=%ld\n",__func__,n,codefreq);
+              #endif //DEBUG                                  
+              switch_RXTX(HIGH); 
+              prevfreq=codefreq;
+              setWord(&SSW,VOX,true);
+              continue;
            }
-           #ifdef ANTIVOX             
-           else {
-            if (millis()-tavox > uint32_t(avoxtime)) {
-               setWord(&TSW,AVOX,false);
-               tavox=0;
-            }
-          }
-          #endif //ANTIVOX
+           /*-----------------------------------------------------*
+            * If this is the first sample AFTER the one that set  *
+            * the VOX on then switch the frequency to it          *
+            *-----------------------------------------------------*/
+           if (f==true) {           
+              si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
+              prevfreq=codefreq;            
+             _INFOLIST("%s Freq sample first f=%ld prev=%ld\n",__func__,codefreq,prevfreq);
+             f=false;
+             continue;
+           }
+           /*------------------------------------------------------*
+            * Strategy to correct common errors depending on the   *
+            * method used for counting                             *
+            *------------------------------------------------------*/
 
-          #ifdef WDT
-             wdt_reset();
-          #endif //WDT
+           /*----
+            * Strategy for ZCD
+            *----*/
+           #ifdef FSK_ZCD
+             int d=codefreq-prevfreq;
+             if (abs(d)>1) {
+                si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
+                if (codefreq != prevfreq) {
+                   #ifdef DEBUG
+                     _INFOLIST("%s Freq sample changed f=%ld prev=%ld\n",__func__,codefreq,prevfreq);
+                     qBad++;
+                   #endif //DEBUG                                           
+                   prevfreq=codefreq;
+                }                   
+              }
+           #endif //FSK_ZCD
 
-        }
+           /*----
+            * Strategy for PEG
+            *----*/
+           #ifdef FSK_PEG
+             int d=codefreq-prevfreq;
+             if ((abs(d)>=FSK_MULT-1) && (abs(d)>=FSK_MULT+1)) {
+                si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
+                if (codefreq != prevfreq) {
+                   #ifdef DEBUG
+                     _INFOLIST("%s Freq sample changed f=%ld prev=%ld\n",__func__,codefreq,prevfreq);
+                     qBad++;
+                   #endif //DEBUG                                           
+                   prevfreq=codefreq;
+                }                   
+              }
+           #endif //FSK_PEG
+        }            
+        /*----------------
+         * Watchdog reset
+         *---------------*/ 
+         #ifdef WDT
+           wdt_reset();
+         #endif //WDT
     } else {
+         /*--------------------
+          * Waiting for signal
+          *--------------------*/
+         uint32_t tcnt = time_us_32() + uint32_t(FSK_IDLE);
+         while (tcnt > time_us_32());
+         n--;
+    }
 
-
-      uint32_t tcnt = time_us_32() + uint32_t(FSK_IDLE);
-      while (tcnt > time_us_32());
-      n--;
-   
-  
+    /*----------------------*
+     * Sample CAT commands  *
+     *----------------------*/
     #ifdef CAT 
-//*--- if CAT enabled check for serial events (again)
        serialEvent();
     #endif
     
+    /*----------------------*
+     * Sample watchdog reset*
+     *----------------------*/   
     #ifdef WDT
        wdt_reset();
     #endif //WDT
-   }
  }
  
- 
-#endif //PDX
 /*---------------------------------------------------------------------------------*
  * when out of the loop no further TX activity is performed, therefore the TX is   *
  * turned off and the board is set into RX mode                                    *
  *---------------------------------------------------------------------------------*/
- 
-#ifdef WDT
 
+ /*------------------------------*
+  * This is a development probe  *
+  * to measure the counting      *
+  * error obtained into the      *
+  * frequency checking           *
+  *------------------------------*/
+ #ifdef DEBUG
+ if (qTot != 0) {
+    float r=100.0*(float(qBad*1.0)/float(qTot*1.0));
+    #ifdef DEBUG
+       _INFOLIST("%s <eof> qBad=%ld qTot=%ld error=%.6f\n",__func__,qBad,qTot,r);   
+    #endif //DEBUG
+    qBad=0;
+    qTot=0;
+ }
+#endif //DEBUG    
+
+#endif //PDX    
+
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                               RX Cycle                                               *
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+/*---------------------------------------------------------------------------------------*
+ * TX cycle ends, fallback to RX mode                                                    *
+ *---------------------------------------------------------------------------------------*/
+
+#ifdef WDT
 /*-----------------------------------------------------------*
  * Check for watchdog                                        *
  * if activated blink TX LED and wait till a full timeout to *
@@ -4911,33 +5087,38 @@ uint16_t n = VOX_MAXTRY;
  * it will stay ready for the next TX command                *
  *                                                           *
  *-----------------------------------------------------------*/
- 
-
- if (getWord(TSW,TX_WDT)==HIGH) {
+  if (getWord(TSW,TX_WDT)==HIGH) {
     blinkLED(TX);
  }
     
  if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+uint32_t(WDT_MAX)))) {
     setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
  }
- 
 #endif //WDT
 
+/*----------------------*
+ * Sample CAT commands  *
+ *----------------------*/   
 #ifdef CAT
  serialEvent();
 #endif //CAT 
- 
+
+/*------------------------------------------------------------*
+ * At this point it must be in RX mode so perform the switch  *
+ *------------------------------------------------------------*/   
  if (getWord(SSW,CATTX)!=true) {
     switch_RXTX(LOW);
     setWord(&SSW,VOX,false);
     setWord(&SSW,TXON,false);
  }   
- 
+
+/*----------------------*
+ * Reset watchdog       *
+ *----------------------*/   
  #ifdef WDT
     wdt_reset();
  #endif //WDT     
 
 }
-
 //****************************[ END OF MAIN LOOP FUNCTION ]*******************************
 //********************************[ END OF FIRMWARE ]*************************************
