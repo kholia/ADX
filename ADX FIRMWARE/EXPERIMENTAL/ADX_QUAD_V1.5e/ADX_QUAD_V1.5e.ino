@@ -316,7 +316,6 @@
 #define QWAIT       0B00000001    //Semaphore Wait
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
-#define QDATA       0B00001000    //FSK new datum
 #define FSKMIN             300    //Minimum FSK frequency computed
 #define FSKMAX            2500    //Maximum FSK frequency computed
 
@@ -3409,8 +3408,7 @@ bool     b = false;
              ffsk+=f_hi<<16;                                    //Add overflow if any
              ffsk=ffsk*FSK_MULT;                                //Apply window multiplicator (1000/FSK_WINDOW)
              if (ffsk > FSKMIN && ffsk <= FSKMAX) {             //If frequency is outside the allowed bandwidth ignore
-                setWord(&QSW,QDATA,true);                       //Mark a new value has been obtained          
-                rp2040.fifo.push(ffsk);                         //Use the rp2040 FIFO IPC to communciate the new frequency
+                 rp2040.fifo.push(ffsk);                         //Use the rp2040 FIFO IPC to communciate the new frequency
              }
           #endif //FSK_PEG algorithm
 
@@ -3451,8 +3449,7 @@ bool     b = false;
                 double f1=round(f);                             //Round to the nearest integer 
                 ffsk=uint32_t(f1);                              //Convert to long integer for actual usage
                 if (ffsk >= FSKMIN && ffsk <= FSKMAX) {         //Only yield a value if within the baseband 
-                   setWord(&QSW,QDATA,true);                    //Mark a new value has been obtained
-                   rp2040.fifo.push_nb(ffsk);                   //Use the rp2040 FIFO IPC to communicate the new frequency
+                    rp2040.fifo.push_nb(ffsk);                   //Use the rp2040 FIFO IPC to communicate the new frequency
                    #ifdef DEBUG
                        _TRACELIST("%s dt=%ld dx=%.3f f=%.3f f1=%.3f ffsk=%ld\n",__func__,dt,dx,f,f1,ffsk); 
                    #endif //DEBUG
@@ -4639,19 +4636,15 @@ void setup()
   /*------------------------------------*
    * trigger counting algorithm         *
    *------------------------------------*/
-  //multicore_launch_core1(setup1);
-  //sleep_ms(500);
-
   rp2040.idleOtherCore();
   #ifdef DEBUG
       _INFOLIST("%s Core1 stopped ok\n",__func__);
   #endif //DEBUG   
 
-  setWord(&QSW,QDATA,false);
   setWord(&QSW,QFSK,true);
   setWord(&QSW,QWAIT,true);
   #ifdef DEBUG
-      _INFOLIST("%s FSK detection algorithm started QDATA=%s QFSK=%s QWAIT=%s ok\n",__func__,BOOL2CHAR(getWord(QSW,QDATA)),BOOL2CHAR(getWord(QSW,QFSK)),BOOL2CHAR(getWord(QSW,QWAIT)));
+      _INFOLIST("%s FSK detection algorithm started QFSK=%s QWAIT=%s ok\n",__func__,BOOL2CHAR(getWord(QSW,QFSK)),BOOL2CHAR(getWord(QSW,QWAIT)));
   #endif //DEBUG   
   delay(500);
   
@@ -4962,11 +4955,8 @@ boolean  f=true;
  * of cycles till extingish the TX mode and fallback   *
  * into RX mode.                                       *
  *-----------------------------------------------------*/
-    //if (getWord(QSW,QDATA)==true) {
     if (rp2040.fifo.available() != 0) {             
-        //codefreq=ffsk;
         codefreq=rp2040.fifo.pop();
-        setWord(&QSW,QDATA,false);
         /*------------------------------------------------------*
          * Filter out frequencies outside the allowed bandwidth *
          *------------------------------------------------------*/
