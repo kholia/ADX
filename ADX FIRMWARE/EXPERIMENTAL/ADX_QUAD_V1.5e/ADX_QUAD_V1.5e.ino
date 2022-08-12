@@ -95,8 +95,8 @@
  * Define the runtime platform either PICO (Raspberry Pi Pico) *
  * or !PICO (Arduino ATMega328p)                               *
  *-------------------------------------------------------------*/
-//#define ADX              1   //This is the standard ADX Arduino based board 
-#define PDX            1   //Compile for Raspberry Pi Pico board
+#define ADX              1   //This is the standard ADX Arduino based board 
+//#define PDX            1   //Compile for Raspberry Pi Pico board
 
 #ifdef PDX
    #pragma GCC optimize (0)
@@ -185,16 +185,15 @@
 #endif //PICO
 
 #ifdef PDX
-   //#define WDT             1      //Hardware and TX watchdog enabled
-   //#define EE              1      //Save in Flash emulation of EEPROM the configuration
-   //#define CW              1      //CW support
-   //#define AUTOCAL         1      //Automatic calibration mode
-   //#define CAT             1      //Enable CAT protocol over serial port
-   //#define FT817           1      //CAT protocol is Yaesu FT817
-   //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
-   //#define ANTIVOX         1      //Anti-VOX enabled
-   //#define QUAD            1      //Support for QUAD board
-
+   #define WDT             1      //Hardware and TX watchdog enabled
+   #define EE              1      //Save in Flash emulation of EEPROM the configuration
+   #define CW              1      //CW support
+   #define AUTOCAL         1      //Automatic calibration mode
+   #define CAT             1      //Enable CAT protocol over serial port
+   #define FT817           1      //CAT protocol is Yaesu FT817
+   #define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
+   #define ANTIVOX         1      //Anti-VOX enabled
+   #define QUAD            1      //Support for QUAD board
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
@@ -318,7 +317,7 @@
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
 #define QDATA       0B00001000    //FSK new datum
-#define FSKMIN             400    //Minimum FSK frequency computed
+#define FSKMIN             300    //Minimum FSK frequency computed
 #define FSKMAX            2500    //Maximum FSK frequency computed
 
 /*----------------------------------------------------------------*
@@ -362,10 +361,7 @@ char hi[80];
 
 //*--- if both supported CAT protocols are simultaneously selected then keep one
 
-#if (defined(ADX))
-   #undef AUTOCAL
-#endif //AUTOCAL only supported on PDX
-   
+  
 #ifdef TERMINAL
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO THE CONFIGURATION TERMINAL FUNCTION                   *
@@ -433,8 +429,8 @@ const char *endList         = "XXX";
 #define  CAL_COMMIT      12
 #define  CAL_ERROR        1
 
-#define  FSK_PEG         1
-//#define  FSK_ZCD         1
+//#define  FSK_PEG         1
+#define  FSK_ZCD         1
 
 #if defined(FSK_PEG) && defined(FSK_ZCD)
     #undef FSK_PEG
@@ -448,19 +444,21 @@ const char *endList         = "XXX";
 #endif //FSK_PEG
 
 #ifdef FSK_ZCD
-    #define FSK_USEC      1000000
-    #define FSK_SAMPLE       1000
-    #define FSK_IDLE      5*FSK_SAMPLE
+    #define FSK_USEC                  1000000
+    #define FSK_SAMPLE                   1000
+    #define FSK_IDLE      5*FSK_SAMPLE*FSK_RA
+    #define FSK_ERROR                       4
+    #define FSK_RA                         20
 #endif //FSK_ZCD
 
-uint32_t ffsk = 0;
-uint32_t fclk = 0;
 uint32_t f_hi;
-int32_t  error = 0;
 int      pwm_slice;  
-//uint32_t tvox=0;
-uint32_t codefreq=0;
-uint32_t prevfreq=0;
+
+uint32_t ffsk     = 0;
+uint32_t fclk     = 0;
+int32_t  error    = 0;
+uint32_t codefreq = 0;
+uint32_t prevfreq = 0;
 
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -470,9 +468,9 @@ uint32_t prevfreq=0;
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-#define DEBUG  1
+//#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-   #define INFO  1   //Enable _INFO and _INFOLIST statements
+   //#define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
@@ -883,7 +881,7 @@ int setSlot(uint32_t f) {
    int s=findSlot(b);
 
 #ifdef DEBUG
-   _INFOLIST("%s() f=%ld band=%d slot=%d\n",__func__,f,band,s);
+   _INFOLIST("%s() f=%ld band=%d slot=%d\n",__func__,f,b,s);
 #endif //DEBUG
 
    return s;
@@ -2882,7 +2880,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     
 #ifdef DEBUG
     if (getWord(SSW,TXON)==HIGH) {
-       _TRACELIST("%s RX+ f=%ld\n",__func__,freq);
+       _INFOLIST("%s RX+ f=%ld\n",__func__,freq);
     }
 #endif //DEBUG
     
@@ -3059,22 +3057,21 @@ bool getTXSW() {
 }
 /*==================================================================================================*
  * Clock (Si5351) Calibration methods                                                               *
- * Legacy method (ADX) || !(AUTOCAL)                                                                *
+ * Legacy method (ADX)                                                                              *
  *     Clock (CLK2) is set to 1MHz output , calibration factor is increased (UP) or decreased (DOWN)*
  *     until a frequency counter shows 1 MHz, this way any offset on the clock will be compensated  *
  *     calibration factor will be stored in EEPROM and saved till next calibration                  *
- *  Automatic method (PDX) && (AUTOCAL)                                                             *
+ *  Automatic method (PDX)                                                                          *
  *     Clock (CLK2) is set to 10MHz output, the board connects this value to the GPIO8 (CAL) pin.   *
  *     An iteration is made automatically until the read value is 10MHz.                            *
  *     The calibration factor will be store                                                         *
  *==================================================================================================*/
 #if defined(ADX)
-/*----------------------------------------------------------*
- * Calibration function (LEGACY, Manual)
- *----------------------------------------------------------*/
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+//*                                     ADX Calibration procedure (legacy,manual)                           *
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
 void Calibration(){
   
-
   #ifdef DEBUG
      _INFO;
   #endif //DEBUG
@@ -3192,24 +3189,33 @@ void Calibration(){
 
   }
 }
-#endif //Legacy calibration method (ADX) || (!AUTOCALL)
+#endif //Legacy calibration method (ADX)
 
 
 #if defined(PDX)
 
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+//*                                     PDX Calibration procedure (automatic)                               *
+//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+/*------
+ * Înterrupt IRQ for edge counting overflow
+ *-----*/
 void pwm_int() {
    pwm_clear_irq(pwm_slice);
    f_hi++;
 }
 
 /*=========================================================================================*
- * CORE1
- * 
+ * CORE1                                                                                   *
+ * 2nd rp2040 core instantiated by defining setup1/proc1 procedures                        *
+ * These procedures are used to run frequency measurement / time sensitive code            *
+ * the por1 procedure isn't never reached actually as the flow is left at an infinite loop *
+ * at setup1                                                                               *
  *=========================================================================================*/
 void setup1() {
 
 /*-----------------------------------------------------------------*
- * Core #2 Setup procedure                                         *
+ * Core1   Setup procedure                                         *
  * Enter processing on POR but restarted from core0 setup ()       *
  *-----------------------------------------------------------------*/
 uint32_t t = 0;
@@ -3232,18 +3238,16 @@ bool     b = false;
    * therefore no loop1() is ever processed    *
    *-------------------------------------------*/
    #ifdef DEBUG
-      _INFOLIST("%s QWAIT semaphore released QCAL=%s QFSK=%s\n",__func__,BOOL2CHAR(QCAL),BOOL2CHAR(QFSK));
+      _INFOLIST("%s Core1 waiting semaphore released QCAL=%s QFSK=%s\n",__func__,BOOL2CHAR(QCAL),BOOL2CHAR(QFSK));
    #endif //DEBUG
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//* AUTOCAL                                                                                                     *
 //* Automatic calibration procedure                                                                             *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*   
    if (getWord(QSW,QCAL)==true) {
       #ifdef DEBUG
-         _INFOLIST("%s CAL_counter() triggered\n",__func__);
+         _INFOLIST("%s Calibration procedure triggered\n",__func__);
       #endif //DEBUG    
-   
-      delay(2000);
+      delay(1000);
       calibrateLED();
       
       /*----
@@ -3265,7 +3269,6 @@ bool     b = false;
        si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
        si5351.set_pll(SI5351_PLL_FIXED, SI5351_PLLA);
        si5351.set_freq(Cal_freq * 100UL, SI5351_CLK2);
-
 
       /*--------------------------------------------*
        * PWM counter used for automatic calibration *
@@ -3311,8 +3314,7 @@ bool     b = false;
           #ifdef DEBUG
             _INFOLIST("%s Calibration VFO=%ld Hz target_freq=%ld error=%ld cal_factor=%ld\n",__func__,fclk,Cal_freq,error,cal_factor);
           #endif //DEBUG            
-          if (labs(error) > int32_t(CAL_ERROR)) {
-             
+          if (labs(error) > int32_t(CAL_ERROR)) {          
              b=!b;
              if (b) {
                 setLED(TX,false);
@@ -3407,7 +3409,8 @@ bool     b = false;
              ffsk+=f_hi<<16;                                    //Add overflow if any
              ffsk=ffsk*FSK_MULT;                                //Apply window multiplicator (1000/FSK_WINDOW)
              if (ffsk > FSKMIN && ffsk <= FSKMAX) {             //If frequency is outside the allowed bandwidth ignore
-                setWord(&QSW,QDATA,true);                       //Mark a new value has been obtained             
+                setWord(&QSW,QDATA,true);                       //Mark a new value has been obtained          
+                rp2040.fifo.push(ffsk);                         //Use the rp2040 FIFO IPC to communciate the new frequency
              }
           #endif //FSK_PEG algorithm
 
@@ -3428,31 +3431,41 @@ bool     b = false;
            *---------------------------------------*/             
              uint32_t t=time_us_32()+2;                         //Allow all the settings to stabilize
              while (t>time_us_32());                            //
-             uint32_t pwm_cnt=pwm_get_counter(pwm_slice);       //Get current pwm count
-             pwm_set_enabled(pwm_slice,true);                   //enable pwm count
-             while (pwm_get_counter(pwm_slice) == pwm_cnt) {}   //Wait till the count change
-             pwm_cnt=pwm_get_counter(pwm_slice);                //Measure that value
-             uint32_t t1=time_us_32();                          //Mark first tick (t1)
-             while (pwm_get_counter(pwm_slice) == pwm_cnt) {}   //Wait till the count change (a rise edge)
-             uint32_t t2=time_us_32();                          //Mark the second tick (t2)
-             pwm_set_enabled(pwm_slice,false);                  //Disable counting
-             if (t2 != t1) {                                    //Prevent noise to trigger a nul measurement
-                float f=FSK_USEC/(t2-t1);                       //Ticks are expressed in uSecs so convert to Hz
-                f=round(f);                                     //Round to the nearest integer 
-                ffsk=uint32_t(f);                               //Convert to long integer for actual usage
-                if (ffsk > FSKMIN && ffsk <= FSKMAX) {          //Only yield a value if within the baseband 
+             uint16_t j=FSK_RA;                                 //
+             uint32_t dt=0;                                      //
+             while (j>0) {                                      //Establish a running average over <j> counts
+                uint32_t pwm_cnt=pwm_get_counter(pwm_slice);    //Get current pwm count
+                pwm_set_enabled(pwm_slice,true);                //enable pwm count
+                while (pwm_get_counter(pwm_slice) == pwm_cnt){} //Wait till the count change
+                pwm_cnt=pwm_get_counter(pwm_slice);             //Measure that value
+                uint32_t t1=time_us_32();                       //Mark first tick (t1)
+                while (pwm_get_counter(pwm_slice) == pwm_cnt){} //Wait till the count change (a rise edge)
+                uint32_t t2=time_us_32();                       //Mark the second tick (t2)
+                pwm_set_enabled(pwm_slice,false);               //Disable counting
+                dt=dt+(t2-t1);                                  //Add to the RA total
+                j--;                                            //Loop
+             }                                                  //
+             if (dt != 0) {                                     //Prevent noise to trigger a nul measurement
+                double dx=1.0*dt/double(FSK_RA);                //
+                double f=double(FSK_USEC)/dx;                   //Ticks are expressed in uSecs so convert to Hz
+                double f1=round(f);                             //Round to the nearest integer 
+                ffsk=uint32_t(f1);                              //Convert to long integer for actual usage
+                if (ffsk >= FSKMIN && ffsk <= FSKMAX) {         //Only yield a value if within the baseband 
                    setWord(&QSW,QDATA,true);                    //Mark a new value has been obtained
+                   rp2040.fifo.push_nb(ffsk);                   //Use the rp2040 FIFO IPC to communicate the new frequency
+                   #ifdef DEBUG
+                       _TRACELIST("%s dt=%ld dx=%.3f f=%.3f f1=%.3f ffsk=%ld\n",__func__,dt,dx,f,f1,ffsk); 
+                   #endif //DEBUG
                 }                                               //
              }                                                  //
              t=time_us_32()+FSK_SAMPLE;                         //Now wait for 1 mSec till next sample
              while (t>time_us_32()) ;
           #endif //FSK_ZCD
             
-        }  //end FSK loop
-      
+        }  //end FSK loop  
    }
 }
-#endif //Auto Calibration & Detection algorithm running on Core #2
+#endif //Auto Calibration & Detection algorithm running on Core1
 /*==========================================================================================================*/
 #ifdef EE
 /*------------------------------------------------------------------------------*
@@ -4631,7 +4644,7 @@ void setup()
 
   rp2040.idleOtherCore();
   #ifdef DEBUG
-      _INFOLIST("%s Core #2 stopped ok\n",__func__);
+      _INFOLIST("%s Core1 stopped ok\n",__func__);
   #endif //DEBUG   
 
   setWord(&QSW,QDATA,false);
@@ -4641,7 +4654,6 @@ void setup()
       _INFOLIST("%s FSK detection algorithm started QDATA=%s QFSK=%s QWAIT=%s ok\n",__func__,BOOL2CHAR(getWord(QSW,QDATA)),BOOL2CHAR(getWord(QSW,QFSK)),BOOL2CHAR(getWord(QSW,QWAIT)));
   #endif //DEBUG   
   delay(500);
-  //rp2040.resumeOtherCore();
   
 
 #endif //PDX
@@ -4665,11 +4677,12 @@ void setup()
      #endif //PDX   
      
      setWord(&TSW,TX_WDT,false);
+     #ifdef DEBUG
+        _INFOLIST("%s watchdog configuration completed\n",__func__);
+     #endif //DEBUG   
+
   #endif //WDT
 
-  #ifdef DEBUG
-     _INFOLIST("%s completed\n",__func__);
-  #endif //DEBUG   
 
 
 #ifdef TERMINAL
@@ -4689,9 +4702,13 @@ void setup()
      rp2040.restartCore1();
      delay(1); 
      #ifdef DEBUG
-        _INFOLIST("%s Core #2 resumed ok\n",__func__);
+        _INFOLIST("%s Core1 resumed ok\n",__func__);
      #endif //DEBUG   
   #endif //PDX
+
+  #ifdef DEBUG
+     _INFOLIST("%s watchdog configuration completed\n",__func__);
+  #endif //DEBUG   
 
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -4932,6 +4949,9 @@ boolean  f=true;
           switch_RXTX(LOW);
           setWord(&TSW,TX_WDT,HIGH);
           wdt_tout=millis();
+          #ifdef DEBUG 
+             _INFOLIST("%s TX watchdog condition triggered\n",__func__);
+          #endif //DEBUG
           break;
        }
     #endif //WDT
@@ -4942,8 +4962,10 @@ boolean  f=true;
  * of cycles till extingish the TX mode and fallback   *
  * into RX mode.                                       *
  *-----------------------------------------------------*/
-    if (getWord(QSW,QDATA)==true) {       
-        codefreq=ffsk;
+    //if (getWord(QSW,QDATA)==true) {
+    if (rp2040.fifo.available() != 0) {             
+        //codefreq=ffsk;
+        codefreq=rp2040.fifo.pop();
         setWord(&QSW,QDATA,false);
         /*------------------------------------------------------*
          * Filter out frequencies outside the allowed bandwidth *
@@ -4986,7 +5008,7 @@ boolean  f=true;
             *----*/
            #ifdef FSK_ZCD
              int d=codefreq-prevfreq;
-             if (abs(d)>1) {
+             if (abs(d) > FSK_ERROR) {
                 si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
                 if (codefreq != prevfreq) {
                    #ifdef DEBUG
@@ -5093,6 +5115,17 @@ boolean  f=true;
     
  if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+uint32_t(WDT_MAX)))) {
     setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
+    #ifdef DEBUG
+       _INFOLIST("%s TX watchdog condition cleared\n",__func__);
+    #endif //DEBUG
+    #ifdef PDX
+        /*-----
+         * Clear FIFO
+         *-----*/
+        while (rp2040.fifo.available() != 0) {             
+           uint32_t dummy=rp2040.fifo.pop();
+        }
+    #endif //PDX
  }
 #endif //WDT
 
