@@ -157,6 +157,7 @@
    #define wdt_reset() watchdog_update()
 #endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                            (A)rduino (D)igital (X)ceiver                                    *
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
@@ -166,7 +167,6 @@
    #define CAT            1      //Enable CAT protocol over serial port
    #define TS480          1      //CAT Protocol is Kenwood 480
    #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
-   #define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
 /*
  * The following definitions are disabled but can be enabled selectively
  */
@@ -177,24 +177,25 @@
    //#define CAL_RESET      1      //If enabled reset cal_factor when performing a new calibration()
    //#define DEBUG          1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
    //#define TERMINAL       1      //Serial configuration terminal
-   //#define IC746          1      //CAT Protocol is ICOM 746
    //#define FT817          1      //CAT Protocol is FT 817
-   //#define CAT_FULL       1      //Extend CAT support to the entire CAT command set (valid only for TS480)
-   //#define LEGACY         1      //Enable code AS IS version 1.1 for testing purposes
 
 #endif //PICO
 
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                               (P)ico (D)igital (X)ceiver                                    *
+//*                            FEATURE CONFIGURATION PROPERTIES                                 *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #ifdef PDX
    #define WDT             1      //Hardware and TX watchdog enabled
    #define EE              1      //Save in Flash emulation of EEPROM the configuration
-   #define CW              1      //CW support
-   #define AUTOCAL         1      //Automatic calibration mode
-   #define CAT             1      //Enable CAT protocol over serial port
-   #define FT817           1      //CAT protocol is Yaesu FT817
-   #define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
-   #define ANTIVOX         1      //Anti-VOX enabled
-   #define QUAD            1      //Support for QUAD board
+   //#define CW              1      //CW support
+   //#define CAT             1      //Enable CAT protocol over serial port
+   //#define FT817           1      //CAT protocol is Yaesu FT817
+   //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
+   //#define QUAD            1      //Support for QUAD board
+   #define ONEBAND         1      //Define a single band 
 #endif //PDX
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -257,7 +258,6 @@
    #define ATU            15     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
 #endif //ATUCTL 
 
-
 /*---
  * LED
  */   
@@ -316,8 +316,6 @@
 #define QWAIT       0B00000001    //Semaphore Wait
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
-#define FSKMIN             300    //Minimum FSK frequency computed
-#define FSKMAX            2500    //Maximum FSK frequency computed
 
 /*----------------------------------------------------------------*
  * Miscellaneour definitions                                              *
@@ -352,9 +350,7 @@ char hi[80];
 //*--- If CAT is not defined then erase all conflicting definitions
 
 #if (!defined(CAT))  //Rule for conflicting usage of the CAT Protocol (can't activate extended without basic)
-   #undef  CAT_FULL
    #undef  TS480
-   #undef  IC746
    #undef  FT817
 #endif // CAT && DEBUG
 
@@ -390,9 +386,6 @@ const char *bounce_timeToken= "*bt";
 const char *short_timeToken = "*st";
 const char *max_blinkToken  = "*mbl";
 
-#ifdef ANTIVOX
-const char *avoxtime_Token  = "*vxt";
-#endif //ANTIVOX
 
 #ifdef EE
 const char *eeprom_toutToken= "*eet";
@@ -428,12 +421,15 @@ const char *endList         = "XXX";
 #define  CAL_COMMIT      12
 #define  CAL_ERROR        1
 
-//#define  FSK_PEG         1
-#define  FSK_ZCD         1
+#define  FSK_PEG         1
+//#define  FSK_ZCD         1
 
 #if defined(FSK_PEG) && defined(FSK_ZCD)
     #undef FSK_PEG
 #endif //Consistency rule 
+
+#define FSKMIN             300    //Minimum FSK frequency computed
+#define FSKMAX            2500    //Maximum FSK frequency computed
 
 #if FSK_PEG
     #define  FSK_WINDOW      10
@@ -452,7 +448,6 @@ const char *endList         = "XXX";
 
 uint32_t f_hi;
 int      pwm_slice;  
-
 uint32_t ffsk     = 0;
 uint32_t fclk     = 0;
 int32_t  error    = 0;
@@ -467,9 +462,9 @@ uint32_t prevfreq = 0;
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-//#define DEBUG  1
+#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-   //#define INFO  1   //Enable _INFO and _INFOLIST statements
+   #define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
@@ -522,15 +517,6 @@ uint32_t prevfreq = 0;
    uint32_t tATU=0;
    
 #endif //ATUCTL
-
-#ifdef ANTIVOX
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*       ANTIVOX FEATURE IF PTT IS CONTROLLED BY CAT AVOID NOISE TO PTT THE ADX                *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-   #define AVOXTIME    2000
-   uint16_t avoxtime =   AVOXTIME;
-   uint32_t tavox    =   0;
-#endif //ANTIVOX   
 
 
 #ifdef CW
@@ -667,50 +653,6 @@ uint32_t      wdt_tout    = 0;
 //*                    CODE INFRASTRUCTURE                                                      *
 //* General purpose procedures and functions needed to implement services through the code      *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#ifdef PDX
-/*----------------------------------------------------------------------*     
- * This is specific code for the RP2040 to manage the BOOTSEL button    *
- * this code is for debugging purposes only                             *
- *----------------------------------------------------------------------*/
- bool __no_inline_not_in_flash_func(get_bootsel_button)() {
-    const uint CS_PIN_INDEX = 1;
-
-/*--------------------------------------------------------------------------* 
- * 
- * Must disable interrupts, as interrupt handlers may be in flash, and we 
- * are about to temporarily disable flash access! 
- *--------------------------------------------------------------------------*/
-    uint32_t flags = save_and_disable_interrupts();
-
-/*---    
- * 
- *Set chip select to Hi-Z
- *
- *----*/
-    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,GPIO_OVERRIDE_LOW << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
-
-/*------
-  Note we can't call into any sleep functions in flash right now
-*-------*/  
-    for (volatile int i = 0; i < 1000; ++i);
-
-/*-----------
-  The HI GPIO registers in SIO can observe and control the 6 QSPI pins.
-  Note the button pulls the pin *low* when pressed.
-*------------*/    
-    bool button_state = !(sio_hw->gpio_hi_in & (1u << CS_PIN_INDEX));
-
-/*-----------
- * Need to restore the state of chip select, else we are going to have a
- * bad time when we return to code in flash!
- *-----------*/ 
-  
-    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,GPIO_OVERRIDE_NORMAL << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
-    restore_interrupts(flags);
-    return button_state;
-}
-#endif //PDX
-
 /*-------------------------------------------*
  * getWord                                   *
  * get boolean bitwise pseudo-variable       *
@@ -892,9 +834,7 @@ int setSlot(uint32_t f) {
  * the mode that should be assigned, -1 if none can be identified  *
  *-----------------------------------------------------------------*/
 int getMode(int s,uint32_t f) {
-
-
-  
+ 
   int m=-1;
   for (int i=0;i<MAXMODE;i++) {
     if (slot[s][i]==f) {
@@ -1424,670 +1364,6 @@ void serialEvent() {
 #endif //FT817
 
 
-#ifdef IC746
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                   IC746 CAT PROTOCOL SUBSYSTEM                                              *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-/*
- * cloned from ADX CAT support developed by Alan Altman (AG7XS) as part of his ADX_CAT_V3.51.ino sketch*
- * with adaptations to port his implementation to the overall architecture of this sketch. Functionally*
- * it should behave (as a black box) in the same way. The obvious advantage of his implementation is   *
- * that by means of using a lighter protocol such as the IC746 a smaller footprint and resources taxing*
- * is impossed on the underlying Arduino Nano processor (ATMega328p). So is a simpler and faster code  *
- * to use whenever an implementation of other features might require additional resources.             *                                    
- * ----------------------------------------------------------------------------------------------------*/
-/*-----------------------------------------------------------------------------------------------------*
-   CAT support inspired by Alan Altman (AG7XS) made public by the author, main idea to use IC746 protocol
-   as a lightweight alternative with a small footprint for ADX was his.
-   source: https://groups.io/g/ucx/files/ADX%20Transceiver#:~:text=Updated-,ADX_CAT_V3.51.ino,-Report%20File
-   Excerpts and ideas taken from Dean A Souleles (KK4DAS) from his IC746CAT package, OO format oriented
-   removed to reduce the memory footprint required by a class, otherwise just a glue exercise between his structures
-   and the ones already present at the ADX firmware to control operational parameters such as frequency,
-   mode, etc. Many hardwired answers whenever the underlying feature lack sense for the ADX transceiver
-   source: https://github.com/kk4das/IC746CAT
-   Mods and adaptations performed by Pedro E. Colla (LU7DZ) 2022 (permission given by Alan for
-   the relevant part of his work on this porting)
- *----------------------------------------------------------------------------------------------------*/
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*               DEFINITIONS SPECIFIC TO IC746 CAT PROTOCOL                                    *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-
-/*---
- * Memory areas specific to the protocol
- ----*/
-
-/*
-Command buffer (without preamble and EOM)
-  |FE|FE|56|E0|cmd|sub-cmd|data|FD|  // Preamble (FE) and EOM (FD) are discarded leaving
-  2 addr bytes , 1 command, 1 sub-command, up to 12 data, (longest is unimplemented edge frequency)
-*/
-#define CAT_CMD_BUF_LENGTH  16
-/*----------------------------------------------------------------------*
- * includes specific to the IC-746 protocol                             *
- *----------------------------------------------------------------------*/
-/* 
- *  Protocol
- */
-#define CAT_PREAMBLE        0xFE  // sent twice at start of command
-#define CAT_EOM             0xFD  // end of message
-#define CAT_ACK             0xFB  // OK
-#define CAT_NACK            0xFA  // No good
-#define CAT_RIG_ADDR        0x56  // Rig ID for IC746
-#define CAT_CTRL_ADDR       0xE0  // Controller ID
-
-/*
- * Commands
- */
-
-#define CAT_SET_TCV_FREQ    0x00  // Not implemented
-#define CAT_SET_TCV_MODE    0x01  // Not implemented
-#define CAT_READ_BAND_EDGE  0x02  // Not implemented
-#define CAT_READ_FREQ       0x03
-#define CAT_READ_MODE       0x04
-#define CAT_SET_FREQ        0x05
-#define CAT_SET_MODE        0x06
-#define CAT_SET_VFO         0x07
-#define CAT_SEL_MEM         0x08  // Not implemented
-#define CAT_WRITE_MEM       0x09  // Not implemented
-#define CAT_MEM_TO_VFO      0x0A  // Not implemented
-#define CAT_CLEAR_MEM       0x0B  // Not implemented
-#define CAT_READ_OFFSET     0x0C  // Not implemented
-#define CAT_SET_OFFSET      0x0D  // Not implemented
-#define CAT_SCAN            0x0E  // Not implemented
-#define CAT_SPLIT           0x0F
-#define CAT_SET_RD_STEP     0x10  // Not implemented
-#define CAT_SET_RD_ATT      0x11  // Not implemented
-#define CAT_SET_RD_ANT      0x12  // Not implemented
-#define CAT_SET_UT102       0x13  // Not implemented
-#define CAT_SET_RD_PARAMS1  0x14  // Not implemented
-#define CAT_READ_SMETER     0x15  // Only impemented read S-Meter
-#define CAT_SET_RD_PARAMS2  0x16  // Not implemented (various settings)
-#define CAT_READ_ID         0x19  
-#define CAT_MISC            0x1A  // Only implemented sub-command 3 Read IF filter 
-#define CAT_SET_TONE        0x1B  // Not implemented (VHF/UHF)
-#define CAT_PTT             0x1C
-
-/*
-   CAT Sub COmmands
-*/
-#define CAT_MODE_LSB        0x00
-#define CAT_MODE_USB        0x01
-#define CAT_MODE_AM         0x02 // Not implemented
-#define CAT_MODE_CW         0x03 // Not implemented
-#define CAT_MODE_RTTY       0x04 // Not implemented
-#define CAT_MODE_FM         0x05 // Not implemented
-#define CAT_MODE_CW_R       0x06 // Not implemented
-#define CAT_MODE_RTTY_R     0x07 // Not implemented
-#define CAT_MODE_FILTER1    0x01 // Required for "read mode"
-
-/*
- * VFO Subcommand
- */
-
-#define CAT_VFO_A           0x00
-#define CAT_VFO_B           0x01
-#define CAT_VFO_A_TO_B      0xA0
-#define CAT_VFO_SWAP        0xB0
-
-/*
- * Split Subcommand
- */
-#define CAT_SPLIT_OFF       0x00
-#define CAT_SPLIT_ON        0x01
-#define CAT_SIMPLE_DUP      0x10 // Not implemented
-#define CAT_MINUS_DUP       0x11 // Not implemented
-#define CAT_PLUS_DUP        0x12 // Not implemented
-
-/*
- * S-Meter / Squelch Subcommand
- */
-#define CAT_READ_SUB_SQL    0x01 // Not implemented (squelch)
-#define CAT_READ_SUB_SMETER 0x02
-
-/*
- * PTT Subcommand
- */
-#define CAT_PTT_RX          0x00
-#define CAT_PTT_TX          0x01
-
-// 1A - MISC Subcommands
-#define CAT_SET_MEM_CHAN    0x00  // Not implemented
-#define CAT_SET_BANDSTACK   0x01  // Not implemented
-#define CAT_SET_MEM_KEYER   0x02  // Not implemented
-#define CAT_READ_IF_FILTER  0x03  // Hard coded response to keep WSJTX and other CAT controllers happy
-
-// Command Receive States
-#define CAT_RCV_WAITING     0  // waiting for 1st preamble byte
-#define CAT_RCV_INIT        1  // waiting for 2nd preamble byte
-#define CAT_RCV_RECEIVING   2  // waiting for command bytes
-
-
-
-
-// Command indices
-//
-// Command structure after preamble and EOM have been discarded
-// |56|E0|cmd|sub-cmd|data
-//   56 - fixed transceiver address for IC746
-//   E0 - fixed cat xontroller address
-// The sub-command field varies by command. For somme commands the sub-cmd field is not supplied and the data
-// begins immediatedly follwing the command.
-//
-// The following are the array indexes within the command buffer for command elements that are sent with the command
-// or are where we put data to return to the conroller
-//
-#define CAT_IX_TO_ADDR     0
-#define CAT_IX_FROM_ADDR   1
-#define CAT_IX_CMD         2
-#define CAT_IX_SUB_CMD     3
-#define CAT_IX_FREQ        3   // Set Freq has no sub-command
-#define CAT_IX_MODE        3   // Get mode has no sub-command
-#define CAT_IX_TUNE_STEP   3   // Get step has no sub-command
-#define CAT_IX_ANT_SEL     3   // Get amt has no sub-command
-#define CAT_IX_PTT         4   // PTT RX/TX indicator
-#define CAT_IX_IF_FILTER   4   // IF Filter value
-#define CAT_IX_SMETER      4   // S Meter 0-255
-#define CAT_IX_SQUELCH     4   // Squelch 0=close, 1= open
-#define CAT_IX_ID          5
-#define CAT_IX_DATA        4   // Data following sub-comand
-
-// Lentgth of commands that request data 
-#define CAT_RD_LEN_NOSUB   3   //  3 bytes - 56 E0 cc
-#define CAT_RD_LEN_SUB     4   //  4 bytes - 56 E0 cc ss  (cmd, sub command)
-
-// Length of data responses
-#define CAT_SZ_SMETER      6   //  6 bytes - E0 56 15 02 nn nn 
-#define CAT_SZ_SQUELCH     5   //  5 bytes - E0 56 15 01 nn
-#define CAT_SZ_PTT         5   //  5 bytes - E0 56 1C 00 nn
-#define CAT_SZ_FREQ        8   //  8 bytes - E0 56 03 ff ff ff ff ff  (frequency in little endian BCD)
-#define CAT_SZ_MODE        5   //  5 bytes - E0 56 04 mm ff  (mode, then filter)
-#define CAT_SZ_IF_FILTER   5   //  5 bytes - E0 56 1A 03 nn
-#define CAT_SZ_TUNE_STEP   4   //  4 bytes - E0 56 10 nn
-#define CAT_SZ_ANT_SEL     4   //  4 bytes - E0 56 12 nn
-#define CAT_SZ_ID          5   //  5 bytes - E0 56 19 00 56    (returns RIG ID)
-#define CAT_SZ_UNIMP_1B    5   //  5 bytes - E0 56 NN SS 00    (unimplemented commands that require 1 data byte
-#define CAT_SZ_UNIMP_2B    6   //  6 bytes - EO 56 NN SS 00 00 (unimplemented commandds that required 2 data bytes
-
-
- 
-byte cmdBuf[CAT_CMD_BUF_LENGTH];
-byte rcvState    = CAT_RCV_WAITING;
-boolean cmdRcvd  = false;
-int bytesRcvd    = 0;
-int cmdLength    = 0;
-
-
-
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-//                                       BCD FrequencyConversion Routines
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-/*
- * BCDtoFreq()
-  Convert BCD frequency to/from command buffer to/from long
- Format (beginning at first data byte in buffer is
-  Byte 0 10Hz   | 1Hz
-  Byte 1 1KHz   | 100Hz
-  Byte 2 100KHz | 10KHz
-  Byte 3 10MHz  | 1MHz
-  Example: 7,123,456 is encoded 56 | 34 | 12 | 07
-*/
-
-uint32_t BCDtoFreq() {
-  uint32_t f;
-
-  f = cmdBuf[CAT_IX_FREQ] & 0xf;                 // lower 4 bits
-  f += 10L * (cmdBuf[CAT_IX_FREQ] >> 4);          // upper 4 bits
-  f += 100L * (cmdBuf[CAT_IX_FREQ + 1] & 0xf);
-  f += 1000L * (cmdBuf[CAT_IX_FREQ + 1] >> 4);
-  f += 10000L * (cmdBuf[CAT_IX_FREQ + 2] & 0xf);
-  f += 100000L * (cmdBuf[CAT_IX_FREQ + 2] >> 4);
-  f += 1000000L * (cmdBuf[CAT_IX_FREQ + 3] & 0xf);
-  f += 10000000L * (cmdBuf[CAT_IX_FREQ + 3] >> 4);
-
-  return f;
-}
-
-/*
- * FreqtoBCD
- * Convert an unsigned long integer into the BCD representation needed for the response message
- */
-void FreqtoBCD(uint32_t f) {
-  
-  byte ones, tens, hund, thou, ten_thou, hund_thou, mil, ten_mil;
-
-  ones =     byte(f % 10);
-  tens =     byte((f / 10L) % 10);
-  cmdBuf[CAT_IX_FREQ] = byte((tens << 4)) | ones;
-
-  hund =      byte((f / 100L) % 10);
-  thou =      byte((f / 1000L) % 10);
-  cmdBuf[CAT_IX_FREQ + 1] = byte((thou << 4)) | hund;
-
-  ten_thou =  byte((f / 10000L) % 10);
-  hund_thou = byte((f / 100000L) % 10);
-  cmdBuf[CAT_IX_FREQ + 2] = byte((hund_thou << 4)) | ten_thou;
-
-  mil =       byte((f / 1000000L) % 10);
-  ten_mil =   byte(f / 10000000L);
-  cmdBuf[CAT_IX_FREQ + 3] = byte((ten_mil << 4)) | mil;
-
-  cmdBuf[CAT_IX_FREQ + 4] = 0; // fixed
-
-}
-
-/*----
- * send
- * Send a buffer to the receiver, previously formatted into a CAT IC 746 compliant message
- */
-void send(byte *buf, int len) {
-  
-  int i;
-
-  Serial.write(CAT_PREAMBLE);
-  Serial.write(CAT_PREAMBLE);
-
-  for (i = 0; i < len; i++) {
-    Serial.write(buf[i]);
-  }
-  Serial.write(CAT_EOM);
-  #ifdef ADX
-     Serial.flush();              //WSJT-X seems to like (need) it
-     delay(50);                   //WSJT-X seems to like (need) it
-  #endif //ADX
-
-}
-/*
- * sendResponse
- * Format a response and send it
- */
-void sendResponse(byte *buf, int len) {
-  buf[CAT_IX_FROM_ADDR] = CAT_RIG_ADDR;
-  buf[CAT_IX_TO_ADDR] = CAT_CTRL_ADDR;
-  send(buf, len);
-}
-
-/*
- * sendAck()
- * Acknowledge command setting messages either because of being
- * honored or because being faked, but an answer is needed by the
- * protocol
- * send back hard-code acknowledge message
- */
-void sendAck() {
-  byte ack[] = {CAT_CTRL_ADDR, CAT_RIG_ADDR, CAT_ACK};
-  send(ack, 3);
-}
-
-/*
- * sendNack
- * send back hard-code negative-acknowledge message
- */
-void sendNack() {
-  byte nack[] = {CAT_CTRL_ADDR, CAT_RIG_ADDR, CAT_NACK};
-  send(nack, 3);
-}
-
-/*
-   readCMD - state machine to receive a command from the controller
-   States:
-      CAT_RCV_WAITING    - scan incoming serial data for first preamble byte
-      CAT_RCV_INIT       - second premable byte confirms start of message
-      CAT_RCV_RECEIVING  - fill command buffer until EOM received
-
-   Command format
-
-   |FE|FE|56|E0|cmd|sub-cmd|data|FD|
-    FE FE = preamble, FD = end of command
-    56 = transceiver default address for IC746 (unused)
-    E0 = CAT controller default address (unused)
-    
-    Upon successful receipt of EOM, protocol requires echo back of enitre message
-    
-    On interrupted preamble or buffer overflow (no EOM received), send NAK
-    On successful receipt of a command the global array cmdBuf
-    
-    will have the received CAT command (without the preamble and EOM)
-*/
-boolean readCmd() {
-  byte bt;
-  boolean cmdRcvd = false;
-
-  while (Serial.available() && !cmdRcvd) {
-
-    bt = byte(Serial.read());
-
-    switch (rcvState) {       //This is the core FSM controlling the message processing loop
-      
-      case CAT_RCV_WAITING:   // scan for start of new command
-        if (bt == CAT_PREAMBLE) {
-          rcvState = CAT_RCV_INIT;
-        }
-        break;
-
-      case CAT_RCV_INIT:      // check for second preamble byte
-        if (bt == CAT_PREAMBLE) {
-          rcvState = CAT_RCV_RECEIVING;
-        } else {              // error - should not happen, reset and report
-          rcvState = CAT_RCV_WAITING;
-          bytesRcvd = 0;
-          sendNack();
-        }
-        break;
-
-      case CAT_RCV_RECEIVING:
-        switch (bt) {
-          case CAT_EOM:        // end of message received, return for processing, reset state
-            send(cmdBuf, bytesRcvd);  // echo received packet for protocol
-            cmdRcvd = true;
-            rcvState = CAT_RCV_WAITING;
-            cmdLength = bytesRcvd;
-            bytesRcvd = 0;
-            break;
-
-          default:            // fill command buffer
-            if (bytesRcvd <= CAT_CMD_BUF_LENGTH) {
-              cmdBuf[bytesRcvd] = bt;
-              bytesRcvd++;
-            } else {           // overflow - should not happen reset for new comand
-              rcvState = CAT_RCV_WAITING;
-              bytesRcvd = 0;
-              sendNack();      // report error
-            }
-            break;
-        }
-        break;
-    }
-  }
-  return cmdRcvd;
-}
-
-/*
- * doPtt()
- * Integrated with ADX system status
- */
-void doPtt() { //PORTED
-  if (cmdLength == CAT_RD_LEN_SUB) {  // Read request
-      cmdBuf[CAT_IX_PTT] = getWord(SSW,CATTX);
-      sendResponse(cmdBuf, CAT_SZ_PTT);
-  } else {               // Set request
-    if (cmdBuf[CAT_IX_PTT] == CAT_PTT_TX) {
-       switch_RXTX(HIGH);
-       setWord(&SSW,CATTX,true);
-    } else {
-       switch_RXTX(LOW);
-       setWord(&SSW,CATTX,false);
-       #ifdef ANTIVOX
-          tavox=millis();
-          setWord(&TSW,AVOX,true);
-       #endif //ANTIVOX   
-    }
-    sendAck();  // always acknowledge "set" commands
-  }
-}
-
-/*
- * doSplit()
- * Actually a hardwired response as the ADX doesn't work primarily on split
- */
-void doSplit() {
-  sendAck();
-}
-/*
- * doSetVfo()
- * Actually a hardwired response as the ADX doesn't have a dual VFO
- */
-void doSetVfo() { //PORTED
-  sendAck();
-}
-
-/*
- * doSetFreq()
- * A frequency request is required and processed, a validation is performed that the new 
- * frequency lies between the configured limits of the ADX transceiver receiving it
- */
-void doSetFreq() { //ADDITIONAL CONTROL FOR LEGAL BAND NEEDED
-  uint32_t f=BCDtoFreq();
-  int      b=setSlot(f);
-  if (b<0) {
-    sendNack();
-    return;
-  }
-  freq=f;
-  if (b!=Band_slot) { //band change
-     Band_slot=b;
-     Freq_assign();   //Do all the changes if a band change has been requested
-     freq=f;
-  }
-
-  /*---
-   * Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
-   */
-   int i=getBand(freq);
-   if ( i<0 ) {
-      return;
-   }
-   int j=findSlot(i);
-   if (j<0 || j>3) {
-      return;
-   }
-   int k=Bands[j];
-   int q=band2Slot(k);
-   int m=getMode(q,freq);
-
-   #ifdef DEBUG
-     _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
-   #endif //DEBUG  
-
- 
-   if (mode != m) {
-      mode = m;
-      Mode_assign();
-   }
-
-  #ifdef QUAD  //Set the PA & LPF filter board settings if defined
-     uint16_t s=Bands[b];
-     int p=band2QUAD(s);
-     if (p != -1) { 
-        setQUAD(p);
-     }   
-     #ifdef DEBUG
-        _INFOLIST("%s bands[%d]=%d quad=%d\n",__func__,b,s,q);
-     #endif //DEBUG
-     
-  #endif //QUAD    
-  sendAck();
-}
-/*
- * doReadFreq()
- * Read the current operating frequency
- */
-void doReadFreq() {
-  FreqtoBCD(freq);
-  sendResponse(cmdBuf, CAT_SZ_FREQ);
-}
-
-/*
- * doSetMode()
- * Change the mode, only LSB/USB and CW are supported
- */
-void doSetMode() {
-  switch (cmdBuf[CAT_IX_SUB_CMD]) {
-     case CAT_MODE_LSB:
-     case CAT_MODE_USB:
-        //* Only USB allowed, later CW needs to be added
-        setWord(&SSW,CWMODE,false);
-        mode=0;
-        Mode_assign();
-        break;
-  }
-  sendAck();
-}
-/*
- * doReadMode()
- */
-void doReadMode() {
-
-  cmdBuf[CAT_IX_MODE]   = CAT_MODE_USB;
-  cmdBuf[CAT_IX_MODE+1] = CAT_MODE_FILTER1;  // protocol filter - return reasonable value
-  sendResponse(cmdBuf, CAT_SZ_MODE);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-// doMisc() - process the CAT_MISC command
-//
-// The MISC command has several unrelated sub-commands
-// The only one implemented here is the sub-command to read the IF Filter Setting
-// The code sends a hard-coded response since most homebrew rigs won't have such a setting
-// but programs like WSJTX and FLDIGI request it
-//
-// Commands that "set" values are replied to with an ACK message
-///////////////////////////////////////////////////////////////////////////////////////////////////////
-void doMisc() {
-  switch (cmdBuf[CAT_IX_SUB_CMD]) {
-    case CAT_READ_IF_FILTER:
-      cmdBuf[CAT_IX_IF_FILTER] = 0;
-      sendResponse(cmdBuf, CAT_SZ_IF_FILTER);
-      break;
-
-    // Not implemented
-    // Reply with ACK to keep the protocol happy
-    case CAT_SET_MEM_CHAN:
-    case CAT_SET_BANDSTACK:
-    case CAT_SET_MEM_KEYER:
-      sendAck();
-      break;
-  }
-}
-void doUnimplemented_1b() {
-  if (cmdLength == CAT_RD_LEN_SUB) {        // Read request
-    cmdBuf[CAT_IX_DATA] = 0;   // return 0 for all read requests
-    sendResponse(cmdBuf, CAT_SZ_UNIMP_1B);
-  } else {                   // Set parameter request
-    sendAck();               // Send an acknowledgement to keep the protocol happy
-  }
-}
-
-void doUnimplemented_2b() {
-  if (cmdLength == CAT_RD_LEN_SUB) {        // Read request
-    cmdBuf[CAT_IX_DATA] = 0;   // return 0 for all read requests
-    cmdBuf[CAT_IX_DATA+1] = 0; 
-    sendResponse(cmdBuf, CAT_SZ_UNIMP_2B);
-  } else {                   // Set parameter request
-    sendAck();               // Send an acknowledgement to keep the protocol happy
-  }
-}
-
-void doTuneStep() {
-  if (cmdLength == CAT_RD_LEN_NOSUB) {             // Read request
-    cmdBuf[CAT_IX_TUNE_STEP] = 0;   // return 0 for all read requests
-    sendResponse(cmdBuf, CAT_SZ_TUNE_STEP);
-  } else {                   // Set parameter request
-    sendAck();               // Send an acknowledgement to keep the protocol happy
-  }
-}
-
-void doAntSel() {
-  if (cmdLength == CAT_RD_LEN_NOSUB) {           // Read request
-    cmdBuf[CAT_IX_ANT_SEL] = 0;   // return 0 for all read requests
-    sendResponse(cmdBuf, CAT_SZ_ANT_SEL);
-  } else {                   // Set parameter request
-    sendAck();               // Send an acknowledgement to keep the protocol happy
-  }
-}
-
-void doSmeter() {
-  switch (cmdBuf[CAT_IX_SUB_CMD]) {
-    case CAT_READ_SUB_SMETER:
-      cmdBuf[CAT_IX_SMETER] = 0;      // user has not supplied S Meter function - keep the protocol happy
-      cmdBuf[CAT_IX_SMETER + 1] = 0;
-      sendResponse(cmdBuf, CAT_SZ_SMETER);
-      break;
-
-    case CAT_READ_SUB_SQL:        // Squelch condition 0=closed, 1=open
-      cmdBuf[CAT_IX_SQUELCH] = 1;
-      send(cmdBuf, CAT_SZ_SQUELCH);
-      break;
-  }
-}
-
-
-void serialEvent() {
-
-  // Receive a CAT Command
-  if (!readCmd()) return;
-
-  // Process the command - command opcode is at CAT_IX_CMD location in command buffer
-  switch (cmdBuf[CAT_IX_CMD]) {
-
-    case CAT_PTT:
-      doPtt();
-      break;
-
-    case CAT_SPLIT:
-      doSplit();
-      break;
-
-    case CAT_SET_VFO:
-      doSetVfo();
-      break;
-
-    case CAT_SET_FREQ:
-      doSetFreq();
-      break;
-
-    case CAT_SET_MODE:
-      doSetMode();
-      break;
-
-    case CAT_READ_MODE:
-      doReadMode();
-      break;
-
-    case CAT_READ_FREQ:
-      doReadFreq();
-      break;
-
-    case CAT_READ_SMETER:
-      doSmeter();
-      break;
-
-    case CAT_MISC:
-      doMisc();
-      break;
-
-    case CAT_READ_ID:
-      cmdBuf[CAT_IX_ID] = CAT_RIG_ADDR;      // Send back the transmitter ID
-      send(cmdBuf, CAT_SZ_ID);
-      break;
-
-    // Unimplemented commands that request one or two bytes of data from the rig - keep the protocol happy
-    case CAT_SET_RD_STEP:
-      doTuneStep();
-      break;
-      
-    case CAT_SET_RD_ANT:
-      doAntSel();
-      break;
-      
-    case CAT_SET_RD_ATT:
-    case CAT_SET_RD_PARAMS2:
-      doUnimplemented_1b();
-      break;
-
-    case CAT_SET_RD_PARAMS1:
-    case CAT_READ_OFFSET:
-      doUnimplemented_2b();
-      break;
-      
-    default:                // For all other commands respond with an NACK
-      sendNack();
-      break;
-  }
-}
- 
-
-#endif //IC746
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   TS480 CAT PROTOCOL SUBSYSTEM                                              *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -2097,8 +1373,7 @@ void serialEvent() {
  *                                    TS480 CAT SubSystem                                              *
  * cloned from uSDX (QCX-SSB) firmware, this is a very large and complex yet very complete CAT protocol*                                    
  * because of memory constraints it has been implemented in two sections, a basic one which is the set *
- * needed to interact with WSJT-X (or FLRig) and a full protocol (activated with the CAT_FULL directive* 
- * intended to comply with most if not all the protocol commands, many answers aren't actually other   *
+ * needed to interact with WSJT-X (or FLRig)  many answers aren't actually other                       *
  * than a hardwired response not reflecting the actual status of the ADX transceiver, at the same time *
  * the ADX transceiver has less features than a real TS-480 rig, thus many commands refers to features *
  * which aren't really present on the ADX so nothing else than a hard wired command can be given, still*
@@ -2121,46 +1396,11 @@ void serialEvent() {
   const char *cMD3="MD3;";
   const char *cFR="FR"; const char *cFT="FT"; const char *cEX="EX";
   const char *cKY="KY"; const char *cXT="XT"; const char *cVX="VX";
-  const char *cRU="RU"; const char *cPS="PS"; const char *cRD="RD";
-  
-#ifdef CAT_FULL
-
-  const char *cISr="IS+0000;";
-  const char *cPCr="PC005;";
-  const char *cXOr="XO00000000000;";
-  const char *cSUr="SU00000000000;";
-  const char *cMRr="MR00000000000000000000000000000000000000000000000;";
-  const char *cVDr="VD0100;";
-  const char *cVGr="VG005;";
-  const char *cSMr="SM00000;";
-  const char *cPLr="PL000000;";
-  const char *cRMr="RM00000;";
-  const char *cLMr="LM00000;";
-  const char *cSSr="SS0000000000000;";
-  const char *cSM="SM"; const char *cRA="RA"; const char *cIS="IS";  const char *cAC="AC";  const char *cAG="AG";  const char *cSQ="SQ";
-  const char *cMG="MG"; const char *cGT="GT"; const char *cNL="NL";  const char *cRT="RT";
-  const char *cSH="SH"; const char *cCN="CN"; const char *cRL="RL";  const char *cPA="PA";  const char *cTN="TN";
-  const char *cQR="QR"; const char *cLK="LK"; const char *cSC="SC"; 
-  const char *cNB="NB"; const char *cBC="BC"; const char *cNR="NR";  const char *cBY="BY";
-  const char *cFS="FS"; const char *cPR="PR"; const char *cRS="RS";  const char *cAN="AN";  const char *cMF="MF";  const char *cTO="TO";
-  const char *cTS="TS"; const char *cBS="BS"; const char *cCA="CA";  const char *cCT="CT";
-  const char *cUL="UL"; const char *cAI="AI"; const char *cFL="FL";
-  
-  
-  const char *cML="ML"; const char *cOP="OP"; const char *cPB="PB"; const char *cDL="DL";
-  const char *cRG="RG"; const char *cKS="KS"; const char *cTY="TY"; const char *cMC="MC";
-  const char *cSD="SD"; const char *cFW="FW";
-  const char *cDN="DN"; const char *cRC="RC"; const char *cCH="CH"; const char *cSV="SV"; const char *cMW="MW";  const char *cQT="QT";
-  const char *cSR="SR"; const char *cUP="UP"; const char *cVR="VR"; const char *cVV="VV";
-  const char *cPC="PC"; const char *cPL="PL"; const char *cSU="SU"; const char *cMR="MR"; const char *cXO="XO"; const char *cVG="VG";
-  const char *cSS="SS"; const char *cRM="RM"; const char *cLM="LM"; const char *cVD="VD"; const char *cSL="SL"; const char *cQI="QI";
-
-#endif //CAT_FULL
+  const char *cRU="RU"; const char *cPS="PS"; const char *cRD="RD"; 
 
 /*-------------------------------------------------------------*
  * Specific CAT commands implementation                        *
  *-------------------------------------------------------------*/
- 
 //*--- Get Freq VFO A
 void Command_GETFreqA()          //Get Frequency VFO (A)
 {
@@ -2293,10 +1533,6 @@ void Command_RX()
   setWord(&SSW,CATTX,false);
   sprintf(hi,"%s",cRX0);
   Serial.print(hi);
-  #ifdef ANTIVOX
-      tavox=millis();
-      setWord(&TSW,AVOX,true);
-  #endif //ANTIVOX   
 }
 
 //*--- Place transceiver in TX mode
@@ -2379,14 +1615,6 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        {Command_BChange(-1); return;}
   if ((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        {Command_BChange(+1); return;}
 
-#ifdef CAT_FULL
-
-  if ((CATcmd[0] == 'V') && (CATcmd[1] == 'X'))                        {Command_VX(); return;} 
-  if ((CATcmd[0] == 'A') && (CATcmd[1] == 'S'))                        {Command_AS(); return;}
-  if ((CATcmd[0] == 'S') && (CATcmd[1] == 'T'))                        {Command_ST(); return;}      //Step when implemented
-  if ((CATcmd[0] == 'X') && (CATcmd[1] == 'I'))                        {Command_XI(); return;}      //Step when implemented
-
-#endif  //CAT_FULL
   
   strcmd[0]=CATcmd[0];
   strcmd[1]=CATcmd[1];
@@ -2397,53 +1625,7 @@ void analyseCATcmd()
       strcmp(strcmd,cVX)==0 || strcmp(strcmd,cXT)==0 || strcmp(strcmd,cKY)==0 ||
       strcmp(strcmd,cRU)==0 || strcmp(strcmd,cPS)==0 || strcmp(strcmd,cRD)==0)    {sprintf(hi,"%s",CATcmd);Serial.print(hi);return;}
 
-#ifdef CAT_FULL
-
-  if (strcmp(strcmd,cIS)==0)                                           {sprintf(hi,"%s",cISr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cPC)==0)                                           {sprintf(hi,"%s",cPCr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cPL)==0)                                           {sprintf(hi,"%s",cPLr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cSU)==0)                                           {sprintf(hi,"%s",cSUr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cMR)==0)                                           {sprintf(hi,"%s",cMRr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cXO)==0)                                           {sprintf(hi,"%s",cXOr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cVD)==0)                                           {sprintf(hi,"%s",cVDr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cVG)==0)                                           {sprintf(hi,"%s",cVGr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cSS)==0)                                           {sprintf(hi,"%s",cSSr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cSM)==0)                                           {sprintf(hi,"%s",cSMr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cRM)==0)                                           {sprintf(hi,"%s",cRMr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cLM)==0)                                           {sprintf(hi,"%s",cLMr);Serial.print(hi);return;}
-
-  if (strcmp(strcmd,cSL)==0 || strcmp(strcmd,cSH)==0 || strcmp(strcmd,cCN)==0 ||
-      strcmp(strcmd,cRL)==0 || strcmp(strcmd,cPA)==0 || strcmp(strcmd,cTN)==0 ||
-      strcmp(strcmd,cQR)==0 || strcmp(strcmd,cLK)==0 || strcmp(strcmd,cSC)==0)   {sprintf(hi,"%s00;",strcmd);Serial.print(hi);return;}
-
-     
-  if (strcmp(strcmd,cNB)==0 || strcmp(strcmd,cBC)==0 || strcmp(strcmd,cNR)==0 ||
-      strcmp(strcmd,cSM)==0 || strcmp(strcmd,cRT)==0 || strcmp(strcmd,cBY)==0 ||
-      strcmp(strcmd,cFS)==0 || strcmp(strcmd,cPR)==0 || strcmp(strcmd,cRS)==0 ||
-      strcmp(strcmd,cAN)==0 || strcmp(strcmd,cMF)==0 || strcmp(strcmd,cTO)==0 ||
-      strcmp(strcmd,cTS)==0 || strcmp(strcmd,cBC)==0 || strcmp(strcmd,cBS)==0 ||
-      strcmp(strcmd,cXT)==0 || strcmp(strcmd,cCA)==0 || strcmp(strcmd,cCT)==0 ||
-      strcmp(strcmd,cUL)==0 || strcmp(strcmd,cAI)==0 || strcmp(strcmd,cFL)==0 )   {sprintf(hi,"%s0;",strcmd);Serial.print(hi);return;}
-
-      
-
-      
-  if (strcmp(strcmd,cSM)==0 || strcmp(strcmd,cRA)==0 || strcmp(strcmd,cAC)==0  ||
-      strcmp(strcmd,cGT)==0 || strcmp(strcmd,cNL)==0 || strcmp(strcmd,cML)==0  ||
-      strcmp(strcmd,cOP)==0 || strcmp(strcmd,cPB)==0 || strcmp(strcmd,cDL)==0  ||
-      strcmp(strcmd,cRG)==0 || strcmp(strcmd,cKS)==0 || strcmp(strcmd,cTY)==0  ||
-      strcmp(strcmd,cMC)==0 || strcmp(strcmd,cMG)==0 )                                                    {sprintf(hi,"%s000;",strcmd);Serial.print(hi);return;}
-      
-  if (strcmp(strcmd,cAG)==0 || strcmp(strcmd,cSQ)==0 || strcmp(strcmd,cAC)==0 ||
-      strcmp(strcmd,cSD)==0 || strcmp(strcmd,cFW)==0)                             {sprintf(hi,"%s0000;",strcmd);Serial.print(hi);return;}
-  
-  if (strcmp(strcmd,cRC)==0 || strcmp(strcmd,cDN)==0 || strcmp(strcmd,cCH)==0 ||
-      strcmp(strcmd,cSV)==0 || strcmp(strcmd,cMW)==0 || strcmp(strcmd,cQI)==0 ||
-      strcmp(strcmd,cSR)==0 || strcmp(strcmd,cUP)==0 || strcmp(strcmd,cVR)==0 ||
-      strcmp(strcmd,cVV)==0)                                                      {return;}
-
-#endif //CAT_FULL
-              
+             
   Serial.print("?;");
 }
 
@@ -2537,7 +1719,6 @@ Si5351 si5351;
 /*--------------------------------------------------------------------------------------------*
  * Initialize DDS SI5351 object
  *--------------------------------------------------------------------------------------------*/
-
 void setup_si5351() {
 //------------------------------- SET SI5351 VFO -----------------------------------  
 // The crystal load value needs to match in order to have an accurate calibration
@@ -2936,12 +2117,7 @@ void ManualTX(){
     #ifdef DEBUG
        _INFOLIST("%s ManualTX(LOW)\n",__func__);
     #endif //DEBUG   
-
     
-    #ifdef ANTIVOX
-      tavox=millis();
-      setWord(&TSW,AVOX,true);
-    #endif //ANTIVOX   
 }
 /*---------------------------------------------------------------------*
  * getSwitchPL
@@ -3051,7 +2227,6 @@ bool getTXSW() {
 #ifdef PDX
     return detectKey(TXSW,LOW,false);
 #endif //PDX
-
 
 }
 /*==================================================================================================*
@@ -3404,9 +2579,11 @@ bool     b = false;
              t+=uint32_t(FSK_WINDOW_USEC);                      //Wait for the FSK WINDOW (uSec)
              while (t>time_us_32());                            //This window will define the sample rate for frequency (every FSK_WINDOW uSec)
              pwm_set_enabled(pwm_slice,false);                  //Disable pwm count
-             ffsk=pwm_get_counter(pwm_slice);                   //Obtain actual pwm count during the window
+             uint32_t ffskB=pwm_get_counter(pwm_slice);                   //Obtain actual pwm count during the window
+             ffsk=ffskB;
              ffsk+=f_hi<<16;                                    //Add overflow if any
              ffsk=ffsk*FSK_MULT;                                //Apply window multiplicator (1000/FSK_WINDOW)
+             _INFOLIST("%s f_hi=%ld ffsk=%ld ffskB=%ld\n",__func__,f_hi,ffsk,ffskB);
              if (ffsk > FSKMIN && ffsk <= FSKMAX) {             //If frequency is outside the allowed bandwidth ignore
                  rp2040.fifo.push(ffsk);                         //Use the rp2040 FIFO IPC to communciate the new frequency
              }
@@ -3437,7 +2614,7 @@ bool     b = false;
                 while (pwm_get_counter(pwm_slice) == pwm_cnt){} //Wait till the count change
                 pwm_cnt=pwm_get_counter(pwm_slice);             //Measure that value
                 uint32_t t1=time_us_32();                       //Mark first tick (t1)
-                while (pwm_get_counter(pwm_slice) == pwm_cnt){} //Wait till the count change (a rise edge)
+                while (pwm_get_counter(pwm_slice) == pwm_cnt){} //Wait till the count change (a rising edge)
                 uint32_t t2=time_us_32();                       //Mark the second tick (t2)
                 pwm_set_enabled(pwm_slice,false);               //Disable counting
                 dt=dt+(t2-t1);                                  //Add to the RA total
@@ -3492,9 +2669,6 @@ uint16_t build=BUILD;
    EEPROM.put(EEPROM_MAX_BLINK,max_blink);
    EEPROM.put(EEPROM_EEPROM_TOUT,eeprom_tout);
 
-#ifdef ANTIVOX
-   EEPROM.put(EEPROM_AVOXTIME,avoxtime);
-#endif //ANTIVOX
    
 #endif //TERMINAL
 
@@ -3538,11 +2712,6 @@ uint16_t build=BUILD;
    short_time = SHORT_TIME;
    max_blink  = MAX_BLINK;
    eeprom_tout= EEPROM_TOUT;
-
-
-#ifdef ANTIVOX
-   avoxtime   = AVOXTIME;
-#endif //ANTIVOX
 
 #endif //TERMINAL
 
@@ -3633,7 +2802,8 @@ uint8_t band2Slot(uint16_t b) {
          case  20 : {s=4;break;}
          case  17 : {s=5;break;}
          case  15 : {s=6;break;}
-         case  10 : {s=7;break;}
+         case  12 : {s=7;break;}
+         case  10 : {s=8;break;}
       }
       #ifdef DEBUG
        _INFOLIST("%s() band=%d slot=%d\n",__func__,b,s);
@@ -4190,10 +3360,6 @@ void execCommand(char * commandLine) {
   if (strcmp(ptrToCommandName, resetToken+1)       == 0) {perform_resetToken();printMessage(msgReset);return;}
 #endif //EE
 
-#ifdef ANTIVOX
-  if (strcmp(ptrToCommandName, avoxtime_Token+1)   == 0) {printCommand(ptrToCommandName,updateWord(&avoxtime));return;}
-#endif //ANTIVOX
-
   if (strcmp(ptrToCommandName, saveToken+1)        == 0) {perform_saveToken();printMessage(msgSave);return;}
   if (strcmp(ptrToCommandName, quitToken+1)        == 0) {perform_quitToken();return;}
   if (strcmp(ptrToCommandName, helpToken+1)        == 0) {perform_helpToken();return;}
@@ -4334,10 +3500,6 @@ void initADX(){
    EEPROM.get(EEPROM_SHORT_TIME,short_time);
    EEPROM.get(EEPROM_MAX_BLINK,max_blink);
    EEPROM.get(EEPROM_EEPROM_TOUT,eeprom_tout);
-
-#ifdef ANTIVOX
-   EEPROM.get(EEPROM_AVOXTIME,avoxtime);
-#endif //ANTIVOX   
    
 #endif //TERMINAL
  
@@ -4456,7 +3618,7 @@ void setup()
  * has been given proper initialization based on the protocol used
  *-----*/
 
-   #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) || defined(AUTOCAL))   
+   #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) )   
       Serial.begin(BAUD,SERIAL_8N2);
       while (!Serial) {
       #ifdef WDT      
@@ -4514,10 +3676,6 @@ void setup()
       _INFOLIST("%s Terminal Sub-system activated\n",__func__);
       #endif //TERMINAL
 
-      #ifdef ANTIVOX
-      _INFOLIST("%s Anti-VOX feature activated\n",__func__);
-      #endif //TERMINAL
-
       #ifdef RESET
       _INFOLIST("%s Reset feature activated\n",__func__);
       #endif //TERMINAL
@@ -4534,10 +3692,16 @@ void setup()
 
       #ifdef QUAD
       _INFOLIST("%s Quad Band filter support activated\n",__func__);
-      #else
-      _INFOLIST("%s Quad Band filter support activated\n",__func__);
       #endif //ONEBAND
-     
+
+      #ifdef FSK_PEG
+      _INFOLIST("%s PEG decoding algorithm used Mult(%d) Window[uSec]=%d \n",__func__,uint16_t(FSK_MULT),uint16_t(FSK_WINDOW_USEC));
+      #endif //ONEBAND
+
+      #ifdef FSK_ZCD
+      _INFOLIST("%s ZCD decoding algorithm used\n",__func__);
+      #endif //ONEBAND
+
    #endif //DEBUG
 #endif //PDX   
 
@@ -4719,20 +3883,6 @@ void loop()
  *  Change frequency, mode, band                                                   *
  *---------------------------------------------------------------------------------*/  
     checkMode();
-
-//*--- Manage anti-VOX timeout after avoxtime (mSec) the anti-vox condition is cleared
-
-    #ifdef ANTIVOX
-    
-    if (getWord(TSW,AVOX)==true) {
-       if (millis()-tavox > uint32_t(avoxtime)) {
-          setWord(&TSW,AVOX,false);
-          tavox=0;
-       }
-    }
-
-    #endif //ANTIVOX
-
 /*---------------------------------------------------------------------------------*
  *  Save EEPROM if a change has been flagged anywhere in the logic                 *
  *---------------------------------------------------------------------------------*/  
@@ -4841,10 +3991,6 @@ uint16_t n = VOX_MAXTRY;
 
        if ((codefreq < FRQ_MAX) && (codefreq > 0)){
 
-#ifdef ANTIVOX
-          if (getWord(TSW,AVOX)==false) {
-#endif //ANTIVOX
-            
              if (getWord(SSW,VOX) == false){
                  switch_RXTX(HIGH);                 
              }
@@ -4852,26 +3998,11 @@ uint16_t n = VOX_MAXTRY;
              si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
              setWord(&SSW,VOX,true);
 
-
-
-/*----------------------*
- * ANTIVOX if enabled   *
- *----------------------*/   
-
-#ifdef ANTIVOX             
-          }  else {
-            if (millis()-tavox > uint32_t(avoxtime)) {
-               setWord(&TSW,AVOX,false);
-               tavox=0;
-            }
-          }
-#endif //ANTIVOX
-
-       #ifdef WDT
-          wdt_reset();
-       #endif //WDT
-          
+             #ifdef WDT
+                wdt_reset();
+             #endif //WDT
        }
+       
     } else {
        n--;
     }
@@ -4968,6 +4099,7 @@ boolean  f=true;
             * if VOX is off then pass into TX mode               *
             * Frequency IS NOT changed on the first sample       *
             *----------------------------------------------------*/
+   
            if (getWord(SSW,VOX)==false) {                            
               #ifdef DEBUG
                   _INFOLIST("%s VOX activated n=%d f=%ld\n",__func__,n,codefreq);
@@ -5015,7 +4147,7 @@ boolean  f=true;
             *----*/
            #ifdef FSK_PEG
              int d=codefreq-prevfreq;
-             if ((abs(d)>=FSK_MULT-1) && (abs(d)>=FSK_MULT+1)) {
+                if ((abs(d)<=FSK_MULT-1)) {
                 si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
                 if (codefreq != prevfreq) {
                    #ifdef DEBUG
