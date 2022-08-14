@@ -95,8 +95,8 @@
  * Define the runtime platform either PICO (Raspberry Pi Pico) *
  * or !PICO (Arduino ATMega328p)                               *
  *-------------------------------------------------------------*/
-#define ADX              1   //This is the standard ADX Arduino based board 
-//#define PDX            1   //Compile for Raspberry Pi Pico board
+//#define ADX              1   //This is the standard ADX Arduino based board 
+#define PDX            1   //Compile for Raspberry Pi Pico board
 
 #ifdef PDX
    #pragma GCC optimize (0)
@@ -421,15 +421,15 @@ const char *endList         = "XXX";
 #define  CAL_COMMIT      12
 #define  CAL_ERROR        1
 
-#define  FSK_PEG         1
-//#define  FSK_ZCD         1
+//#define  FSK_PEG         1
+#define  FSK_ZCD         1
 
 #if defined(FSK_PEG) && defined(FSK_ZCD)
     #undef FSK_PEG
 #endif //Consistency rule 
 
 #define FSKMIN             300    //Minimum FSK frequency computed
-#define FSKMAX            2500    //Maximum FSK frequency computed
+#define FSKMAX            2800    //Maximum FSK frequency computed
 
 #if FSK_PEG
     #define  FSK_WINDOW      10
@@ -2579,11 +2579,10 @@ bool     b = false;
              t+=uint32_t(FSK_WINDOW_USEC);                      //Wait for the FSK WINDOW (uSec)
              while (t>time_us_32());                            //This window will define the sample rate for frequency (every FSK_WINDOW uSec)
              pwm_set_enabled(pwm_slice,false);                  //Disable pwm count
-             uint32_t ffskB=pwm_get_counter(pwm_slice);                   //Obtain actual pwm count during the window
-             ffsk=ffskB;
+             ffsk=pwm_get_counter(pwm_slice);                   //Obtain actual pwm count during the window
              ffsk+=f_hi<<16;                                    //Add overflow if any
              ffsk=ffsk*FSK_MULT;                                //Apply window multiplicator (1000/FSK_WINDOW)
-             _INFOLIST("%s f_hi=%ld ffsk=%ld ffskB=%ld\n",__func__,f_hi,ffsk,ffskB);
+             _INFOLIST("%s f_hi=%ld ffsk=%ld\n",__func__,f_hi,ffsk);
              if (ffsk > FSKMIN && ffsk <= FSKMAX) {             //If frequency is outside the allowed bandwidth ignore
                  rp2040.fifo.push(ffsk);                         //Use the rp2040 FIFO IPC to communciate the new frequency
              }
