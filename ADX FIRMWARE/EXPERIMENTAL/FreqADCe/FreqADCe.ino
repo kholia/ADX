@@ -344,7 +344,7 @@ while (true) {
     //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
     case 6: {                                                                    //Datum for two sucessive crossings has been collected at this point
                                                                                  //then a more precise computation of the exact epoch of each crossing      
-            double m=((v2[0]-v1[0])*1.0/(t2[0]-t1[0])*1.0);                      //is performed. The freQSTATEuency is computed as the projection of the difference
+            double m=((v2[0]-v1[0])*1.0/(t2[0]-t1[0])*1.0);                      //is performed. The frequency is computed as the projection of the difference
             double t0s=t1[0]+uint32_t((adc_zero-v1[0])*1.0/m);                   //between two sucessive crossings projected to a full second.
             m=((v2[1]-v1[1])*1.0/(t2[1]-t1[1])*1.0);
             double t1s=t1[1]+uint32_t((adc_zero-v1[1])*1.0/m);    
