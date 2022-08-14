@@ -98,6 +98,21 @@ uint8_t  QSTATE=0;
 uint16_t calibrateADC(uint16_t min,uint16_t max) {
      return uint16_t((adc_max-adc_min)*1.0/2.0)+adc_min;   
 }
+/*-------------------------------------------------------------------------------------------*
+ * ADCreset
+ * restore all calibration values
+ * 
+ */
+void ADCreset() {
+     adc_min=ADCMAX;
+     adc_max=ADCMIN;
+     adc_zero=ADCZERO;                
+     adc_uh=adc_zero*110/100;
+     adc_ul=adc_zero*90/100;
+     ffmin=FSKMAX;
+     ffmax=FSKMIN;
+     Serial.println("Timeout break QSTATE=0, recalibrate input level");
+}
 /*------------------------------------------------------------------------------------------*
  * getADCsample
  * collect an ADC sample running free.
@@ -124,9 +139,7 @@ uint16_t getADCsample() {
   if (v<=adc_ul) {adc_low =true;} 
   
   return  v; 
-  
 }
-
 /*-------------------------------------------------------*
  * setup 
  * main initialization
@@ -194,12 +207,7 @@ while (true) {
                   adc_t1=adc_t2;
                   if (time_us_32() > tstop) {
                     QSTATE=0;
-                    adc_min=ADCMAX;
-                    adc_max=ADCMIN;
-                    adc_zero=ADCZERO;                
-                    ffmin=FSKMAX;
-                    ffmax=FSKMIN;
-                    Serial.println("Timeout break QSTATE=0, recalibrate input level");
+                    ADCreset();
                     break;
                   }
                  
@@ -228,7 +236,11 @@ while (true) {
                   if (adc_v1 >= adc_zero && adc_v2 >= adc_zero) {
                      adc_v1=adc_v2;
                      adc_t1=adc_t2;
-                     if (time_us_32() > tstop) {QSTATE=0; Serial.println("Break QSTATE=1");break;}
+                     if (time_us_32() > tstop) {
+                        QSTATE=0;
+                        Serial.println("Break QSTATE=1");
+                        break;
+                     }
                      continue;
                   }
                   Serial.println("Bad signal QSTATE=1");
@@ -263,7 +275,11 @@ while (true) {
 
                      adc_v1=adc_v2;
                      adc_t1=adc_t2;
-                     if (time_us_32() > tstop) {QSTATE=0; Serial.println("break QSTATE=2");break;}
+                     if (time_us_32() > tstop) {
+                         QSTATE=0; 
+                         Serial.println("break QSTATE=2");
+                         break;
+                     }
                      continue;
                   }
                   Serial.println("Bad signal QSTATE=2");
@@ -288,7 +304,11 @@ while (true) {
                   }
                   adc_v1=adc_v2;
                   adc_t1=adc_t2;                  
-                  if (time_us_32() > tstop) {QSTATE=0; Serial.println("break QSTATE=3");break;}
+                  if (time_us_32() > tstop) {
+                     QSTATE=0;
+                     Serial.println("break QSTATE=3");
+                     break;
+                  }
 
                }
     } //QSTATE=3
@@ -314,7 +334,11 @@ while (true) {
                   if (adc_v1 >= adc_zero && adc_v2 >=  adc_zero) {
                     adc_v1=adc_v2;
                     adc_t1=adc_t2;
-                    if (time_us_32() > tstop) {QSTATE=0; Serial.println("break QSTATE=4");break;}
+                    if (time_us_32() > tstop) {
+                       QSTATE=0;
+                       Serial.println("break QSTATE=4");
+                       break;
+                    }
                     continue;
                   }
                   Serial.println("Bad signal QSTATE=4");
@@ -347,7 +371,11 @@ while (true) {
 
                      adc_v1=adc_v2;
                      adc_t1=adc_t2;
-                     if (time_us_32() > tstop) {QSTATE=0; Serial.println("Break QSTATE=5");break;}
+                     if (time_us_32() > tstop) {
+                        QSTATE=0; 
+                        Serial.println("Break QSTATE=5");
+                        break;
+                     }
                      continue;
                   }
                   QSTATE=0;
@@ -364,7 +392,6 @@ while (true) {
             double t0s=t1[0]+uint32_t((adc_zero-v1[0])*1.0/m);                   //between two sucessive crossings projected to a full second.
             m=((v2[1]-v1[1])*1.0/(t2[1]-t1[1])*1.0);
             double t1s=t1[1]+uint32_t((adc_zero-v1[1])*1.0/m);    
-
             /*---------------------------------------------------------*
              * This operates as a squelch by insuring that during the  *
              * frequency measurement both positive and negative values *
@@ -374,6 +401,7 @@ while (true) {
              *---------------------------------------------------------*/
             if (adc_low == false || adc_high == false) {
                Serial.printf("Input signal too low to compute\n");
+               ADCreset();
                QSTATE=7;
                break;
             }   
@@ -383,13 +411,16 @@ while (true) {
                  if (f<ffmin) {ffmin=f;}
                  if (f>ffmax) {ffmax=f;}
                  Serial.printf("f=%.2f Hz  fmin=%.2f fmax=%.2f\n",f,ffmin,ffmax);
+                 /*-----------------------------*
+                  * this is a valid f epoch     *       
+                  *-----------------------------*/
+                  
               } else {
                  Serial.printf("f=%.2f Hz  outside of frequency limits defined\n",f);                          
               }
             } else {
               Serial.printf("Invalid frequency marking is ignored\n");             
             }
-
             QSTATE=7;
       
     }
@@ -401,9 +432,10 @@ while (true) {
               QSTATE=0;
             }  
 
-}  //FSM(QSTATE) logic
-  
-}  //FSQSTATE(QSTATE) infinite loop
+  }  //FSM(QSTATE) logic
+
+} //FSQSTATE(QSTATE) infinite loop
+
 }
 void loop() {
   // This code is left executing in loop at core0, all computations are made at core1
