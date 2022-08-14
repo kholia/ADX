@@ -72,6 +72,9 @@ uint16_t adc_v2=0;
 uint32_t adc_t1=0;
 uint32_t adc_t2=0;
 
+bool     adc_high=false;
+bool     adc_low=false;
+
 /*-------------------------------*
  * Computed frequency limits     *
  */
@@ -80,7 +83,8 @@ double   ffmax=FSKMIN;
 uint16_t adc_min=ADCMAX;
 uint16_t adc_max=ADCMIN;
 uint16_t adc_zero=ADCZERO;
-
+uint16_t adc_uh;
+uint16_t adc_ul;
 /*--------------------------------*
  * FSM state variable
  *--------------------------------*/
@@ -104,15 +108,23 @@ uint16_t getADCsample() {
   if (v>adc_max) {
      adc_max=v;
      adc_zero=calibrateADC(adc_min,adc_max);
+     adc_uh=adc_zero*110/100;
+     adc_ul=adc_zero*90/100;
      Serial.printf("calibration adc_max=%d adc_min=%d adc_Zero=%d\n",adc_max,adc_min,adc_zero);
 
   }
   if (v<=adc_min) {
      adc_min=v;
      adc_zero=calibrateADC(adc_min,adc_max);
+     adc_uh=adc_zero*110/100;
+     adc_ul=adc_zero*90/100;
      Serial.printf("calibration adc_max=%d adc_min=%d adc_Zero=%d\n",adc_max,adc_min,adc_zero);
   }
+  if (v>=adc_uh) {adc_high=true;}
+  if (v<=adc_ul) {adc_low =true;} 
+  
   return  v; 
+  
 }
 
 /*-------------------------------------------------------*
@@ -169,6 +181,8 @@ while (true) {
                adc_v1=getADCsample();               //Wait till two sucessive readings are positive, exit if none in 1 mSec
                adc_t1=time_us_32();
                uint32_t tstop=adc_t1+1000;
+               adc_high=false;
+               adc_low=false;
                while (true) {
                   adc_v2=getADCsample();
                   adc_t2=time_us_32();
@@ -183,6 +197,8 @@ while (true) {
                     adc_min=ADCMAX;
                     adc_max=ADCMIN;
                     adc_zero=ADCZERO;                
+                    ffmin=FSKMAX;
+                    ffmax=FSKMIN;
                     Serial.println("Timeout break QSTATE=0, recalibrate input level");
                     break;
                   }
@@ -215,7 +231,7 @@ while (true) {
                      if (time_us_32() > tstop) {QSTATE=0; Serial.println("Break QSTATE=1");break;}
                      continue;
                   }
-                  Serial.println("Invalid signal QSTATE=1");
+                  Serial.println("Bad signal QSTATE=1");
                   QSTATE=0;
                   break;
                   
@@ -250,7 +266,7 @@ while (true) {
                      if (time_us_32() > tstop) {QSTATE=0; Serial.println("break QSTATE=2");break;}
                      continue;
                   }
-                  Serial.println("Invalid signal QSTATE=2");
+                  Serial.println("Bad signal QSTATE=2");
                   QSTATE=0;
                   break;
                }
@@ -301,7 +317,7 @@ while (true) {
                     if (time_us_32() > tstop) {QSTATE=0; Serial.println("break QSTATE=4");break;}
                     continue;
                   }
-                  Serial.println("Invalid signal QSTATE=4");
+                  Serial.println("Bad signal QSTATE=4");
                   QSTATE=0;
                   break;
                }
@@ -349,6 +365,18 @@ while (true) {
             m=((v2[1]-v1[1])*1.0/(t2[1]-t1[1])*1.0);
             double t1s=t1[1]+uint32_t((adc_zero-v1[1])*1.0/m);    
 
+            /*---------------------------------------------------------*
+             * This operates as a squelch by insuring that during the  *
+             * frequency measurement both positive and negative values *
+             * went in excess of the calibrated zero level +/-10%      *
+             * and not computing the frequency if the signal was too   *
+             * low because it would create large errors if so          *
+             *---------------------------------------------------------*/
+            if (adc_low == false || adc_high == false) {
+               Serial.printf("Input signal too low to compute\n");
+               QSTATE=7;
+               break;
+            }   
             if ((t1s>t0s)) {
               double f=1000000/(t1s-t0s);
               if (f>=double(FSKMIN) && f<=double(FSKMAX)) {
