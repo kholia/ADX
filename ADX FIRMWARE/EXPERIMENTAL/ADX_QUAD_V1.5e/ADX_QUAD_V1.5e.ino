@@ -94,8 +94,11 @@
  * Define the runtime platform either PICO (Raspberry Pi Pico) *
  * or !PICO (Arduino ATMega328p)                               *
  *-------------------------------------------------------------*/
-#define ADX              1   //This is the standard ADX Arduino based board 
-//#define PDX            1   //Compile for Raspberry Pi Pico board
+#define ADX            1   //This is the standard ADX Arduino based board 
+
+#if !defined(ADX)
+  #define PDX          1       //Compile for PDX board
+#endif   
 
 #ifdef PDX
    #pragma GCC optimize (0)
@@ -194,10 +197,11 @@
    #define EE              1      //Save in Flash emulation of EEPROM the configuration
    //#define CW              1      //CW support
    //#define CAT             1      //Enable CAT protocol over serial port
+   //#define TS480
    //#define FT817           1      //CAT protocol is Yaesu FT817
    //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
    //#define QUAD            1      //Support for QUAD board
-   #define ONEBAND         1      //Define a single band 
+   //#define ONEBAND         1      //Define a single band 
 #endif //PDX
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -222,7 +226,7 @@
 #define REPEAT_KEY    30            //Key repetition period while in calibration
 #define WAIT          true          //Debouncing constant
 #define NOWAIT        false         //Debouncing constant
-#define SERIAL_TOUT   50
+#define SERIAL_TOUT   5000
 #define SERIAL_WAIT   2
 #define CAT_RECEIVE_TIMEOUT      500
 
@@ -246,7 +250,7 @@
    #define FT4            11           //FT4 LED
    #define FT8            12           //FT8 LED
 #ifdef ATUCTL
-   #define ATU             5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+   #define ATU             5           //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
 #endif //ATUCTL
 
 #endif //ADX
@@ -363,7 +367,7 @@ char hi[80];
 #ifdef PDX
 #define NFS 32
 double fsequences[NFS]; // Ring buffer for communication across cores
-int nfsi = 0;
+int nfsi   = 0;
 double pfo = 0; // Previous output frequency
 #endif
 
@@ -415,8 +419,13 @@ const char *endList         = "XXX";
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO TS480 CAT PROTOCOL                                    *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-
+#ifdef ADX
    #define CATCMD_SIZE          18
+#endif //ADX
+
+#ifdef PDX
+   #define CATCMD_SIZE         256
+#endif //PDX
    
    volatile char    CATcmd[CATCMD_SIZE];
    const int        BUFFER_SIZE = CATCMD_SIZE;
@@ -430,8 +439,11 @@ const char *endList         = "XXX";
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define  CAL_COMMIT      12
 #define  CAL_ERROR       1
-//#define  FSK_ZCD         1
+
 #define  FSK_ADCZ        1
+#if !defined(FSK_ADCZ)
+    #define FSK_ZCD      1
+#endif    
 
 #define FSKMIN             300    //Minimum FSK frequency computed
 #define FSKMAX            3000    //Maximum FSK frequency computed
@@ -1154,63 +1166,69 @@ void catReadEEPRom(void)
  *----*/
 void processCATCommand2(byte* cmd) {
   byte response[5];
-  unsigned long f;
+  //unsigned long f;
+  int j;
+  int k;
+  int b;
+  int i;
+  int q;
+  int m;
+  int x;
+  uint32_t f;
 
   switch (cmd[4]) {
     case 0x01:   // set frequency
     {
       f = readFreq(cmd);
       /*---
-       * operate band switching if necessary and the
-       * selection of the QUAD filter if enabled
+       * Answer OK to the requester
        */
-    /*   
- int   b=setSlot(uint32_t(f));
- */
- /*
-       if (b<0) {
-          response[0] = 0;
-          Serial.write(response, 1);
-          #ifdef ADX
-            delay(SERIAL_WAIT);
-            Serial.flush();
-            delay(50);
-          #endif   
-          break;
-          }
-  */
-       freq=f;
 
+      response[0] = 0;
+      Serial.write(response, 1);
+
+/*
+       #ifdef ADX
+          delay(SERIAL_WAIT);
+          Serial.flush();
+          delay(50);
+        #endif   
+     
+       b=setSlot(uint32_t(f));
+       if (b<0) {
+          break;
+       }
+ 
+       freq=uint32_t(f);
+*/
  /*--- 
   * If a band change is detected switch to the new band
   *---*/
-    /*
+/*    
        if (b!=Band_slot) { //band change
            Band_slot=b;
            Freq_assign();
            freq=f;
         }
-    */
+*/    
   /*---
    * Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
-   */
-
-    
+   */  
     /*
-        int i=getBand(freq);
+        i=getBand(freq);
         if ( i<0 ) {
            break;
         }
         
-        int j=findSlot(i);
+        j=findSlot(i);
         if (j<0 || j>3) {
            break;
         }
-        int k=Bands[j];
-        int q=band2Slot(k);
-        int m=getMode(q,freq);
-  */
-  /*
+        k=Bands[j];
+        q=band2Slot(k);
+        m=getMode(q,freq);
+  
+  
         #ifdef DEBUG
            _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n",__func__,freq,i,j,k,q,m,mode);
         #endif //DEBUG  
@@ -1222,30 +1240,24 @@ void processCATCommand2(byte* cmd) {
               Mode_assign();
            }
         }
-   */     
+      */ 
 /*----
  * if enabled change filter from the LPF filter bank
  *----*/
-    /*
+ /*   
         #ifdef QUAD  //Set the PA & LPF filter board settings if defined
-           int x=band2QUAD(k);
+           
+           x=band2QUAD(k);
            if (x != -1) {
               setQUAD(x);
            }   
         #endif //QUAD    
-
+*/
         #ifdef DEBUG
           _INFOLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n",__func__,Catbuffer,freq,b,k,q,x);
         #endif //DEBUG 
-*/
-        //freq = uint32_t(f);
-        response[0] = 0;
-        Serial.write(response, 1);
-        #ifdef ADX
-           delay(SERIAL_WAIT);
-           Serial.flush();
-           delay(50);
-        #endif   
+
+        freq = uint32_t(f);
         break;
   }
     case 0x02: // split on
@@ -1702,7 +1714,7 @@ void analyseCATcmd()
  * Process incoming characters from the serial buffer assemble     *
  * commands and process responses according with the TS480 cat prot*
  *-----------------------------------------------------------------*/
-volatile uint8_t cat_ptr = 0;
+volatile uint16_t cat_ptr = 0;
 volatile char serialBuffer[CATCMD_SIZE];
 
 void serialEvent(){
@@ -1718,8 +1730,6 @@ void serialEvent(){
   if (rc<=0) {return;}
   buf[rc]=0x0;
 
-
-
   int k=0;
   for (int j=0;j<rc;j++){
     if (buf[j]!=0x0d && buf[j]!=0x0a) { 
@@ -1729,13 +1739,13 @@ void serialEvent(){
   }
   
 #ifdef DEBUG  
-   _TRACELIST("%s CAT received buffer=%s len=%d\n",__func__,serialBuffer,rc);
+   _INFOLIST("%s CAT received buffer=%s len=%d\n",__func__,serialBuffer,rc);
 #endif //DEBUG  
 
   if (strcmp((const char*)serialBuffer,strCmd)==0) { //coincidence
 
 #ifdef DEBUG
-     _TRACELIST("%s Hit RX;ID; string\n",__func__);
+     _INFOLIST("%s Hit RX;ID; string\n",__func__);
 #endif //DEBUG
      
      Serial.write(strResp,10);
@@ -1748,7 +1758,7 @@ void serialEvent(){
        CATcmd[cat_ptr++] = data;
 
 #ifdef DEBUG
-       _TRACELIST("%s data=%c CATcmd[%d]=%c\n",__func__,data,i,CATcmd[i]);
+       _INFOLIST("%s data=%c CATcmd[%d]=%c\n",__func__,data,i,CATcmd[i]);
 #endif //DEBUG
 
        if(data == ';'){      
@@ -1756,20 +1766,24 @@ void serialEvent(){
          cat_ptr = 0;            // reset for next CAT command
 
 #ifdef DEBUG
-        _TRACELIST("%s() cmd(%s)\n",__func__,CATcmd);
+        _INFOLIST("%s() cmd(%s)\n",__func__,CATcmd);
 #endif //DEBUG
 
         analyseCATcmd();
-        delay(SERIAL_WAIT);
-        Serial.flush();
-        delay(50);
+        #ifdef ADX
+           delay(SERIAL_WAIT);
+           Serial.flush();
+           delay(50);
+        #endif //ADX   
         
       } else {
         if(cat_ptr > (CATCMD_SIZE - 1)){
            Serial.print("?;");  //Overrun, send error
-           cat_ptr = 0;         //Overrun, cleanse buffer       
-           Serial.flush();
-           delay(50);
+           cat_ptr = 0;         //Overrun, cleanse buffer
+           #ifdef ADX       
+              Serial.flush();
+              delay(50);
+           #endif //ADX
         }
       }  
    }   
@@ -2722,6 +2736,7 @@ bool     b = false;
                 dt=dt+(t2-t1);                                  //Add to the RA total
                 j--;                                            //Loop
              }                                                  //
+             
              if (dt != 0) {                                     //Prevent noise to trigger a nul measurement
                 double dx=1.0*dt/double(FSK_RA);                //
                 double f=double(FSK_USEC)/dx;                   //Ticks are expressed in uSecs so convert to Hz
@@ -4553,11 +4568,12 @@ uint32_t qTot=0;
  *-----------------------------------------------------*/
     if (rp2040.fifo.available() != 0) {             
       
-        #ifdef FSK_ZDC
+        #ifdef FSK_ZCD
            int index = rp2040.fifo.pop();
            double fo = fsequences[index];
            codefreq = uint32_t(round(fo));
-        #endif //FSK_ZDC
+           n=VOX_MAXTRY;
+        #endif //FSK_ZCD
         
         #ifdef FSK_ADCZ
            codefreq = rp2040.fifo.pop();      
@@ -4596,11 +4612,11 @@ uint32_t qTot=0;
             *-----------------------------------------------------*/
             #ifdef FSK_ZCD
             if (pfo != fo) {
-              si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0);
-              #ifdef DEBUG
-                _TRACELIST("%s Freq sample first f=%ld prev=%ld\n",__func__,codefreq,prevfreq);
-              #endif //DEBUG  
-             pfo = fo;
+               si5351.set_freq(((freq + fo) * 100ULL), SI5351_CLK0);
+               #ifdef DEBUG
+                 _TRACELIST("%s Frequency change fo=%ld\n",__func__,fo);
+               #endif //DEBUG  
+               pfo = fo;
              continue;
             }
             #endif //PSK_ZCD
@@ -4609,7 +4625,7 @@ uint32_t qTot=0;
             if (codefreq != prevfreq) {
                 si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0);
                 #ifdef DEBUG
-                   _TRACELIST("%s Freq sample first f=%ld prev=%ld\n",__func__,codefreq,prevfreq);
+                   _TRACELIST("%s Frequency change f=%ld prev=%ld\n",__func__,codefreq,prevfreq);
                 #endif //DEBUG
                 prevfreq=codefreq;   
             }
@@ -4669,6 +4685,7 @@ uint32_t qTot=0;
 #endif //FSK_ZCD 
 #endif //DEBUG    
 
+
 #endif //PDX    
 
 //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -4723,6 +4740,7 @@ uint32_t qTot=0;
     switch_RXTX(LOW);
     setWord(&SSW,VOX,false);
     setWord(&SSW,TXON,false);
+    pfo=0;                           //Force next TX mode to setup frequency
  }   
 
 /*----------------------*
