@@ -246,7 +246,7 @@ const char *endList         = "XXX";
 #define  CAL_COMMIT      12
 #define  CAL_ERROR       1
 
-#define  FSK_ADCZ        1
+//#define  FSK_ADCZ        1
 #if !defined(FSK_ADCZ)
 #define FSK_ZCD      1
 #endif
