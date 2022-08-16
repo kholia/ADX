@@ -7,8 +7,6 @@
 // Arduino "EEPROM.h" EEPROM Library(built-into arduino ide)
 // AVR "wdt.h" Watchdog Library
 
-#define PDX           1
-
 #include <Arduino.h>
 #include <stdint.h>
 #include <si5351.h>
@@ -43,29 +41,26 @@
 #undef  _NOP
 #define _NOP          (byte)0
 
-#ifdef PDX
 #define resetFunc() while(true) {}
 #define getGPIO(x) gpio_get(x)
 #define setGPIO(x,y) gpio_put(x,y)
 #define PICODISPLAY 1
 #define wdt_reset() watchdog_update()
-#endif //PDX
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                               (P)ico (D)igital (X)ceiver                                    *
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#ifdef PDX
 #define WDT             0      //Hardware and TX watchdog enabled
 #define EE              0      //Save in Flash emulation of EEPROM the configuration
-//#define CW              1      //CW support
 #define CAT             1      //Enable CAT protocol over serial port
-//#define TS480
 #define FT817           1      //CAT protocol is Yaesu FT817
+
+//#define CW              1      //CW support
+//#define TS480
 //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
 //#define QUAD            1      //Support for QUAD board
 //#define ONEBAND         1      //Define a single band
-#endif //PDX
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
@@ -97,7 +92,6 @@
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      PIN ASSIGNMENTS                                                        *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#ifdef PDX
 
 /*----
    Output control lines
@@ -131,7 +125,6 @@
 */
 #define FSK            27      //Frequency counter algorithm
 #define CAL             9      //Automatic calibration entry
-#endif //PDX
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GLOBAL STATE VARIABLE DEFINITIONS                                      *
@@ -198,13 +191,10 @@ char hi[80];
 //*--- If CAT is not defined then erase all conflicting definitions
 
 //*--- if both supported CAT protocols are simultaneously selected then keep one
-
-#ifdef PDX
 #define NFS 32
 double fsequences[NFS]; // Ring buffer for communication across cores
 int nfsi   = 0;
 double pfo = 0; // Previous output frequency
-#endif
 
 #ifdef TERMINAL
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -250,7 +240,6 @@ const char *endList         = "XXX";
 
 #endif //TERMINAL
 
-#ifdef PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO THE RP2040 ARCHITECTURE                               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -346,7 +335,6 @@ uint16_t adc_ul;
 uint8_t  QSTATE = 0;
 #endif //ADCZ
 
-#endif //PDX
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEBUG SUPPORT MACRO DEFINITIONS                                               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -462,17 +450,16 @@ uint16_t mode           = 0;          //Default to mode=0 (FT8)
 uint16_t Band_slot      = 0;          //Default to Bands[0]=40
 int32_t  cal_factor     = 0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
-unsigned long f[MAXMODE]                  = { 7074000, 7047500, 7078000, 7038600, 7030000};   //Default frequency assignment
-const unsigned long slot[MAXBAND][MAXMODE] = {{ 3573000, 3575000, 3578000, 3568600, 3560000}, //80m [0]
-  { 5357000, 5357000, 5357000, 5287200, 5346500},   //60m [1]
-  { 7074000, 7047500, 7078000, 7038600, 7030000},   //40m [2]
-  {10136000, 10140000, 10130000, 10138700, 10106000}, //30m [3]
-  {14074000, 14080000, 14078000, 14095600, 14060000}, //20m [4]
-  {18100000, 18104000, 18104000, 18104600, 18096000}, //17m [5]
-  {21074000, 21140000, 21078000, 21094600, 21060000}, //15m [6]
-  {24915000, 24915000, 24922000, 24924600, 24906000}, //12m [7]
-  {28074000, 28074000, 28078000, 28124600, 28060000}
-};  //10m [8]
+unsigned long f[MAXMODE]                   =  { 7074000, 7047500, 7078000, 7038600, 7030000};       //Default frequency assignment
+const unsigned long slot[MAXBAND][MAXMODE] = {{ 3573000, 3575000, 3578000, 3568600, 3560000},       //80m [0]
+                                              { 5357000, 5357000, 5357000, 5287200, 5346500},       //60m [1]
+                                              { 7074000, 7047500, 7078000, 7038600, 7030000},       //40m [2]
+                                              {10136000, 10140000, 10130000, 10138700, 10106000},   //30m [3]
+                                              {14074000, 14080000, 14078000, 14095600, 14060000},   //20m [4]
+                                              {18100000, 18104000, 18104000, 18104600, 18096000},   //17m [5]
+                                              {21074000, 21140000, 21078000, 21094600, 21060000},   //15m [6]
+                                              {24915000, 24915000, 24922000, 24924600, 24906000},   //12m [7]
+                                              {28074000, 28074000, 28078000, 28124600, 28060000}};  //10m [8]
 
 unsigned long freq      = f[mode];
 const uint8_t LED[4]    = {FT8, FT4, JS8, WSPR}; //A 5th virtual mode is handled if CW enabled, LEDS are managed in that case not using this table
@@ -800,11 +787,9 @@ void setup_si5351() {
 void clearLED(uint8_t LEDpin) {
   setGPIO(LEDpin, LOW);
 
-#ifdef PDX
   if (LEDpin == uint8_t(TX)) {
     setGPIO(LED_BUILTIN, LOW);
   }
-#endif //PDX
 
 #ifdef DEBUG
   _EXCPLIST("%s pin=%d\n", __func__, LEDpin);
@@ -818,10 +803,7 @@ void resetLED() {  // Turn-off all LEDs
   clearLED(JS8);
   clearLED(FT4);
   clearLED(FT8);
-
-#ifdef PDX
   clearLED(LED_BUILTIN);
-#endif //PDX
 
 #ifdef DEBUG
   _EXCP;
@@ -850,11 +832,9 @@ void setLED(uint8_t LEDpin, bool clrLED) {     //Turn-on LED {pin}
   (clrLED == true ? resetLED() : void(_NOP));
   setGPIO(LEDpin, HIGH);
 
-#ifdef PDX
   if (LEDpin == uint8_t(TX)) {
     setGPIO(LED_BUILTIN, HIGH);
   }
-#endif //PDX
 
 #ifdef DEBUG
   _EXCPLIST("%s(%d)\n", __func__, LEDpin);
@@ -876,20 +856,15 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
   while (n > 0) {
     setGPIO(LEDpin, HIGH);
 
-#ifdef PDX
     if (LEDpin == uint8_t(TX)) {
       setGPIO(LED_BUILTIN, HIGH);
     }
-#endif //PDX
 
     delay(BDLY);
     setGPIO(LEDpin, LOW);
-#ifdef PDX
     if (LEDpin == uint8_t(TX)) {
       setGPIO(LED_BUILTIN, LOW);
     }
-#endif //PDX
-
     delay(BDLY);
     n--;
 
@@ -1013,7 +988,8 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 #ifdef DEBUG
     _INFOLIST("%s TX+ (CW=%s) TX=%s ftx=%ld f=%ld\n", __func__, BOOL2CHAR(getWord(SSW, CWMODE)), BOOL2CHAR(getWord(SSW, TXON)), freqtx, freq);
 #endif //DEBUG
-#else
+
+#else   //!CW
     freqtx = freq;
 #ifdef DEBUG
     _INFOLIST("%s TX+ f=%ld\n", __func__, freqtx);
@@ -1024,11 +1000,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     si5351.output_enable(SI5351_CLK0, 1);   // TX on
 
     setGPIO(TX, HIGH);
-
-#ifdef PDX
     setGPIO(LED_BUILTIN, HIGH);
-#endif //PDX
-
     setWord(&SSW, TXON, HIGH);
 
 #ifdef WDT
@@ -1060,11 +1032,7 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
   si5351.output_enable(SI5351_CLK1, 1);   //RX on
 
   setGPIO(TX, 0);
-
-#ifdef PDX
   setGPIO(LED_BUILTIN, LOW);
-#endif //PDX
-
   setWord(&SSW, TXON, LOW);
   setWord(&SSW, VOX, LOW);
   /*---------------------------------------------------------*
@@ -1116,17 +1084,13 @@ void ManualTX() {
    Detect and clear the Long push condition on both UP/DOWN buttons
   ---------------------------------------------------------------------*/
 bool getSwitchPL(uint8_t pin) {
-#ifdef PDX   //No support for Press Long feature yet
   return HIGH;
-#endif //PDX
 }
 /*----------------------------------------------------------*
    get value for a digital pin and return after debouncing
   ----------------------------------------------------------*/
 bool getSwitch(uint8_t pin) {
-#ifdef PDX
   return detectKey(pin, LOW, WAIT);
-#endif //PDX
 }
 /*----------------------------------------------------------*
    read UP switch
@@ -1152,9 +1116,7 @@ bool getDOWNSSW() {
    short and long pulse though.
   ---------------------------------------------------------------*/
 bool getTXSW() {
-#ifdef PDX
   return detectKey(TXSW, LOW, false);
-#endif //PDX
 }
 /*==================================================================================================*
    Clock (Si5351) Calibration methods
@@ -1167,138 +1129,10 @@ bool getTXSW() {
        An iteration is made automatically until the read value is 10MHz.
        The calibration factor will be store
   ==================================================================================================*/
-#if defined(ADX)
-//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-//*                                     ADX Calibration procedure (legacy,manual)                           *
-//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-void Calibration() {
 
-#ifdef DEBUG
-  _INFO;
-#endif //DEBUG
-
-  resetLED();
-  uint8_t  n = 4;
-
-  switch_RXTX(LOW);
-
-  si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_2MA); // Set for lower power for calibration
-  si5351.set_clock_pwr(SI5351_CLK0, 0); // Enable the clock for calibration
-
-  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA); // Set for lower power for calibration
-  si5351.set_clock_pwr(SI5351_CLK1, 0); // Enable the clock for calibration
-
-  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
-  si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
-
-  /*-------
-     Reset calibration & apply initial values
-  */
-
-#ifdef CAL_RESET
-  cal_factor = 0;
-
-#ifdef EE
-  EEPROM.put(EEPROM_CAL, cal_factor);
-#endif //EEPROM
-
-#endif //CAL_RESET
-
-  si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
-  si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
-
-
-
-  while (n > 0) {
-
-#ifdef WDT
-    wdt_reset();
-#endif //WDT
-
-    calibrateLED();
-    n--;
-
-#ifdef WDT
-    wdt_reset();
-#endif //WDT
-  }
-
-#ifdef EE
-  EEPROM.get(EEPROM_CAL, cal_factor);
-#endif //EEPROM
-
-  while (getGPIO(DOWN) == LOW) {
-#ifdef WDT
-    wdt_reset();
-#endif //WDT
-  }
-
-#ifdef DEBUG
-  _INFOLIST("%s cal_factor=%ld\n", __func__, cal_factor);
-#endif //DEBUG
-
-  while (true) {
-
-#ifdef WDT
-    wdt_reset();
-#endif //WDT
-
-    if (detectKey(UP, LOW, NOWAIT) == LOW) {
-      cal_factor = cal_factor - CAL_STEP;
-
-#ifdef EE
-      EEPROM.put(EEPROM_CAL, cal_factor);
-#endif //EEPROM
-
-      si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
-
-#ifdef DEBUG
-
-      _INFOLIST("%s (-) cal_factor=%ld cal_freq=%ld\n", __func__, cal_factor, Cal_freq);
-
-#endif //DEBUG
-
-      // Set Calibration CLK output
-
-      si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
-      si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for calibration
-      si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable the clock for calibration
-    }
-
-
-    if (detectKey(DOWN, LOW, NOWAIT) == LOW) {
-      cal_factor = cal_factor + CAL_STEP;
-
-#ifdef EE
-      EEPROM.put(EEPROM_CAL, cal_factor);
-#endif //EEPROM
-
-      si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
-
-      // Set Calbration Clock output
-#ifdef DEBUG
-
-      _INFOLIST("%s (+) cal_factor=%ld cal_freq=%ld\n", __func__, cal_factor, Cal_freq);
-
-#endif //DEBUG
-
-      si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
-      si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
-      si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable clock2
-
-    }
-
-  }
-}
-#endif //Legacy calibration method (ADX)
-
-
-#ifdef PDX
 //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
 //*                           PDX Calibration (automatic) and FSK counting algorithm                        *
 //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-
-
 /*------
    Înterrupt IRQ for edge counting overflow
   -----*/
@@ -1973,7 +1807,6 @@ void setup1() {
 #endif //FSK_ADCZ
   }
 }
-#endif //Auto Calibration & Detection algorithm running on Core1
 /*==========================================================================================================*/
 #ifdef EE
 /*------------------------------------------------------------------------------*
@@ -2006,13 +1839,10 @@ void updateEEPROM() {
 
 #endif //TERMINAL
 
-#ifdef PDX
   EEPROM.commit();
 #ifdef DEBUG
   _INFOLIST("%s commit()\n", __func__)
 #endif //DEBUG
-#endif //PDX
-
   setWord(&SSW, SAVEEE, false);
 
 #ifdef DEBUG
@@ -2920,7 +2750,7 @@ void initADX() {
    setup flow
   --------------------------------------------------------------------------*/
 void definePinOut() {
-#ifdef PDX
+
   gpio_init(TX);
   gpio_init(LED_BUILTIN);
   gpio_init(UP);
@@ -2963,12 +2793,6 @@ void definePinOut() {
   Wire.setSCL(PDX_I2C_SCL);
   Wire.begin();
 
-
-
-#endif //PDX
-
-
-
 }
 /*---------------------------------------------------------------------------------------------
    setup()
@@ -2986,25 +2810,18 @@ void setup()
 #endif //DEBUG or CAT or Terminal
 
 #ifdef DEBUG
-#if defined(__AVR_ATmega168__) || defined(__AVR_ATmega328P__)
-  const char * proc = "ATmega328P";
-#else
   const char * proc = "RP2040";
-#endif
   _INFOLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
 #endif //DEBUG
 
-#ifdef PDX
   EEPROM.begin(512);
 #ifdef DEBUG
   _INFOLIST("%s: EEPROM reserved (%d)\n", __func__, EEPROM.length());
 #endif //DEBUG
-#endif //PDX
 
   /*---
      List firmware properties at run time
   */
-#ifdef PDX
 #ifdef DEBUG
 #ifdef EE
   _INFOLIST("%s EEPROM Sub-system activated\n", __func__);
@@ -3045,7 +2862,6 @@ void setup()
 #endif //ONEBAND
 
 #endif //DEBUG
-#endif //PDX
 
   definePinOut();
   blinkLED(TX);
@@ -3126,11 +2942,9 @@ void setup()
 
 #ifdef WDT
 
-#ifdef PDX
   watchdog_enable(8000, 1);
-#endif //PDX
-
   setWord(&TSW, TX_WDT, false);
+
 #ifdef DEBUG
   _INFOLIST("%s watchdog configuration completed\n", __func__);
 #endif //DEBUG
@@ -3150,13 +2964,12 @@ void setup()
   /*------------
      re-start the core1 where the FSK counting is performed
   */
-#ifdef PDX
   rp2040.restartCore1();
   delay(1);
 #ifdef DEBUG
   _INFOLIST("%s Core1 resumed ok\n", __func__);
 #endif //DEBUG
-#endif //PDX
+
 
 #ifdef DEBUG
   _INFOLIST("%s watchdog configuration completed\n", __func__);
@@ -3214,7 +3027,6 @@ void loop()
   wdt_reset();
 #endif //WDT
 
-#ifdef PDX
   //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   //*                                                                                *
   //*                      PDX Counting Algorithm                                    *
@@ -3396,10 +3208,6 @@ void loop()
   }
 #endif //FSK_ZCD
 #endif //DEBUG
-
-
-#endif //PDX
-
   //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   //*                               RX Cycle                                               *
   //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -3427,14 +3235,13 @@ void loop()
 #ifdef DEBUG
     _INFOLIST("%s TX watchdog condition cleared\n", __func__);
 #endif //DEBUG
-#ifdef PDX
+
     /*-----
        Clear FIFO
       -----*/
     while (rp2040.fifo.available() != 0) {
       uint32_t dummy = rp2040.fifo.pop();
     }
-#endif //PDX
   }
 #endif //WDT
 
@@ -3449,10 +3256,10 @@ void loop()
      At this point it must be in RX mode so perform the switch
     ------------------------------------------------------------*/
   if (getWord(SSW, CATTX) != true) {
-    switch_RXTX(LOW);
-    setWord(&SSW, VOX, false);
-    setWord(&SSW, TXON, false);
-    pfo = 0;                         //Force next TX mode to setup frequency
+     switch_RXTX(LOW);
+     setWord(&SSW, VOX, false);
+     setWord(&SSW, TXON, false);
+     pfo = 0;                         //Force next TX mode to setup frequency
   }
 
   /*----------------------*
