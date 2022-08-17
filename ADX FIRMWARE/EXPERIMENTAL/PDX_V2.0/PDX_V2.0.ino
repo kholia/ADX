@@ -14,7 +14,7 @@
 // Arduino "EEPROM.h" EEPROM Library(built-into arduino ide)
 // AVR "wdt.h" Watchdog Library
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=**=*=*
-// License  
+// License
 // -------
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
@@ -23,10 +23,10 @@
 // distribute, sublicense, and/or sell copies of the Software, and to
 // permit persons to whom the Software is furnished to do so, subject
 // to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be
 // included in all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 // EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 // MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
@@ -54,6 +54,7 @@
 #include "hardware/adc.h"
 #include "hardware/uart.h"
 #include "pdx_common.h"
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -185,14 +186,15 @@ int32_t  cal_factor     = 0;
 unsigned long Cal_freq  = 1000000UL; // Calibration Frequency: 1 Mhz = 1000000 Hz
 unsigned long f[MAXMODE]                   =  { 7074000, 7047500, 7078000, 7038600, 7030000};       //Default frequency assignment
 const unsigned long slot[MAXBAND][MAXMODE] = {{ 3573000, 3575000, 3578000, 3568600, 3560000},       //80m [0]
-                                              { 5357000, 5357000, 5357000, 5287200, 5346500},       //60m [1]
-                                              { 7074000, 7047500, 7078000, 7038600, 7030000},       //40m [2]
-                                              {10136000, 10140000, 10130000, 10138700, 10106000},   //30m [3]
-                                              {14074000, 14080000, 14078000, 14095600, 14060000},   //20m [4]
-                                              {18100000, 18104000, 18104000, 18104600, 18096000},   //17m [5]
-                                              {21074000, 21140000, 21078000, 21094600, 21060000},   //15m [6]
-                                              {24915000, 24915000, 24922000, 24924600, 24906000},   //12m [7]
-                                              {28074000, 28074000, 28078000, 28124600, 28060000}};  //10m [8]
+  { 5357000, 5357000, 5357000, 5287200, 5346500},       //60m [1]
+  { 7074000, 7047500, 7078000, 7038600, 7030000},       //40m [2]
+  {10136000, 10140000, 10130000, 10138700, 10106000},   //30m [3]
+  {14074000, 14080000, 14078000, 14095600, 14060000},   //20m [4]
+  {18100000, 18104000, 18104000, 18104600, 18096000},   //17m [5]
+  {21074000, 21140000, 21078000, 21094600, 21060000},   //15m [6]
+  {24915000, 24915000, 24922000, 24924600, 24906000},   //12m [7]
+  {28074000, 28074000, 28078000, 28124600, 28060000}
+};  //10m [8]
 
 unsigned long freq      = f[mode];
 const uint8_t LED[4]    = {FT8, FT4, JS8, WSPR}; //A 5th virtual mode is handled if CW enabled, LEDS are managed in that case not using this table
@@ -226,48 +228,6 @@ uint32_t      wdt_tout    = 0;
 #endif //WDT
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                             BAND SELECT CONFIGURATION                                       *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-/*
-  ADX can support up to 4 bands on board. Those 4 bands needs to be assigned to Band1 ... Band4 from supported 6 bands.
-  To change bands press SW1 and SW2 simultaneously. Band LED will flash 3 times briefly and stay lit for the stored band. also TX LED will be lit to indicate
-  that Band select mode is active. Now change band bank by pressing SW1(<---) or SW2(--->). When desired band bank is selected press TX button briefly to exit band select mode.
-  Now the new selected band bank will flash 3 times and then stored mode LED will be lit.
-  TX won't activate when changing bands so don't worry on pressing TX button when changing bands in band mode.
-  Assign your prefered bands to B1,B2,B3 and B4
-  Supported Bands are: 80m, 40m, 30m, 20m,17m, 15m
-*/
-
-
-#ifdef ONEBAND                                      //If defined selects a single band to avoid mistakes with PA filter
-const uint16_t Bands[BANDS] = {10, 10, 10, 10};         //All bands the same (change to suit needs)
-#else
-const uint16_t Bands[BANDS] = {40, 30, 20, 10};         //Band1,Band2,Band3,Band4 (initial setup)
-#endif //ONEBAND
-
-/*-----------------------------------------------------------------------------------------------------*
-   This is the definition of the QUAD filter board switching, this board carries 4 filters and can
-   decode up to 4 bands, so by wiring each of the 4 selectors enable any 4 band group, in the standard
-   configuration bands are encoded as:
-               80 -- 0 --  1
-               60 -- 1 --  2
-               40 -- 2 --  4
-               30 -- 3 --  8
-               20 -- 4 -- 16
-               17 -- 5 -- 32
-               15 -- 6 -- 64
-               10 -- 7 --128
-   This position matches the position in the slot[][] array and no change is needed, a future expansion
-   will allow for all HF bands + 6 meters to be coded but the QUAD board will still be able to decode
-   only 8 positions so an indirection can be made. Meanwhile it's better not to touch the quads[] defs
-
-*/
-#ifdef QUAD
-#define QUADMAX         8
-const uint16_t quads[QUADMAX] = {80, 60, 40, 30, 20, 17, 15, 10};
-#endif //QUAD
-
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                    CODE INFRASTRUCTURE                                                      *
 //* General purpose procedures and functions needed to implement services through the code      *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -278,6 +238,7 @@ const uint16_t quads[QUADMAX] = {80, 60, 40, 30, 20, 17, 15, 10};
 bool getWord (uint8_t SysWord, uint8_t v) {
   return SysWord & v;
 }
+
 /*-------------------------------------------*
    setSSW
    set boolean bitwise pseudo-variable
@@ -305,204 +266,32 @@ void flipATU() {
 #endif //DEBUG
 }
 #endif //ATUCTL
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                   QUAD BOARD MANAGEMENT                                                     *
-//*this is an optional function that support the configuration of the QUAD board on band changes*
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-
-#ifdef QUAD
-/*====================================================================================================*/
-/*                                     QUAD Board management                                          */
-/*====================================================================================================*/
-/*-------------------------------------------------------------------*
-   band2QUAD
-   Transform a band [80..10] into the QUAD number to activate a LPF
-  -------------------------------------------------------------------*/
-int band2QUAD(uint16_t b) {
-
-  int q = -1;
-  for (int i = 0; i < QUADMAX; i++) {
-    if (quads[i] == b) {
-      q = i;
-      break;
-    }
-  }
-#ifdef DEBUG
-  _INFOLIST("%s band=%d quad=%d\n", __func__, b, q);
-#endif //DEBUG
-  return q;
-}
-/*-------------------------------------------------------------------*
-   setQUAD
-   Set the QUAD filter with the proper slot [0..3]
-  -------------------------------------------------------------------*/
-void setQUAD(int LPFslot) {
-
-  uint8_t s = 0;
-  s |= (1 << LPFslot);
-
-  Wire.beginTransmission(0x20);   //I2C device address
-  Wire.write(0x09);               // address port A
-  Wire.write(s);                  // Band Relay value to write
-  Wire.endTransmission();
-  delay(100);
-
-#ifdef DEBUG
-  _INFOLIST("%s() LPFslot=%d QUAD=%d\n", __func__, LPFslot, s);
-#endif //DEBUG
-
-}
-/*-------------------------------------------------------------------*
-   setupQUAD
-   init the QUAD Board [0..3]
-  -------------------------------------------------------------------*/
-void setupQUAD() {
-
-  Wire.begin();                   // wake up I2C bus
-  Wire.beginTransmission(0x20);   //I2C device address
-  Wire.write(0x00);               // IODIRA register
-  Wire.write(0x00);               // set entire PORT A as output
-  Wire.endTransmission();
-
-#ifdef DEBUG
-  _INFO;
-#endif //DEBUG
-
-}
-#endif //QUAD
 
 #ifdef CAT
-/*---
-    Forward reference prototypes
-  ---*/
 
+// Forward reference prototypes
 void switch_RXTX(bool t);     //advanced definition for compilation purposes (interface only)
 void Mode_assign();           //advanced definition for compilation purposes
 void Freq_assign();
 void Band_assign();
 uint16_t changeBand(uint16_t c);
 
-
-/*---------------------------------------*
-   getBand
-   get a band number from frequency
-   (-1) is unsupported band
-  ---------------------------------------*/
-int getBand(uint32_t f) {
-
-  int b = -1;
-  if (f >= 3500000 && f < 4000000) {
-    b = 80;
-  }
-  if (f >= 5350000 && f < 5367000) {
-    b = 60;
-  }
-  if (f >= 7000000 && f < 7300000) {
-    b = 40;
-  }
-  if (f >= 10100000 && f < 10150000) {
-    b = 30;
-  }
-  if (f >= 14000000 && f < 14350000) {
-    b = 20;
-  }
-  if (f >= 18068000 && f < 18168000) {
-    b = 17;
-  }
-  if (f >= 21000000 && f < 21450000) {
-    b = 15;
-  }
-  if (f >= 28000000 && f < 29700000) {
-    b = 10;
-  }
-
-#ifdef DEBUG
-  _INFOLIST("%s() f=%ld band=%d\n", __func__, f, b);
-#endif //DEBUG
-
-  return b;
-}
-/*------------------------------------------------------------*
-   findSlot
-   find the slot [0..3] on the Bands array (band slot)
-  ------------------------------------------------------------*/
-int findSlot(uint16_t band) {
-
-  int s = -1;
-  for (int i = 0; i < BANDS; i++) {
-    if (Bands[i] == band) {
-      s = i;
-      break;
-    }
-  }
-#ifdef DEBUG
-  _INFOLIST("%s() band=%d slot=%d\n", __func__, band, s);
-#endif //DEBUG
-
-  return s;
-
-}
-/*-------------------------------------------------------------*
-   setSlot
-   set a slot consistent with the frequency, do not if not
-   supported
-  -------------------------------------------------------------*/
-int setSlot(uint32_t f) {
-
-  int b = getBand(f);
-  if (b == -1) {
-    return Band_slot;
-  }
-  int s = findSlot(b);
-
-#ifdef DEBUG
-  _INFOLIST("%s() f=%ld band=%d slot=%d\n", __func__, f, b, s);
-#endif //DEBUG
-
-  return s;
-
-}
-/*-----------------------------------------------------------------*
-   getMode
-   given the slot in the slot[][] array and the frequency returns
-   the mode that should be assigned, -1 if none can be identified
-  -----------------------------------------------------------------*/
-int getMode(int s, uint32_t f) {
-
-  int m = -1;
-  for (int i = 0; i < MAXMODE; i++) {
-    if (slot[s][i] == f) {
-      m = i;
-      break;
-    }
-  }
-
-#ifdef DEBUG
-  _INFOLIST("%s slot=%d f=%ld m=%d\n", __func__, s, f, m);
-#endif //DEBUG
-
-  return m;
-}
-
 #endif //CAT
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                   SI5351 MANAGEMENT SUBSYSTEM                                               *
+//*                   Si5351 MANAGEMENT SUBSYSTEM                                               *
 //* Most of the work is actually performed by the Si5351 Library used                           *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 Si5351 si5351;
 
 /*--------------------------------------------------------------------------------------------*
-   Initialize DDS SI5351 object
+   Initialize DDS Si5351 object
   --------------------------------------------------------------------------------------------*/
 void setup_si5351() {
-  //------------------------------- SET SI5351 VFO -----------------------------------
+  //------------------------------- SET Si5351 VFO -----------------------------------
   // The crystal load value needs to match in order to have an accurate calibration
   //---------------------------------------------------------------------------------
-
-
   long cal = XT_CAL_F;
-
 
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
@@ -512,9 +301,9 @@ void setup_si5351() {
 
 #ifdef DEBUG
   _INFO;
-#endif //DEBUG
-
+#endif // DEBUG
 }
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   LED MANAGEMENT SUBSYSTEM                                                  *
 //* Functions to operate the 5 LED the ADX board has                                            *
@@ -577,7 +366,6 @@ void setLED(uint8_t LEDpin, bool clrLED) {     //Turn-on LED {pin}
 #ifdef DEBUG
   _EXCPLIST("%s(%d)\n", __func__, LEDpin);
 #endif //DEBUG
-
 }
 
 /*-------
@@ -616,7 +404,6 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
    LED on calibration mode
 */
 void calibrateLED() {          //Set callibration mode
-
   setGPIO(WSPR, HIGH);
   setGPIO(FT8, HIGH);
   delay(DELAY_CAL);
@@ -624,15 +411,13 @@ void calibrateLED() {          //Set callibration mode
   _INFO;
 #endif //DEBUG
 }
+
 /*-----
    Signal band selection with LED   (THIS NEEDS TO BE REVIEWED TO ACTUALLY SHOW MORE THAN 4 BANDS
 */
 void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
-
   setLED(LED[3 - b], true);
-
 }
-
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   BUTTON MANAGEMENT SUBSYSTEM                                               *
@@ -644,11 +429,8 @@ void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
    detect if a push button is pressed
   -----------------------------------------------------------------------------*/
 bool detectKey(uint8_t k, bool v, bool w) {
-
   uint32_t tdown = millis();
   if (getGPIO(k) == v) {
-
-
     while (millis() - tdown < REPEAT_KEY) {
 
 #ifdef WDT
@@ -657,7 +439,6 @@ bool detectKey(uint8_t k, bool v, bool w) {
 
     }
     if (getGPIO(k) == v) { //confirmed as v value now wait for the inverse, if not return the inverse
-
       if (w == false) {
         return v;
       }
@@ -684,11 +465,11 @@ bool detectKey(uint8_t k, bool v, bool w) {
         }
       }
       return !v;
-
     }
   }
   return !v;
 }
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   TRANSCEIVER MANAGEMENT SUBSYSTEM                                          *
 //* Functions related to the overall operation of the transceiver                               *
@@ -697,10 +478,8 @@ bool detectKey(uint8_t k, bool v, bool w) {
 /*---------------------------------------------------------------------------------------------*
    Switch between RX and TX
   ---------------------------------------------------------------------------------------------*/
-void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
-
-
-  if (t) {    //Set to TX
+void switch_RXTX(bool t) { // t = False (RX) : t = True (TX)
+  if (t) { // Set to TX
     /*-----------------------------------*
        if Watchdog enabled avoid to turn
        TX on if the watchdog mark hasn't
@@ -748,17 +527,15 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     return;
   }
 
-  /*------------------------------------*
-                    RX
-    ------------------------------------*/
+  // RX
 #ifdef CAT
   if (getWord(SSW, CATTX) == true) {
-    return; //if the PTT is managed by the CAT subsystem get out of the way.
+    return; // If the PTT is managed by the CAT subsystem get out of the way
   }
-#endif //CAT
+#endif // CAT
 
   setGPIO(RX, HIGH);
-  si5351.output_enable(SI5351_CLK0, 0);   //TX off
+  si5351.output_enable(SI5351_CLK0, 0); // TX off
 
 #ifdef DEBUG
   if (getWord(SSW, TXON) == HIGH) {
@@ -766,22 +543,20 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
   }
 #endif //DEBUG
 
+  // set to master frequency
   si5351.set_freq(freq * 100ULL, SI5351_CLK1);
-  si5351.output_enable(SI5351_CLK1, 1);   //RX on
+  si5351.output_enable(SI5351_CLK1, 1); // RX on
 
   setGPIO(TX, 0);
   setGPIO(LED_BUILTIN, LOW);
   setWord(&SSW, TXON, LOW);
   setWord(&SSW, VOX, LOW);
-  /*---------------------------------------------------------*
-     set to master frequency
-    ---------------------------------------------------------*/
-
 }
+
 /*----------------------------------------------------------*
    Manually turn TX while pressed
   ----------------------------------------------------------*/
-bool getTXSW();  //prototype for forward reference
+bool getTXSW();  // prototype for forward reference
 void ManualTX() {
 
   bool buttonTX = getTXSW();
@@ -789,7 +564,7 @@ void ManualTX() {
 
 #ifdef DEBUG
   _INFOLIST("%s ManualTX(HIGH)\n", __func__);
-#endif //DEBUG
+#endif // DEBUG
 
   while (buttonTX == LOW) {
 
@@ -815,8 +590,8 @@ void ManualTX() {
 #ifdef DEBUG
   _INFOLIST("%s ManualTX(LOW)\n", __func__);
 #endif //DEBUG
-
 }
+
 /*---------------------------------------------------------------------*
    getSwitchPL
    Detect and clear the Long push condition on both UP/DOWN buttons
@@ -824,12 +599,14 @@ void ManualTX() {
 bool getSwitchPL(uint8_t pin) {
   return HIGH;
 }
+
 /*----------------------------------------------------------*
    get value for a digital pin and return after debouncing
   ----------------------------------------------------------*/
 bool getSwitch(uint8_t pin) {
   return detectKey(pin, LOW, WAIT);
 }
+
 /*----------------------------------------------------------*
    read UP switch
   ----------------------------------------------------------*/
@@ -838,14 +615,14 @@ bool getUPSSW() {
   return getSwitch(UP);
 
 }
+
 /*----------------------------------------------------------*
    read DOWN Switch
   ----------------------------------------------------------*/
 bool getDOWNSSW() {
-
   return getSwitch(DOWN);
-
 }
+
 /*--------------------------------------------------------------*
    getTXSW() -- read TXSW switch
    This switch still required debouncing but might operate
@@ -856,6 +633,7 @@ bool getDOWNSSW() {
 bool getTXSW() {
   return detectKey(TXSW, LOW, false);
 }
+
 /*==================================================================================================*
    Clock (Si5351) Calibration methods
    Legacy method (ADX)
@@ -879,8 +657,6 @@ void pwm_int() {
   f_hi++;
 }
 
-
-
 #ifdef FSK_ADCZ
 /*------------------------------------------------------------------------------------------*
    calibrateADC
@@ -889,10 +665,10 @@ void pwm_int() {
 uint16_t calibrateADC(uint16_t min, uint16_t max) {
   return uint16_t((adc_max - adc_min) * 1.0 / 2.0) + adc_min;
 }
+
 /*-------------------------------------------------------------------------------------------*
    ADCreset
    restore all calibration values
-
 */
 void ADCreset() {
   adc_min = ADCMAX;
@@ -906,6 +682,7 @@ void ADCreset() {
   _TRACELIST("%s Timeout break QSTATE=0, recalibrate input level", __func__);
 #endif //DEBUG
 }
+
 /*------------------------------------------------------------------------------------------*
    getADCsample
    collect an ADC sample running free.
@@ -952,7 +729,6 @@ uint16_t getADCsample() {
    at setup1
   =========================================================================================*/
 void setup1() {
-
   /*-----------------------------------------------------------------*
      Core1   Setup procedure
      Enter processing on POR but restarted from core0 setup ()
@@ -1092,7 +868,6 @@ void setup1() {
             setLED(FT4, false);
             delay(1000);
           }
-
         }
       }
     }
@@ -1104,7 +879,6 @@ void setup1() {
   //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   if (getWord(QSW, QFSK) == true) {
     ffsk = 0;
-
 
 #ifdef FSK_ZCD
     /*----------------------------------------*
@@ -1546,13 +1320,13 @@ void setup1() {
   }
 }
 /*==========================================================================================================*/
+
 #ifdef EE
 /*------------------------------------------------------------------------------*
    updateEEPROM
    selectively sets values into EEPROM
   ------------------------------------------------------------------------------*/
 void updateEEPROM() {
-
   uint16_t save = EEPROM_SAVED;
   uint16_t build = BUILD;
 
@@ -1593,7 +1367,6 @@ void updateEEPROM() {
    reset to pinche defaults
   ------------------------------------------------------------------------------*/
 void resetEEPROM() {
-
   uint16_t save = EEPROM_SAVED;
   uint16_t build = BUILD;
 
@@ -1617,6 +1390,7 @@ void resetEEPROM() {
 
   updateEEPROM();
 }
+
 /*------
    checkEEPROM
    check if there is a pending EEPROM save that needs to be committed
@@ -1645,11 +1419,11 @@ uint16_t changeBand(uint16_t c) {
 #endif //DEBUG
   return b;
 }
+
 /*----------------------------------------------------------*
    Mode assign
   ----------------------------------------------------------*/
 void Mode_assign() {
-
   freq = f[mode];
 #ifdef CW
   if (mode == MAXMODE - 1) {
@@ -1736,11 +1510,11 @@ uint8_t band2Slot(uint16_t b) {
   return s;
 
 }
+
 /*----------------------------------------------------------*
    Frequency assign (band dependant)
   ----------------------------------------------------------*/
 void Freq_assign() {
-
   uint16_t Band = Bands[Band_slot];
   uint8_t  b = band2Slot(Band);
   for (int i = 0; i < MAXMODE; i++) {
@@ -1802,7 +1576,6 @@ void Freq_assign() {
    Band assignment based on selected slot
   ----------------------------------------------------------*/
 void Band_assign() {
-
   resetLED();
   blinkLED(LED[3 - Band_slot]);
 
@@ -1814,8 +1587,8 @@ void Band_assign() {
 #ifdef DEBUG
   _INFOLIST("%s mode(%d) slot(%d) f=%ld\n", __func__, mode, Band_slot, freq);
 #endif //DEBUG
-
 }
+
 /*----------------------------------------------------------*
    Select band to operate
   ----------------------------------------------------------*/
@@ -2545,7 +2318,6 @@ void setup()
 
 #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) )
   Serial.begin(BAUD, SERIAL_8N1);
-  while(!Serial) {}
   Serial.flush();
 #endif //DEBUG or CAT or Terminal
 
@@ -2654,13 +2426,10 @@ void setup()
       wdt_reset();
 #endif //WDT
     }
-#else   //Manual calibration
-#endif //AUTOCAL
+#endif // AUTOCAL
   }
 
-  /*------------------------------------*
-     trigger counting algorithm
-    ------------------------------------*/
+  // trigger counting algorithm on the second core
   rp2040.idleOtherCore();
 #ifdef DEBUG
   _INFOLIST("%s Core1 stopped ok\n", __func__);
@@ -2672,7 +2441,6 @@ void setup()
   _INFOLIST("%s FSK detection algorithm started QFSK=%s QWAIT=%s ok\n", __func__, BOOL2CHAR(getWord(QSW, QFSK)), BOOL2CHAR(getWord(QSW, QWAIT)));
 #endif //DEBUG
   delay(500);
-
   switch_RXTX(LOW);
 #ifdef DEBUG
   _INFOLIST("%s switch_RXTX Low ok\n", __func__);
@@ -2681,14 +2449,11 @@ void setup()
   Mode_assign();
 
 #ifdef WDT
-
   watchdog_enable(8000, 1);
   setWord(&TSW, TX_WDT, false);
-
 #ifdef DEBUG
   _INFOLIST("%s watchdog configuration completed\n", __func__);
 #endif //DEBUG
-
 #endif //WDT
 
 #ifdef TERMINAL
@@ -2988,17 +2753,17 @@ void loop()
      Sample CAT commands
     ----------------------*/
 #ifdef CAT
-   serialEvent();
+  serialEvent();
 #endif //CAT
 
   /*------------------------------------------------------------*
      At this point it must be in RX mode so perform the switch
     ------------------------------------------------------------*/
   if (getWord(SSW, CATTX) != true) {
-     switch_RXTX(LOW);
-     setWord(&SSW, VOX, false);
-     setWord(&SSW, TXON, false);
-     pfo = 0;                         //Force next TX mode to setup frequency
+    switch_RXTX(LOW);
+    setWord(&SSW, VOX, false);
+    setWord(&SSW, TXON, false);
+    pfo = 0;                         //Force next TX mode to setup frequency
   }
 
   /*----------------------*

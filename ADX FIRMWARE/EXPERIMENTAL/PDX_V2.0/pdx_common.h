@@ -12,6 +12,8 @@
 #ifndef PDX_common
 #define PDX_common
 
+#include <stdint.h>
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -25,9 +27,8 @@
 #define PICODISPLAY 1
 #define wdt_reset() watchdog_update()
 
-
-//#define FT817      1
-#define TS480    1
+#define FT817      1
+// #define TS480      1
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                               (P)ico (D)igital (X)ceiver                                    *
@@ -225,7 +226,7 @@
 
 #if (defined(CAT) && defined(FT817))
    #undef TS480
-#endif // CAT && TS480   
+#endif // CAT && TS480
 
 //*--- if both supported CAT protocols are simultaneously selected then keep one
 #define NFS 32
@@ -315,7 +316,7 @@ uint16_t cwshift = CWSHIFT;
 #define       WDT_MAX     130000
 #endif //WDT
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-//*                Definitions shared by all sub-systems 
+//*                Definitions shared by all sub-systems
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
 extern char hi[80];
 extern uint8_t SSW;
@@ -338,9 +339,6 @@ void serialEvent();
 void setWord(uint8_t* SysWord, uint8_t v, bool val);
 void switch_RXTX(bool t);
 
-
-
-
-
+extern const unsigned long slot[MAXBAND][MAXMODE];
 
 #endif
