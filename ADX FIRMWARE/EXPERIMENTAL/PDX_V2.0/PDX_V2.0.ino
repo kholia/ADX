@@ -2318,6 +2318,9 @@ void setup()
 
 #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) )
   Serial.begin(BAUD, SERIAL_8N1);
+  #ifndef FT817
+     while(!Serial);
+  #endif //!FT817   
   Serial.flush();
 #endif //DEBUG or CAT or Terminal
 

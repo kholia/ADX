@@ -135,10 +135,14 @@ void setFreqCAT() {
   if (x != -1) {
     setQUAD(x);
   }
-#endif //PALPF    
+  #ifdef DEBUG
+     _INFOLIST("%s()quad=%d\n", __func__,x);
+  #endif //DEBUG 
+
+#endif //QUAD    
 
 #ifdef DEBUG
-  _INFOLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n", __func__, Catbuffer, freq, b, k, q, x);
+  _INFOLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n", __func__, Catbuffer, freq, b, k, q);
 #endif //DEBUG 
 }
 

@@ -27,8 +27,8 @@
 #define PICODISPLAY 1
 #define wdt_reset() watchdog_update()
 
-#define FT817      1
-// #define TS480      1
+//#define FT817      1
+#define TS480      1
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                               (P)ico (D)igital (X)ceiver                                    *
@@ -237,9 +237,10 @@
 /*****************************************************************
    Trace and debugging macros (only enabled if DEBUG is set
  *****************************************************************/
-// #define DEBUG  1
+
+#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-//#define INFO  1   //Enable _INFO and _INFOLIST statements
+#define INFO  1   //Enable _INFO and _INFOLIST statements
 //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
 //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
@@ -247,8 +248,8 @@
    Define Info,Exception and Trace macros (replaced by NOP if not enabled)
   -------------------------------------------------------------------------*/
 #ifdef DEBUG
-#define _DEBUG           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-#define _DEBUGLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+#define _DEBUG           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);
+#define _DEBUGLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);
 #define print2(x,y) (Serial.print(x), Serial.println(y))
 
 #else
@@ -258,24 +259,24 @@
 #endif
 
 #ifdef TRACE
-#define _TRACE           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-#define _TRACELIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+#define _TRACE           sprintf(hi,"%s: Ok\n",__func__); Serial.print(strcat("@",hi));
+#define _TRACELIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);
 #else
 #define _TRACE _NOP
 #define _TRACELIST(...)  _TRACE
 #endif
 
 #ifdef INFO
-#define _INFO           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-#define _INFOLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);
 #else
 #define _INFO _NOP
 #define _INFOLIST(...)  _INFO
 #endif
 
 #ifdef EXCP
-#define _EXCP           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-#define _EXCPLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+#define _EXCP           sprintf(hi,"%s: Ok\n",__func__); Serial.print(strcat("@",hi));
+#define _EXCPLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(strcat("@",hi));
 #else
 #define _EXCP           _NOP
 #define _EXCPLIST(...)  _EXCP
