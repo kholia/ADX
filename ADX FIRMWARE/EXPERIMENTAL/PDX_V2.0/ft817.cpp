@@ -221,6 +221,8 @@ void processCATCommand2(byte* cmd) {
   byte response[5];
   unsigned long f;
 
+  int b, i, j, k, q, m;
+
   switch (cmd[4]) {
     case 0x01:
       // set frequency
@@ -229,6 +231,42 @@ void processCATCommand2(byte* cmd) {
       freq = f;
       response[0] = 0;
       Serial.write(response, 1);
+      b = setSlot(freq);
+      // If a band change is detected switch to the new band
+      if (b != Band_slot) { // band change
+        Band_slot = b;
+        Freq_assign();
+      }
+      // Properly register the mode if the frequency implies a WSJT mode change
+      // (FT8,FT4,JS8,WSPR)
+      i = getBand(freq);
+      if (i < 0) {
+        break;
+      }
+      j = findSlot(i);
+      if (j < 0 || j > 3) {
+        break;
+      }
+      k = Bands[j];
+      q = band2Slot(k);
+      m = getMode(q, freq);
+      break;
+#ifdef DEBUG
+      _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n", __func__, freq, i, j, k, q, m, mode);
+#endif //DEBUG
+      if (getWord(SSW, CWMODE) == false) {
+        if (mode != m) {
+          mode = m;
+          Mode_assign();
+        }
+      }
+      // If enabled change filter from the LPF filter bank
+#ifdef QUAD // Set the PA & LPF filter board settings if defined
+      x = band2QUAD(k);
+      if (x != -1) {
+        setQUAD(x);
+      }
+#endif //QUAD
       break;
 
     case 0x02:
