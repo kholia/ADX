@@ -318,7 +318,7 @@ void serialEvent(){
      Serial.write(strResp,10);
      setWord(&SSW,CATTX,false);
      switch_RXTX(LOW);
-     delay(SERIAL_WAIT);
+     //delay(SERIAL_WAIT);
   } else { 
     for (int i=0;i<k;i++) {
        char data=serialBuffer[i];
@@ -337,16 +337,16 @@ void serialEvent(){
 #endif //DEBUG
 
         analyseCATcmd();
-        delay(SERIAL_WAIT);
-        Serial.flush();
-        delay(50);
+        //delay(SERIAL_WAIT);
+        //Serial.flush();
+        //delay(50);
         
       } else {
         if(cat_ptr > (CATCMD_SIZE - 1)){
            Serial.print("?;");  //Overrun, send error
            cat_ptr = 0;         //Overrun, cleanse buffer
-           Serial.flush();
-           delay(50);
+           //Serial.flush();
+           //delay(50);
         }
       }  
    }   
