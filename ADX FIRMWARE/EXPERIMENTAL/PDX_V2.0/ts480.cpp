@@ -5,399 +5,422 @@
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO TS480 CAT PROTOCOL                                    *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#define CATCMD_SIZE          18
-volatile char    CATcmd[CATCMD_SIZE];
-const int        BUFFER_SIZE = CATCMD_SIZE;
-char             buf[BUFFER_SIZE];
 
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                   TS480 CAT PROTOCOL SUBSYSTEM                                              *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-/*-----------------------------------------------------------------------------------------------------*
-                                      TS480 CAT SubSystem
-   cloned from uSDX (QCX-SSB) firmware, this is a very large and complex yet very complete CAT protocol
-   because of memory constraints it has been implemented in two sections, a basic one which is the set
-   needed to interact with WSJT-X (or FLRig)  many answers aren't actually other
-   than a hardwired response not reflecting the actual status of the ADX transceiver, at the same time
-   the ADX transceiver has less features than a real TS-480 rig, thus many commands refers to features
-   which aren't really present on the ADX so nothing else than a hard wired command can be given, still
-   many program requires some response to commands, even a phony one.
-   Adaptations and extensions by P.E.Colla (LU7DZ)
-   ----------------------------------------------------------------------------------------------------*/
-/*-----------------------------------------------------------------------------------------------------*
-   CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX,
-   source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
-   https://www.kenwood.com/i/products/info/amateur/ts_480/pdf/ts_480_pc.pdf
-   Code excerpts from QCX-SSB by Guido (PE1NNZ)
-   Mods by Pedro E. Colla(LU7DZ) 2022
-  ----------------------------------------------------------------------------------------------------*/
+extern unsigned long freq;
+extern boolean newCATcmd;
 
-const char *cID = "ID";
-const char *cIDr = "ID020;";
-const char *cRX0 = "RX0;";
-const char *cTX0 = "TX0;";
-const char *cMD2 = "MD2;";
-const char *cMD3 = "MD3;";
-const char *cFR = "FR"; const char *cFT = "FT"; const char *cEX = "EX";
-const char *cKY = "KY"; const char *cXT = "XT"; const char *cVX = "VX";
-const char *cRU = "RU"; const char *cPS = "PS"; const char *cRD = "RD";
+/*---------
+ * An array where to store the received CAT data
+ */
+extern char CATcmd[256];  
 
-//*---- Translate ADX mode into the TS-480 coding for mode
-char modeTS480() {
+/*---------
+ * Structure to translate frequency
+ */
+extern int freq10GHz;
+extern int freq1GHz;
+extern int freq100MHz;
+extern int freq10MHz;
+extern int freq1MHz;
+extern int freq100kHz;
+extern int freq10kHz;
+extern int freq1kHz;
+extern int freq100Hz;
+extern int freq10Hz;
+extern int freq1Hz;
 
-  if (mode == 4) {
-    return '3';
-  }
-  return '2';
+/*--------
+ * Some general purpose internal status of an FT817, mostly fake ones
+ */
+extern int RIT, XIT, MEM1, MEM2, VFO, SCAN, SIMPLEX, CTCSS, TONE1, TONE2;
+extern int RXSTAT;
+extern int TXSTAT;
+extern int MODE;
 
-}
-
-char txstatus() {
-
-  if (getWord(SSW, CATTX) == false) {
-    return '0';
-  }
-  return '1';
-
-
-}
-
-/*-------------------------------------------------------------*
-   Specific CAT commands implementation
-  -------------------------------------------------------------*/
-//*--- Get Freq VFO A
-void Command_GETFreqA()          //Get Frequency VFO (A)
+/*-------------
+ * Compute the frequency in the format required by the TS480 protocol
+ */
+unsigned long CalcFreq()
 {
-  sprintf(hi, "FA%011ld;", freq);
-  Serial.print(hi);
+  unsigned long f = (
+           (10000000000L * freq10GHz) +
+           (1000000000L * freq1GHz) +
+           (100000000L * freq100MHz) +
+           (10000000L * freq10MHz) +
+           (1000000L * freq1MHz) +
+           (100000L * freq100kHz) +
+           (10000L * freq10kHz) +
+           (1000L * freq1kHz) +
+           (100L * freq100Hz) +
+           (10L * freq10Hz) +
+           freq1Hz);
+   return f;
+}
+/*------------------------------------------------------
+ * freq2digit
+ * compute individual digits out of the transceiver freq
+ */
+void freq2digit(long int f) {
+
+/*
+ *  11 digits to convert from 1 GHz down to 1 Hz 
+ * 
+ */
+    freq1Hz  =               f  % 10;
+    freq10Hz =           (f/10) % 10;
+    freq100Hz=          (f/100) % 10;
+    freq1kHz =         (f/1000) % 10;
+    freq10kHz=        (f/10000) % 10;
+    freq100kHz=      (f/100000) % 10;
+    freq1MHz  =     (f/1000000) % 10;
+    freq10MHz =    (f/10000000) % 10;
+    freq100MHz=   (f/100000000) % 10;
+    freq1GHz  =  (f/1000000000) % 10;
+    freq10GHz = (f/10000000000) % 10;
+    return;  
 }
 
-//*--- Set Freq VFO A
-void setFreqCAT() {
-  char Catbuffer[16];
-  for (int i = 2; i < 13; i++) {
-    Catbuffer[i - 2] = CATcmd[i];
-  }
-  Catbuffer[11] = '\0';
-  uint32_t fx = (uint32_t)(atol(Catbuffer) * 1000 / 1000);
-  int      b = setSlot(fx);
+/*---------------------------------------------------------------*
+ * Commands to manage TRX state (TX/RX)
+ * 
+ *---------------------------------------------------------------*/
+/*-----
+ * Turn TX off and RX on
+ */
 
-  if (b < 0) {
-    return;
-  }
-
-  freq = fx;
-
-  /*---
-     If a band change is detected switch to the new band
-    ---*/
-
-  if (b != Band_slot) { //band change
-    Band_slot = b;
-    Freq_assign();
-    freq = fx;
-  }
-
-  /*---
-     Properly register the mode if the frequency implies a WSJT mode change (FT8,FT4,JS8,WSPR) ||
-  */
-
-
-  int i = getBand(freq);
-  if ( i < 0 ) {
-    return;
-  }
-  int j = findSlot(i);
-  if (j < 0 || j > 3) {
-    return;
-  }
-  int k = Bands[j];
-  int q = band2Slot(k);
-  int m = getMode(q, freq);
-
-#ifdef DEBUG
-  _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n", __func__, freq, i, j, k, q, m, mode);
-#endif //DEBUG  
-
-  if (getWord(SSW, CWMODE) == false) {
-
-    if (mode != m) {
-      mode = m;
-      Mode_assign();
-    }
-  }
-  /*----
-     if enabled change filter from the LPF filter bank
-    ----*/
-
-#ifdef QUAD  //Set the PA & LPF filter board settings if defined
-  int x = band2QUAD(k);
-  if (x != -1) {
-    setQUAD(x);
-  }
-  #ifdef DEBUG
-     _INFOLIST("%s()quad=%d\n", __func__,x);
-  #endif //DEBUG 
-
-#endif //QUAD    
-
-#ifdef DEBUG
-  _INFOLIST("%s() CAT=%s f=%ld slot=%d bands[]=%d slot=%d quad=%d\n", __func__, Catbuffer, freq, b, k, q);
-#endif //DEBUG 
-}
-
-void Command_SETFreqA()          //Set Frequency VFO (A)
-{
-  setFreqCAT();
-  Command_GETFreqA();
-}
-
-//*--- Get Freq VFO B
-void Command_GETFreqB()          //Get Frequency VFO (B) -- fallback to VFO (A) until implementation of VFOA/B pair
-{
-  sprintf(hi, "FB%011ld;", freq);
-  Serial.print(hi);
-}
-//*--- Set Freq VFO B
-void Command_SETFreqB()          //Set Frequency VFO (B) -- fallback to VFO (B) until implementation for VFOA/B pair
-{
-  setFreqCAT();
-  Command_GETFreqB();
-}
-
-//*--- Prepare and send response to IF; command
-void Command_IF()               //General purpose status information command (IF), needs to be modified if RIT is implemented
-{
-  sprintf(hi, "IF%011ld00000+000000000%c%c0000000;", freq, txstatus(), modeTS480()); //Freq & mode the rest is constant (fake)
-  Serial.print(hi);
-}
-
-//*--- Get current Mode (only 2=USB and 3=CW are supported)
-
-void Command_GetMD()      //Get MODE command, only USB (2) and CW (3) are supported, 4 digital modes (mode 0,1,2,3 are mapped as USB)
-{
-  sprintf(hi, "MD%c;", modeTS480());
-  Serial.print(hi);
-}
-
-void Command_SetMD()      //Set MODE command, only USB (2) and CW (3) are supported
-{
-  if (CATcmd[2] != '3') {
-    setWord(&SSW, CWMODE, false);
-    mode = 0;
-    Mode_assign();
-    sprintf(hi, "%s", cMD2);  // at this time only USB is allowed, needs to be modified when CW is added
-
-  }
-  Serial.print(hi);
-}
-
-//*--- Place transceiver in RX mode
 void Command_RX()
 {
-  setWord(&SSW, CATTX, false);
+  RXSTAT = 0;
+  TXSTAT = 0;
+  setWord(&SSW,CATTX,false);
+  switch_RXTX(false);
+  Serial.print("RX0;");
 
-  switch_RXTX(LOW);
-  setWord(&SSW, CATTX, false);
-  sprintf(hi, "%s", cRX0);
-  Serial.print(hi);
 }
 
-//*--- Place transceiver in TX mode
+/*------
+ * Turn TX on and RX off
+ */
 void Command_TX()
 {
-
-  switch_RXTX(HIGH);
-  setWord(&SSW, CATTX, true);
-  sprintf(hi, "%s", cTX0);
-  Serial.print(hi);
+  RXSTAT = 1;
+  TXSTAT = 1;
+  setWord(&SSW,CATTX,true);
+  switch_RXTX(true);
+  Serial.print("TX0;");
 }
-
-//*--- Response for VOX command
-void Command_VX()
+/*------
+ * Turn TX on and RX off
+ */
+void Command_TX1()
 {
-  sprintf(hi, "VX%s;", (getWord(SSW, VOX) == true ? "1" : "0"));
-  Serial.print(hi);
-}
-
-//*--- Fake response for AS; command (not implemented)
-void Command_AS() {
-
-  sprintf(hi, "AS000%011ld%c;", freq, modeTS480());
-  Serial.print(hi);
-  return;
-}
-//*--- Fake response for XI; command (not implemented)
-void Command_XI() {
-
-  sprintf(hi, "XI%011ld%c0;", freq, modeTS480());
-  Serial.print(hi);
-  return;
-}
-
-//*--- Band change command (not implemented)
-void Command_BChange(int c) { //Change band up or down
-
-  Band_slot = changeBand(c);
-  Band_assign();
-#ifdef DEBUG
-  _TRACELIST("%s() change=%d Band_slot=%d\n", __func__, c, Band_slot);
-#endif //DEBUG 
+  RXSTAT = 1;
+  TXSTAT = 1;
+  setWord(&SSW,CATTX,true);
+  switch_RXTX(true);
+  Serial.print("TX0;");
 
 }
-/*---------------------------------------------------------------------------------------------
-    CAT Main command parser and dispatcher
-  ---------------------------------------------------------------------------------------------*/
+/*------
+ * Turn TX on and RX off
+ */
+void Command_TX0()
+{
+  RXSTAT = 1;
+  TXSTAT = 1;
+  setWord(&SSW,CATTX,true);
+  switch_RXTX(true);
+  Serial.print("TX0;");
+
+}
+
+/*------
+ * Turn TX on and RX off
+ */
+void Command_TX2()
+{
+  RXSTAT = 1;
+  TXSTAT = 1;
+  setWord(&SSW,CATTX,true);
+  switch_RXTX(true);
+  Serial.print("TX0;");
+  #ifdef DEBUG
+     _INFOLIST("%s TX2;->TX0;\n",__func__);
+  #endif //DEBUG   
+
+}
+
+void Command_MD()
+{
+#ifdef CW
+  if (mode=4) {
+     Serial.print("MD3;");
+  } else {   
+     Serial.print("MD2;");   
+  }
+#else
+  Serial.print("MD2;");
+#endif //CW  
+}
+
+void Command_GETFreq() {
+
+  freq2digit(freq);
+
+  Serial.print(freq10GHz);
+  Serial.print(freq1GHz);
+  Serial.print(freq100MHz);
+  Serial.print(freq10MHz);
+  Serial.print(freq1MHz);
+  Serial.print(freq100kHz);
+  Serial.print(freq10kHz);
+  Serial.print(freq1kHz);
+  Serial.print(freq100Hz);
+  Serial.print(freq10Hz);
+  Serial.print(freq1Hz);
+  Serial.print(";");
+
+}
+
+void Command_GETFreqA()
+{
+  Serial.print("FA");
+  Command_GETFreq();
+}
+void Command_GETFreqB()
+{
+  Serial.print("FB");
+  Command_GETFreq();
+}
+
+void Command_SETFreqA()
+{
+  freq10GHz  = CATcmd[2]  - 48;       // convert ASCII char to int equivalent. int 0 = ASCII 48;
+  freq1GHz   = CATcmd[3]  - 48;
+  freq100MHz = CATcmd[4]  - 48;
+  freq10MHz  = CATcmd[5]  - 48;
+  freq1MHz   = CATcmd[6]  - 48;
+  freq100kHz = CATcmd[7]  - 48;
+  freq10kHz  = CATcmd[8]  - 48;
+  freq1kHz   = CATcmd[9]  - 48;
+  freq100Hz  = CATcmd[10] - 48;
+  freq10Hz   = CATcmd[11] - 48;
+  freq1Hz    = CATcmd[12] - 48;
+
+  //Command_GETFreqA();               // now RSP with FA
+
+  Serial.print("FA");
+  Serial.print(freq10GHz);
+  Serial.print(freq1GHz);
+  Serial.print(freq100MHz);
+  Serial.print(freq10MHz);
+  Serial.print(freq1MHz);
+  Serial.print(freq100kHz);
+  Serial.print(freq10kHz);
+  Serial.print(freq1kHz);
+  Serial.print(freq100Hz);
+  Serial.print(freq10Hz);
+  Serial.print(freq1Hz);
+  Serial.print(";");
+
+  freq = CalcFreq();
+}
+void Command_SETFreqB() {
+     Command_SETFreqA();
+}
+
+void Command_IF()
+{
+  freq2digit(freq);
+  
+  Serial.print("IF");
+  Serial.print(freq10GHz);        // P1
+  Serial.print(freq1GHz);
+  Serial.print(freq100MHz);
+  Serial.print(freq10MHz);
+  Serial.print(freq1MHz);
+  Serial.print(freq100kHz);
+  Serial.print(freq10kHz);
+  Serial.print(freq1kHz);
+  Serial.print(freq100Hz);
+  Serial.print(freq10Hz);
+  Serial.print(freq1Hz);
+  Serial.print("00000");          // P2 Always five 0s
+  Serial.print("+0000");          // P3 RIT/XIT freq +/-9990
+  Serial.print(RIT);              // P4
+  Serial.print(XIT);              // P5
+  Serial.print("0");              // P6 Always 0
+  Serial.print(MEM1);             // P7
+  Serial.print(MEM2);             //
+  if (getWord(SSW,TXON) == true) {// RX State
+     Serial.print(1);
+  } else {
+     Serial.print(0);
+  }
+  Serial.print((mode==4 ? 3 : 2));// P9
+  Serial.print(VFO);              // P10  FR/FT 0=VFO
+  Serial.print(SCAN);             // P11
+  Serial.print(SIMPLEX);          // P12
+  Serial.print(CTCSS);            // P13
+  Serial.print(TONE1);            // P14
+  Serial.print(TONE2);
+  Serial.print("0");              // P15 Always 0
+  Serial.print(";");
+}
+
+
+
+
+/*----
+ * Fake commands AI,RS,ID,PS
+ * Response is built based on constants
+ * (not really related to the actual transceiver operational status)
+ */
+void Command_AI()
+{
+  Serial.print("AI0;");
+}
+
+void Command_PS1()
+{
+  Serial.print("PS1;");
+}
+
+void Command_AI0()
+{
+  Serial.print("AI0;");
+}
+
+
+void Command_RS()
+{
+  Serial.print("RS0;");
+}
+
+void Command_ID()
+{
+  Serial.print("ID020;");
+}
+
+void Command_PS()
+{
+  Serial.print("PS1;");
+}
+
+/*------
+ * rxCATcmd
+ * Receive and process CAT commands
+ */
+void rxCATcmd()
+{
+  int index = 0;
+  char endMarker = ';';
+  char data;                    // CAT commands are ASCII characters
+
+  while ((Serial.available() > 0) && (newCATcmd == false))
+  {
+    data = Serial.read();
+
+    if (data != endMarker)
+    {
+      CATcmd[index] = data;
+      index++;
+
+      if (index >= numChars)
+        index = numChars - 1;   // leave space for the \0 array termination
+    }
+    else
+    {
+      CATcmd[index] = ';';      // Indicate end of command
+      CATcmd[index + 1] = '\0'; // terminate the array
+      index = 0;                // reset for next CAT command
+      newCATcmd = true;
+    }
+  }
+}
+
+/*----
+ * analyseCATcmd
+ * analyse and craft a appropriate answer to the CAT command
+ */
 void analyseCATcmd()
 {
-  char strcmd[4];
+  if (newCATcmd == true)
+  {
+    newCATcmd = false;        // reset for next CAT time
+    #ifdef DEBUG
+        _TRACELIST("%s CAT->%s\n",__func__,CATcmd);
+    #endif //DEBUG    
 
+    if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';'))              // must be freq get command
+      Command_GETFreqA();
 
-  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';'))  {
-    Command_GETFreqA();
-    return;
-  }
-  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[13] == ';')) {
-    Command_SETFreqA();
-    return;
-  }
-  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[2] == ';'))  {
-    Command_GETFreqB();
-    return;
-  }
-  if ((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[13] == ';')) {
-    Command_SETFreqB();
-    return;
-  }
-  if ((CATcmd[0] == 'I') && (CATcmd[1] == 'F') && (CATcmd[2] == ';'))  {
-    Command_IF();
-    return;
-  }
-  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))  {
-    Command_GetMD();
-    return;
-  }
-  if ((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[3] == ';'))  {
-    Command_SetMD();
-    return;
-  }
-  if ((CATcmd[0] == 'R') && (CATcmd[1] == 'X'))                        {
-    Command_RX();
-    return;
-  }
-  if ((CATcmd[0] == 'T') && (CATcmd[1] == 'X'))                        {
-    Command_TX();
-    return;
-  }
-  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        {
-    Command_BChange(-1);
-    return;
-  }
-  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        {
-    Command_BChange(+1);
-    return;
-  }
+    else if ((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[2] == ';'))        // must be freq set command
+      Command_GETFreqB();
 
+    else if ((CATcmd[0] == 'F') && (CATcmd[1] == 'B') && (CATcmd[13] == ';'))        // must be freq set command
+      Command_SETFreqB();
 
-  strcmd[0] = CATcmd[0];
-  strcmd[1] = CATcmd[1];
-  strcmd[2] = 0x00;
+    else if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[13] == ';'))        // must be freq set command
+      Command_SETFreqA();
 
-  if (strcmp(strcmd, cID) == 0)                                                      {
-    sprintf(hi, "%s", cIDr);
-    Serial.print(hi);
-    return;
+    else if ((CATcmd[0] == 'I') && (CATcmd[1] == 'F') && (CATcmd[2] == ';'))
+      Command_IF();
+
+    else if ((CATcmd[0] == 'I') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))
+      Command_ID();
+
+    else if ((CATcmd[0] == 'P') && (CATcmd[1] == 'S') && (CATcmd[2] == ';'))
+      Command_PS();
+
+    else if ((CATcmd[0] == 'P') && (CATcmd[1] == 'S') && (CATcmd[2] == '1'))
+      Command_PS1();
+
+    else if ((CATcmd[0] == 'A') && (CATcmd[1] == 'I') && (CATcmd[2] == ';'))
+      Command_AI();
+
+    else if ((CATcmd[0] == 'A') && (CATcmd[1] == 'I') && (CATcmd[2] == '0'))
+      Command_AI0();
+
+    else if ((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[2] == ';'))
+      Command_MD();
+
+    else if ((CATcmd[0] == 'R') && (CATcmd[1] == 'X') && (CATcmd[2] == ';'))
+      Command_RX();
+
+    else if ((CATcmd[0] == 'R') && (CATcmd[1] == 'X') && (CATcmd[2] == '0'))
+      Command_RX();
+
+    else if ((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == ';'))
+      Command_TX();
+
+    else if ((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '1'))
+      Command_TX1();
+
+    else if ((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '0'))
+      Command_TX0();
+
+      
+    else if ((CATcmd[0] == 'T') && (CATcmd[1] == 'X') && (CATcmd[2] == '2'))
+      Command_TX2();
+
+    else if ((CATcmd[0] == 'R') && (CATcmd[1] == 'S') && (CATcmd[2] == ';'))
+      Command_RS();
+
+    Serial.flush();       // Get ready for next command
   }
-  if (strcmp(strcmd, cFR) == 0 || strcmp(strcmd, cFT) == 0 || strcmp(strcmd, cEX) == 0 ||
-      strcmp(strcmd, cVX) == 0 || strcmp(strcmd, cXT) == 0 || strcmp(strcmd, cKY) == 0 ||
-      strcmp(strcmd, cRU) == 0 || strcmp(strcmd, cPS) == 0 || strcmp(strcmd, cRD) == 0)    {
-    sprintf(hi, "%s", CATcmd);
-    Serial.print(hi);
-    return;
-  }
-
-
-  Serial.print("?;");
 }
 
-/*-----------------------------------------------------------------*
-   serialEvent
-   Process incoming characters from the serial buffer assemble
-   commands and process responses according with the TS480 cat prot
-  -----------------------------------------------------------------*/
-volatile uint16_t cat_ptr = 0;
-volatile char serialBuffer[CATCMD_SIZE];
+/*-----
+ * serialEvent()
+ * Event dispatcher called periodically from the main processing loop
+ * this entry point is the single entry called from the outside to this
+ * sub-system, and it's common for all CAT protocol implementations
+ */
 
-#ifdef TS480
 void serialEvent() {
+  rxCATcmd();
+  analyseCATcmd();
 
-  char strCmd[7];
-  char const *strResp = "RX0;ID020;";
-  sprintf(strCmd, "RX;ID;");
-
-  int nread = Serial.available();
-  if (nread <= 0) return;
-
-  int rc = Serial.readBytes(buf, nread);
-  if (rc <= 0) {
-    return;
-  }
-  buf[rc] = 0x0;
-
-  int k = 0;
-  for (int j = 0; j < rc; j++) {
-    if (buf[j] != 0x0d && buf[j] != 0x0a) {
-      serialBuffer[k++] = buf[j];
-    }
-
-  }
-
-#ifdef DEBUG
-  _INFOLIST("%s CAT received buffer=%s len=%d\n", __func__, serialBuffer, rc);
-#endif //DEBUG  
-
-  if (strcmp((const char*)serialBuffer, strCmd) == 0) { //coincidence
-
-#ifdef DEBUG
-    _INFOLIST("%s Hit RX;ID; string\n", __func__);
-#endif //DEBUG
-
-    Serial.write(strResp, 10);
-    setWord(&SSW, CATTX, false);
-    switch_RXTX(LOW);
-    //delay(SERIAL_WAIT);
-  } else {
-    for (int i = 0; i < k; i++) {
-      char data = serialBuffer[i];
-      CATcmd[cat_ptr++] = data;
-
-#ifdef DEBUG
-      _INFOLIST("%s data=%c CATcmd[%d]=%c\n", __func__, data, i, CATcmd[i]);
-#endif //DEBUG
-
-      if (data == ';') {
-        CATcmd[cat_ptr] = '\0'; // terminate the array
-        cat_ptr = 0;            // reset for next CAT command
-
-#ifdef DEBUG
-        _INFOLIST("%s() cmd(%s)\n", __func__, CATcmd);
-#endif //DEBUG
-
-        analyseCATcmd();
-        //delay(SERIAL_WAIT);
-        //Serial.flush();
-        //delay(50);
-
-      } else {
-        if (cat_ptr > (CATCMD_SIZE - 1)) {
-          Serial.print("?;");  //Overrun, send error
-          cat_ptr = 0;         //Overrun, cleanse buffer
-          //Serial.flush();
-          //delay(50);
-        }
-      }
-    }
-  }
 }
-#endif //TS480
 #endif //TS480

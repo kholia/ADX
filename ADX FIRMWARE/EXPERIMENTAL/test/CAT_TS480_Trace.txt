@@ -1,0 +1,131 @@
+picoCAT6.py
+
+<WSJTX>=IF;
+<PDX  >:IF0000707400000000+000000000020000000;
+
+Ok
+
+<WSJTX>=IF;
+<PDX  >:IF0000707400000000+000000000020000000;
+
+Ok
+
+
+<WSJTX>=IF;
+<PDX  >:IF0000707400000000+000000000020000000;
+
+Ok
+
+<WSJTX>=MD;
+<PDX  >:MD2;
+
+Ok
+
+<WSJTX>=FA;
+<PDX  >:FA00007074000;
+
+Ok
+
+<WSJTX>=FA00007074055;ID;
+<PDX  >:FA00007074055;
+<PDX  >:ID020;
+
+Ok. Pero contesta de a uno....
+
+<WSJTX>=FA00007074055;ID;
+<PDX  >:FA00007074055;
+<PDX  >:ID020;
+
+Nuevamente contesta bien pero de a uno
+
+
+<WSJTX>=FA00007074055;ID;
+<WSJTX>=FA;
+<PDX  >:FA00007074055;
+
+Contesta bien el FA, no contesta aun el ID
+Tira otro FA
+
+<WSJTX>=FA00007074000;ID;
+
+Tiene pendiente un ID y un FA por contestar
+
+<PDX  >:ID020;FA00007074055;
+
+Contesta el ID y el FA
+
+Tiene pendiente un FA y un ID
+
+<WSJTX>=IF;
+
+Tira el IF y da error.
+
+
+=====
+
+<WSJTX>=IF;
+<PDX  >:IF0000707400000000+000000000020000000;
+
+<WSJTX>=IF;
+<PDX  >:IF0000707400000000+000000000020000000;
+
+<WSJTX>=IF;
+<PDX  >:IF0000707400000000+000000000020000000;
+
+<WSJTX>=MD;
+<PDX  >:MD2;
+
+<WSJTX>=FA;
+<PDX  >:FA00007074000;
+
+<WSJTX>=FA00007074055;ID;
+<PDX  >:FA00007074055;
+<PDX  >:ID020;
+
+<WSJTX>=FA00007074055;ID;
+<PDX  >:FA00007074055;
+<PDX  >:ID020;
+
+<WSJTX>=FA00007074055;ID;
+<PDX  >:FA00007074055;
+<PDX  >:ID020;
+
+<WSJTX>=FA00007074055;ID;
+<PDX  >:FA00007074055;
+<PDX  >:ID020;
+
+<WSJTX>=FA00007074055;ID;
+<PDX  >:FA00007074055;
+
+SE DEFASA AQUI SIN UN BUEN MOTIVO
+
+--falta el ID--
+
+<WSJTX>=FA00007074055;ID;
+
+--tira otro-- ID(+2) FA(+1)
+
+<PDX  >:ID020;
+
+-- contesta el ID ID(+1) FA(+1)
+
+<WSJTX>=FA;
+
+-- tira otro FA(+2) ID(+1)
+
+<PDX  >:FA00007074055;
+
+-- contesta FA(+1) IF(+1)
+
+<PDX  >:ID020;FA00007074055;
+
+-- contesta ID y FA --> FA(0) ID(0)
+
+<WSJTX>=FA00007074000;ID;
+
+-- recibe otro  sin contestar
+
+<WSJTX>=FA00007074000;ID;
+
+--- recibe otro sin contestar
+

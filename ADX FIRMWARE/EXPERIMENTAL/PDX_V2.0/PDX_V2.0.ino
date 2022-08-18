@@ -276,6 +276,30 @@ void Freq_assign();
 void Band_assign();
 uint16_t changeBand(uint16_t c);
 
+
+#ifdef TS480
+
+boolean newCATcmd = false;
+
+char CATcmd[256] = {'0'};  
+
+int  freq10GHz  = 0;
+int  freq1GHz   = 0;
+int  freq100MHz = 0;
+int  freq10MHz  = 0;
+int  freq1MHz   = 7;
+int  freq100kHz = 0;
+int  freq10kHz  = 7;
+int  freq1kHz   = 4;
+int  freq100Hz  = 0;
+int  freq10Hz   = 0;
+int  freq1Hz    = 0;
+
+int  RIT, XIT, MEM1, MEM2, RXSTAT, TXSTAT, VFO, SCAN, SIMPLEX, CTCSS, TONE1, TONE2 = 0;
+
+int  MODE = 2;
+
+#endif //TS480
 #endif //CAT
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -827,9 +851,11 @@ void setup1() {
       fclk = pwm_get_counter(pwm_slice);
       fclk += f_hi << 16;
       error = fclk - Cal_freq;
+      
 #ifdef DEBUG
       _INFOLIST("%s Calibration VFO=%ld Hz target_freq=%ld error=%ld cal_factor=%ld\n", __func__, fclk, Cal_freq, error, cal_factor);
 #endif //DEBUG
+      
       if (labs(error) > int32_t(CAL_ERROR)) {
         b = !b;
         if (b) {
@@ -846,12 +872,13 @@ void setup1() {
       } else {
         n--;
         if (n == 0) {
+          
 #ifdef DEBUG
           _INFOLIST("%s Convergence achieved cal_factor=%ld\n", __func__, cal_factor);
 #endif //DEBUG
 
 #ifdef EE
-          updateEEPROM();
+         updateEEPROM();
 #endif //EE
 
           while (true) {

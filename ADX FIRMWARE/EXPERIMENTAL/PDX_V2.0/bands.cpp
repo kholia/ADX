@@ -199,7 +199,7 @@ int setSlot(uint32_t f) {
 int getMode(int s, uint32_t f) {
   int m = -1;
   for (int i = 0; i < MAXMODE; i++) {
-    if (slot[s][i] == f) {
+    if (int32_t(slot[s][i]/1000) == int32_t(f/1000)) {
       m = i;
       break;
     }
