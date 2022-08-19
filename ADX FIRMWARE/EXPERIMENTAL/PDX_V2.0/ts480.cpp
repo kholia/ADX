@@ -2,6 +2,21 @@
 #include "pdx_common.h"
 
 #ifdef TS480
+
+/*==========================================================================================*
+/*                            Start of TS480 CAT support sub-system                         *
+/*==========================================================================================*
+
+
+/*-----------------------------------------------------------------------------------------------------*
+   CAT support inspired by Charlie Morris, ZL2CTM, contribution by Alex, PE1EVX, 
+   source: http://zl2ctm.blogspot.com/2020/06/digital-modes-transceiver.html?m=1
+   https://www.kenwood.com/i/products/info/amateur/ts_480/pdf/ts_480_pc.pdf
+   Code excerpts from QCX-SSB by Guido (PE1NNZ)
+   Mods & overall adaptation to the PDX architecture by Pedro E. Colla(LU7DZ) 2022
+ *----------------------------------------------------------------------------------------------------*/
+
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO TS480 CAT PROTOCOL                                    *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -85,7 +100,7 @@ void freq2digit(long int f) {
  * 
  *---------------------------------------------------------------*/
 /*-----
- * Turn TX off and RX on
+ * Turn TX off and RX on, reply RX0;
  */
 
 void Command_RX()
@@ -110,7 +125,7 @@ void Command_TX()
   Serial.print("TX0;");
 }
 /*------
- * Turn TX on and RX off
+ * Turn TX on and RX off, reply TX0;
  */
 void Command_TX1()
 {
@@ -122,7 +137,7 @@ void Command_TX1()
 
 }
 /*------
- * Turn TX on and RX off
+ * Turn TX on and RX off, reply TX0;
  */
 void Command_TX0()
 {
@@ -135,7 +150,7 @@ void Command_TX0()
 }
 
 /*------
- * Turn TX on and RX off
+ * Turn TX on and RX off, reply TX0;
  */
 void Command_TX2()
 {
@@ -150,6 +165,11 @@ void Command_TX2()
 
 }
 
+/*------
+ * Mode change, at this point the transceiver can be set
+ * as either USB (2) or CW (3). CW can be used only if 
+ * enabled by configuration properties.
+ */
 void Command_MD()
 {
 #ifdef CW
@@ -163,6 +183,12 @@ void Command_MD()
 #endif //CW  
 }
 
+/*------
+ * Generic GETFreq response, valid for both FA and FB
+ * PDX doesn't carry at this point a dual VFO feature
+ * therefore both VFOA and VFOB operates over the 
+ * unique VFO
+ */
 void Command_GETFreq() {
 
   freq2digit(freq);
@@ -182,17 +208,60 @@ void Command_GETFreq() {
 
 }
 
+/*--------
+ * Specific response header for the FA; command
+ */
 void Command_GETFreqA()
 {
   Serial.print("FA");
   Command_GETFreq();
 }
+/*--------
+ * Specific response header for the FB; command
+ */
 void Command_GETFreqB()
 {
   Serial.print("FB");
   Command_GETFreq();
 }
+/*-------
+ * Generic response to the FAx; or FBx; command
+ * as there are no dual VFO both changes the main
+ * VFO frequency.
+ */
+void Command_SETFreqB() {
 
+  freq10GHz  = CATcmd[2]  - 48;       // convert ASCII char to int equivalent. int 0 = ASCII 48;
+  freq1GHz   = CATcmd[3]  - 48;
+  freq100MHz = CATcmd[4]  - 48;
+  freq10MHz  = CATcmd[5]  - 48;
+  freq1MHz   = CATcmd[6]  - 48;
+  freq100kHz = CATcmd[7]  - 48;
+  freq10kHz  = CATcmd[8]  - 48;
+  freq1kHz   = CATcmd[9]  - 48;
+  freq100Hz  = CATcmd[10] - 48;
+  freq10Hz   = CATcmd[11] - 48;
+  freq1Hz    = CATcmd[12] - 48;
+
+  //Command_GETFreqA();               // now RSP with FA
+
+  Serial.print("FB");
+  Serial.print(freq10GHz);
+  Serial.print(freq1GHz);
+  Serial.print(freq100MHz);
+  Serial.print(freq10MHz);
+  Serial.print(freq1MHz);
+  Serial.print(freq100kHz);
+  Serial.print(freq10kHz);
+  Serial.print(freq1kHz);
+  Serial.print(freq100Hz);
+  Serial.print(freq10Hz);
+  Serial.print(freq1Hz);
+  Serial.print(";");
+
+  freq = CalcFreq();
+
+}
 void Command_SETFreqA()
 {
   freq10GHz  = CATcmd[2]  - 48;       // convert ASCII char to int equivalent. int 0 = ASCII 48;
@@ -224,11 +293,14 @@ void Command_SETFreqA()
   Serial.print(";");
 
   freq = CalcFreq();
-}
-void Command_SETFreqB() {
-     Command_SETFreqA();
+
 }
 
+/*---------------
+ * Transceiver status command IF;
+ * Build response mixing the actual transceiver status
+ * and some makeup constant responses
+ */ 
 void Command_IF()
 {
   freq2digit(freq);
@@ -307,6 +379,19 @@ void Command_PS()
   Serial.print("PS1;");
 }
 
+
+/*-------
+ * Additional commands, the implemented commands are required at different moments
+ * by WSJT-X. However, FLDigi (and other similars based on the HamLib library) might
+ * throw the following commands which aren't implemented
+ * SL SH AG0 FB BC EX0450000 IS PC SQ0 RG GT FT FR
+ * Many of them belongs to aspects of the transceiver status which aren't and (will not)
+ * be implemented, still a basic answer can be made based on constants. At this point
+ * FLDigi doesn't seems to mind if an answer isn't provided so they are not implemented
+ */
+
+
+
 /*------
  * rxCATcmd
  * Receive and process CAT commands
@@ -347,7 +432,8 @@ void analyseCATcmd()
 {
   if (newCATcmd == true)
   {
-    newCATcmd = false;        // reset for next CAT time
+    newCATcmd = false;        // reset for next CAT time, avoid re-entrancy issues
+
     #ifdef DEBUG
         _TRACELIST("%s CAT->%s\n",__func__,CATcmd);
     #endif //DEBUG    
@@ -415,7 +501,10 @@ void analyseCATcmd()
  * serialEvent()
  * Event dispatcher called periodically from the main processing loop
  * this entry point is the single entry called from the outside to this
- * sub-system, and it's common for all CAT protocol implementations
+ * sub-system, and it's common for all CAT protocol implementations on
+ * the ADX/PDX architecture
+ * As this processing is called serially with most process, even time
+ * critical ones, the fastest possible response must be provided.
  */
 
 void serialEvent() {
@@ -423,4 +512,7 @@ void serialEvent() {
   analyseCATcmd();
 
 }
+/*==========================================================================================*
+/*                              End of TS480 CAT support sub-system                         *
+/*==========================================================================================*
 #endif //TS480
