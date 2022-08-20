@@ -1,3 +1,4 @@
+
 //*********************************************************************************************************
 //********************* ADX - ARDUINO based DIGITAL MODES 4 BAND HF TRANSCEIVER ***************************
 //********************************* Write up start: 02/01/2022 ********************************************
@@ -92,18 +93,28 @@
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            EXTERNAL LIBRARIES USED                                          *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+/*-------------------------------------------------------------*
+ * Define the runtime platform either PICO (Raspberry Pi Pico) *
+ * or !PICO (Arduino ATMega328p)                               *
+ *-------------------------------------------------------------*/
+#define ADX              1   //This is the standard ADX Arduino based board 
+ 
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                            EXTERNAL LIBRARIES USED                                          *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
 #include <Arduino.h>
 #include <stdint.h>
 #include <si5351.h>
 #include "Wire.h"
-#include <EEPROM.h>
+#include <EEPROM.h>  
 #include <avr/wdt.h> 
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#define VERSION        "1.5"
-#define BUILD          201
+#define VERSION        "1.5e"
+#define BUILD          220
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
@@ -115,25 +126,29 @@
 void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc(); to reboot
 #define getGPIO(x) digitalRead(x) 
 #define setGPIO(x,y) digitalWrite(x,y)  
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                            (A)rduino (D)igital (X)ceiver                                    *
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//   #define WDT            1      //Hardware and TX watchdog enabled
+
+   #define WDT            1      //Hardware and TX watchdog enabled
    #define EE             1      //User EEPROM for persistence
-//   #define CAT            1      //Enable CAT protocol over serial port
-//   #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
+   #define CAT            1      //Enable CAT protocol over serial port
+   #define TS480          1      //CAT Protocol is Kenwood 480
+   #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
+   #define ATUCTL         1      //Control external ATU device
 /*
  * The following definitions are disabled but can be enabled selectively
  */
-   //#define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter
-   //#define ATUCTL         1      //Control external ATU device
-   //#define CW             1      //CW support
-/*
- * Miscellaneous definitions
- */
+
    //#define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
+   //#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
+   //#define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter    
+   //#define CW             1      //CW support
    //#define CAL_RESET      1      //If enabled reset cal_factor when performing a new calibration()
+   //#define DEBUG          1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
+   //#define FT817          1      //CAT Protocol is FT 817
+
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
@@ -142,7 +157,7 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define SHORT_TIME     10*BOUNCE_TIME //mSec minimum to consider long push
 #define SI5351_REF     25000000UL   //change this to the frequency of the crystal on your si5351’s PCB, usually 25 or 27 MHz
 #define CPU_CLOCK      16000000UL   //Processor clock
-#define VOX_MAXTRY     15           //Max number of attempts to detect an audio incoming signal
+#define VOX_MAXTRY     10           //Max number of attempts to detect an audio incoming signal
 #define CNT_MAX        65000        //Max count of timer1
 #define FRQ_MAX        30000        //Max divisor for frequency allowed
 #define BDLY           200          //Delay when blinking LED
@@ -157,10 +172,9 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define REPEAT_KEY    30            //Key repetition period while in calibration
 #define WAIT          true          //Debouncing constant
 #define NOWAIT        false         //Debouncing constant
-#define SERIAL_TOUT   5000
+#define SERIAL_TOUT   50
 #define SERIAL_WAIT   2
 #define CAT_RECEIVE_TIMEOUT      500
-
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      PIN ASSIGNMENTS                                                        *
@@ -180,7 +194,7 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
    #define FT4            11           //FT4 LED
    #define FT8            12           //FT8 LED
 #ifdef ATUCTL
-   #define ATU             5           //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+   #define ATU             5       //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
 #endif //ATUCTL
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -215,11 +229,14 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
 #define QWAIT       0B00000001    //Semaphore Wait
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
+#define QDATA       0B00001000    //FSK new datum
+#define FSKMIN             200    //Minimum FSK frequency computed
+#define FSKMAX            2500    //Maximum FSK frequency computed
 
 /*----------------------------------------------------------------*
  * Miscellaneour definitions                                              *
  * ---------------------------------------------------------------*/
-char hi[60];    
+char hi[80];    
 #define BAUD            19200
 #define INT0                0
 #define INT1                1
@@ -232,6 +249,7 @@ char hi[60];
 //* Feature definition might conflict among them so some consistency rules are applied to remove*
 //* potential inconsistencies on the definitions                                                *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+   
 
 //*--- If a QUAD multiband board is defined then the transceiver must not be a single band one
    
@@ -249,20 +267,26 @@ char hi[60];
 
 #if (!defined(CAT))  //Rule for conflicting usage of the CAT Protocol (can't activate extended without basic)
    #undef  TS480
+   #undef  FT817
 #endif // CAT && DEBUG
 
-#if (defined(CAT))
-   #define TS480      1
-#endif // CAT && TS480   
 //*--- if both supported CAT protocols are simultaneously selected then keep one
 
+   
+
+#ifdef TS480
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO TS480 CAT PROTOCOL                                    *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-   #define CATCMD_SIZE          18  
+
+   #define CATCMD_SIZE          18
+   
    volatile char    CATcmd[CATCMD_SIZE];
    const int        BUFFER_SIZE = CATCMD_SIZE;
    char             buf[BUFFER_SIZE];
+
+#endif //TS480
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEBUG SUPPORT MACRO DEFINITIONS                                               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -270,9 +294,9 @@ char hi[60];
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-//#define DEBUG 1
+//#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-//   #define INFO  1   //Enable _INFO and _INFOLIST statements
+   //#define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
@@ -300,10 +324,10 @@ char hi[60];
 
 #ifdef INFO
    #define _INFO           sprintf(hi,"%s: Ok\n",__func__); Serial.print(hi);
-   #define _EXCPLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
+   #define _INFOLIST(...)  sprintf(hi,__VA_ARGS__);Serial.print(hi);
 #else
    #define _INFO _NOP
-   #define _EXCPLIST(...)  _INFO
+   #define _INFOLIST(...)  _INFO
 #endif
 
 #ifdef EXCP
@@ -319,10 +343,21 @@ char hi[60];
 //*               ATU RESET FUNCTION SUPPORT                                                    *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
    #define ATU_DELAY    200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
+
    uint16_t atu       =  ATU;
    uint16_t atu_delay =  ATU_DELAY;
-   uint32_t tATU=0;  
+   uint32_t tATU=0;
+   
 #endif //ATUCTL
+
+#ifdef ANTIVOX
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*       ANTIVOX FEATURE IF PTT IS CONTROLLED BY CAT AVOID NOISE TO PTT THE ADX                *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+   #define AVOXTIME    2000
+   uint16_t avoxtime =   AVOXTIME;
+   uint32_t tavox    =   0;
+#endif //ANTIVOX   
 
 
 #ifdef CW
@@ -342,10 +377,12 @@ char hi[60];
    #define EEPROM_TEMP         30
    #define EEPROM_MODE         40
    #define EEPROM_BAND         50
-   #define EEPROM_SAVED       100     //Signature of EEPROM being updated at least once
-   #define EEPROM_TOUT       2000     //Timeout in mSecs to wait till commit to EEPROM any change
+
    uint32_t tout=0;
 
+   //#define EEPROM_CLR     1   //Initialize EEPROM (only to be used to initialize contents)
+   #define EEPROM_SAVED   100   //Signature of EEPROM being updated at least once
+   #define EEPROM_TOUT  10000   //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -375,13 +412,6 @@ const unsigned long slot[MAXBAND][MAXMODE]={{ 3573000, 3575000, 3578000, 3568600
                                                      
 unsigned long freq      = f[mode]; 
 const uint8_t LED[4]    = {FT8,FT4,JS8,WSPR};  //A 5th virtual mode is handled if CW enabled, LEDS are managed in that case not using this table
-
-/*-------------------------------------*
- * Manage button state                 *
- *-------------------------------------*/
-uint8_t       button[3]   ={0,0,0};
-unsigned long downTimer[3]={PUSHSTATE,PUSHSTATE,PUSHSTATE};
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*       GLOBAL VARIABLE DEFINITION CONDITIIONAL TO DIFFERENT OPTIONAL FUNCTIONS               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -445,6 +475,7 @@ uint32_t      wdt_tout    = 0;
 //*                    CODE INFRASTRUCTURE                                                      *
 //* General purpose procedures and functions needed to implement services through the code      *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
 /*-------------------------------------------*
  * getWord                                   *
  * get boolean bitwise pseudo-variable       *
@@ -522,7 +553,7 @@ void setQUAD(int LPFslot) {
    delay(100);
   
    #ifdef DEBUG
-      _EXCPLIST("%s() LPFslot=%d QUAD=%d\n",__func__,LPFslot,s);
+      _EXCPLIST("%s() LPF=%d QUAD=%d\n",__func__,LPFslot,s);
    #endif //DEBUG 
   
 }
@@ -572,6 +603,7 @@ int getBand(uint32_t f) {
    if (f>=14000000 && f<14350000) {b=20;}
    if (f>=18068000 && f<18168000) {b=17;}
    if (f>=21000000 && f<21450000) {b=15;}
+   if (f>=24890000 && f<24990000) {b=12;}
    if (f>=28000000 && f<29700000) {b=10;}
 
 #ifdef DEBUG
@@ -613,10 +645,6 @@ int setSlot(uint32_t f) {
    }
    int s=findSlot(b);
 
-#ifdef DEBUG
-   _EXCPLIST("%s() f=%ld band=%d slot=%d\n",__func__,f,b,s);
-#endif //DEBUG
-
    return s;
  
 }
@@ -626,9 +654,9 @@ int setSlot(uint32_t f) {
  * the mode that should be assigned, -1 if none can be identified  *
  *-----------------------------------------------------------------*/
 int getMode(int s,uint32_t f) {
- 
+  
   int m=-1;
-  for (int i=0;i<MAXMODE;i++) {
+  for (int i=0;i<MAXMODE-1;i++) {
     if (slot[s][i]==f) {
        m=i;
        break;
@@ -641,14 +669,436 @@ int getMode(int s,uint32_t f) {
   
   return m;
 }
+
+#ifdef FT817
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   FT817 CAT PROTOCOL SUBSYSTEM                                              *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+/**
+   The CAT protocol is used by many radios to provide remote control to computers through
+   the serial port.
+
+   This is very much a work in progress. Parts of this code have been liberally
+   borrowed from other GPL licensed works like hamlib.
+
+   https://github.com/afarhan/ubitxv6/blob/master/ubitx_cat.cpp
+
+   Note: This code was tested with WSJT-X 2.5.4 and Hamlib (rigctl) 4.3.1 in
+   July-2022 by Dhiru (VU3CER).
+
+   Reference: http://www.ka7oei.com/ft817_meow.html
+   
+*/
+
+/*---
+ * Protocol constant definitions
+ *---*/
+#define CAT_MODE_LSB            0x00
+#define CAT_MODE_USB            0x01
+#define CAT_MODE_CW             0x02
+#define CAT_MODE_CWR            0x03
+#define CAT_MODE_AM             0x04
+#define CAT_MODE_FM             0x08
+#define CAT_MODE_DIG            0x0A
+#define CAT_MODE_PKT            0x0C
+#define CAT_MODE_FMN            0x88
+#define ACK                     0x00
+
+
+unsigned char doingCAT = 0;
+bool txCAT             = false;        // turned on if the transmitting due to a CAT command
+char inTx              = 0;                // it is set to 1 if in transmit mode (whatever the reason : cw, ptt or cat)
+char isUSB             = 0;
+
+static unsigned long rxBufferArriveTime = 0;
+static byte rxBufferCheckCount          = 0;
+static byte cat[5];
+static byte insideCat                   = 0;
+unsigned int skipTimeCount              = 0;
+
+/*---
+ * Nibble Format routines
+ * --*/
+byte setHighNibble(byte b, byte v) {
+  // Clear the high nibble
+  b &= 0x0f;
+  // Set the high nibble
+  return b | ((v & 0x0f) << 4);
+}
+
+byte setLowNibble(byte b, byte v) {
+  // Clear the low nibble
+  b &= 0xf0;
+  // Set the low nibble
+  return b | (v & 0x0f);
+}
+
+byte getHighNibble(byte b) {
+  return (b >> 4) & 0x0f;
+}
+
+byte getLowNibble(byte b) {
+  return b & 0x0f;
+}
+/*----
+  Takes a number and produces the requested number of decimal digits, staring
+  from the least significant digit.
+ *----*/ 
+void getDecimalDigits(unsigned long number, byte* result, int digits) {
+  for (int i = 0; i < digits; i++) {
+    // "Mask off" (in a decimal sense) the LSD and return it
+    result[i] = number % 10;
+    // "Shift right" (in a decimal sense)
+    number /= 10;
+  }
+}
+/*---
+  Takes a frequency and writes it into the CAT command buffer in BCD form.
+ *---*/ 
+void writeFreq(unsigned long freq, byte* cmd) {
+  // Convert the frequency to a set of decimal digits. We are taking 9 digits
+  // so that we can get up to 999 MHz. But the protocol doesn't care about the
+  // LSD (1's place), so we ignore that digit.
+  byte digits[9];
+  getDecimalDigits(freq, digits, 9);
+  
+  // Start from the LSB and get each nibble
+  
+  cmd[3] = setLowNibble(cmd[3],  digits[1]);
+  cmd[3] = setHighNibble(cmd[3], digits[2]);
+  cmd[2] = setLowNibble(cmd[2],  digits[3]);
+  cmd[2] = setHighNibble(cmd[2], digits[4]);
+  cmd[1] = setLowNibble(cmd[1],  digits[5]);
+  cmd[1] = setHighNibble(cmd[1], digits[6]);
+  cmd[0] = setLowNibble(cmd[0],  digits[7]);
+  cmd[0] = setHighNibble(cmd[0], digits[8]);
+}
+/*---
+// This function takes a frequency that is encoded using 4 bytes of BCD
+// representation and turns it into an long measured in Hz.
+//
+// [12][34][56][78] = 123.45678? Mhz
+*----*/
+unsigned long readFreq(byte* cmd) {
+  // Pull off each of the digits
+  byte d7 = getHighNibble(cmd[0]);
+  byte d6 = getLowNibble(cmd[0]);
+  byte d5 = getHighNibble(cmd[1]);
+  byte d4 = getLowNibble(cmd[1]);
+  byte d3 = getHighNibble(cmd[2]);
+  byte d2 = getLowNibble(cmd[2]);
+  byte d1 = getHighNibble(cmd[3]);
+  byte d0 = getLowNibble(cmd[3]);
+  return
+    (unsigned long)d7 * 100000000L +
+    (unsigned long)d6 * 10000000L +
+    (unsigned long)d5 * 1000000L +
+    (unsigned long)d4 * 100000L +
+    (unsigned long)d3 * 10000L +
+    (unsigned long)d2 * 1000L +
+    (unsigned long)d1 * 100L +
+    (unsigned long)d0 * 10L;
+}
+
+/*---
+ * This function is to falsify some readings performed
+ * into the volatile memory of a typical FT817 radio 
+ *---*/
+void catReadEEPRom(void)
+{
+  byte temp0 = cat[0];
+  byte temp1 = cat[1];
+  cat[0] = 0;
+  cat[1] = 0;
+
+  switch (temp1)
+  {
+    case 0x45:
+      if (temp0 == 0x03) {
+        cat[0] = 0x00;
+        cat[1] = 0xD0;
+      }
+      break;
+    case 0x47: //
+      if (temp0 == 0x03) {
+        cat[0] = 0xDC;
+        cat[1] = 0xE0;
+      }
+      break;
+    case 0x55:
+      // 0: VFO A/B  0 = VFO-A, 1 = VFO-B
+      cat[1] = 0x00;
+      break;
+    case 0x57:
+      cat[0] = 0xC0;
+      cat[1] = 0x40;
+      break;
+    case 0x59:
+      // http://www.ka7oei.com/ft817_memmap.html
+      break;
+    case 0x5C: // Beep Volume (0-100) (#13)
+      cat[0] = 0xB2;
+      cat[1] = 0x42;
+      break;
+    case 0x5E:
+      cat[1] = 0x25;
+      break;
+    case 0x61: // Sidetone (Volume) (#44)
+      cat[1] = 0x08;
+      break;
+    case 0x5F:
+      cat[0] = 0x32;
+      cat[1] = 0x08;
+      break;
+    case 0x60 : // CW Delay (10-2500 ms)
+      // cat[0] = cwDelayTime;
+      cat[1] = 0x32;
+      break;
+    case 0x62:
+      cat[1] = 0xB2;
+      break;
+    case 0x63:
+      cat[0] = 0xB2;
+      cat[1] = 0xA5;
+      break;
+    case 0x64:
+      break;
+    case 0x67: // 6-0 SSB Mic (#46) Contains 0-100 (decimal) as displayed
+      cat[0] = 0xB2;
+      cat[1] = 0xB2;
+      break;
+    case 0x69: // FM Mic (#29) Contains 0-100 (decimal) as displayed
+      break; // XXX
+    case 0x78:
+      if (isUSB)
+        cat[0] = CAT_MODE_USB;
+      else
+        cat[0] = CAT_MODE_LSB;
+      if (cat[0] != 0) cat[0] = 1 << 5;
+      break;
+    case 0x79:
+      cat[0] = 0x00;
+      cat[1] = 0x00;
+      break;
+    case 0x7A: // SPLIT
+      break;
+    case 0xB3:
+      cat[0] = 0x00;
+      cat[1] = 0x4D;
+      break;
+
+  }
+
+  // send the data
+  
+  Serial.write(cat, 2);
+  
+  #ifdef ADX
+     delay(SERIAL_WAIT);
+     Serial.flush();
+     delay(50);
+  #endif //ADX   
+
+}
+/*---
+ * Main FT817 CAT protocol command processor and dispatcher
+ *----*/
+void processCATCommand2(byte* cmd) {
+  byte response[5];
+  unsigned long f;
+
+  switch (cmd[4]) {
+    case 0x01:   // set frequency
+    {
+      f = readFreq(cmd);
+      freq=f;
+
+      response[0] = 0;
+      Serial.write(response, 1);
+      delay(SERIAL_WAIT);
+      Serial.flush();
+      delay(50);
+      break;
+  }
+    case 0x02: // split on
+    {
+      break;
+    }  
+    case 0x82: // split off
+    {
+      break;
+    }
+    case 0x03: 
+    {
+      unsigned long fx=freq;
+      writeFreq(fx, response); // Put the frequency into the buffer
+      if (isUSB) {
+        response[4] = 0x01; // USB
+      } else {
+        response[4] = 0x00; // LSB
+      }  
+      Serial.write(response, 5);
+      delay(SERIAL_WAIT);
+      Serial.flush();
+      delay(50);
+
+      break;
+    }
+    case 0x07: // set mode
+      {
+      if (cmd[0] == 0x00 || cmd[0] == 0x03) {
+        isUSB = 0;
+      } else {
+        isUSB = 1;
+      }  
+      response[0] = 0x00;
+      Serial.write(response, 1);
+      delay(SERIAL_WAIT);
+      Serial.flush();
+      delay(50);
+      break;
+      }
+    case 0x08: // PTT On
+    {
+      if (!inTx) {
+        response[0] = 0;
+        inTx = 1;
+        setWord(&SSW,CATTX,true);
+        switch_RXTX(HIGH);
+      } else {
+        response[0] = 0xf0;
+      }
+      Serial.write(response, 1);
+      delay(SERIAL_WAIT);
+      Serial.flush();
+      delay(50);
+
+      break;
+    }
+    case 0x88: // PTT Off
+    {
+      if (inTx) {
+        inTx = 0;
+        setWord(&SSW,CATTX,false);
+        switch_RXTX(LOW);
+      }
+      response[0] = 0;
+      Serial.write(response, 1);
+      delay(SERIAL_WAIT);
+      Serial.flush();
+      delay(50);
+      break;
+    }
+    case 0x81: // toggle the VFOs
+  {
+      response[0] = 0;
+      Serial.write(response, 1);
+      delay(SERIAL_WAIT);
+      Serial.flush();
+      delay(50);
+
+      break;
+  }
+    case 0xBB: // Read FT-817 EEPROM Data
+  {
+      catReadEEPRom();
+      break;
+  }
+    case 0xe7:
+       {
+      // Get receiver status, we have hardcoded this as
+      // as we don't support ctcss, etc.
+      response[0] = 0x09;
+      Serial.write(response, 1);
+      delay(SERIAL_WAIT);
+      Serial.flush();
+      delay(50);
+
+      break;
+       }
+    case 0xf7:
+      {
+        boolean isHighSWR = false;
+        boolean isSplitOn = false;
+        response[0] = ((inTx ? 0 : 1) << 7) +
+                      ((isHighSWR ? 1 : 0) << 6) + // Hi swr off / on
+                      ((isSplitOn ? 1 : 0) << 5) + // Split on / off
+                      (0 << 4) + // dummy data
+                      0x08; // P0 meter data
+        Serial.write(response, 1);
+        delay(SERIAL_WAIT);
+        Serial.flush();
+        delay(50);
+
+      }
+      break;
+
+    default:
+    {
+      response[0] = 0x00;
+      Serial.write(response[0]);
+      delay(SERIAL_WAIT);
+      Serial.flush();
+      delay(50);
+    }
+  }
+  insideCat = false;
+}
+/*---
+ * serialEvent() handler
+ *---*/
+void serialEvent() {
+  byte i;
+
+  // Check Serial Port Buffer
+  if (Serial.available() == 0) {                            // Set Buffer Clear status
+    rxBufferCheckCount = 0;
+    return;
+  }
+  else if (Serial.available() < 5) {                        // First Arrived
+    if (rxBufferCheckCount == 0) {
+      rxBufferCheckCount = Serial.available();
+      rxBufferArriveTime = millis() + CAT_RECEIVE_TIMEOUT;  // Set time for timeout
+    }
+    else if (rxBufferArriveTime < millis()) {               // Clear Buffer
+      for (i = 0; i < Serial.available(); i++)
+        rxBufferCheckCount = Serial.read();
+      rxBufferCheckCount = 0;
+    }
+    else if (rxBufferCheckCount < Serial.available()) {     // Increase buffer count, slow arrive
+      rxBufferCheckCount = Serial.available();
+      rxBufferArriveTime = millis() + CAT_RECEIVE_TIMEOUT;  // Set time for timeout
+    }
+    return;
+  }
+
+  // CAT DATA arrived
+  for (i = 0; i < 5; i++)
+    cat[i] = Serial.read();
+
+  // Note: This code is not re-entrant!
+  if (insideCat == 1)
+    return;
+  insideCat = 1;
+
+  processCATCommand2(cat);
+  insideCat = 0;
+}
+#endif //FT817
+
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   TS480 CAT PROTOCOL SUBSYSTEM                                              *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+#ifdef TS480
 /*-----------------------------------------------------------------------------------------------------*
  *                                    TS480 CAT SubSystem                                              *
  * cloned from uSDX (QCX-SSB) firmware, this is a very large and complex yet very complete CAT protocol*                                    
  * because of memory constraints it has been implemented in two sections, a basic one which is the set *
- * needed to interact with WSJT-X (or FLRig)  many answers aren't actually other                       *
+ * needed to interact with WSJT-X (or FLRig) and a full protocol (activated with the CAT_FULL directive* 
+ * intended to comply with most if not all the protocol commands, many answers aren't actually other   *
  * than a hardwired response not reflecting the actual status of the ADX transceiver, at the same time *
  * the ADX transceiver has less features than a real TS-480 rig, thus many commands refers to features *
  * which aren't really present on the ADX so nothing else than a hard wired command can be given, still*
@@ -669,13 +1119,12 @@ int getMode(int s,uint32_t f) {
   const char *cTX0="TX0;";
   const char *cMD2="MD2;";
   const char *cMD3="MD3;";
-  const char *cFR="FR"; const char *cFT="FT"; const char *cEX="EX";
-  const char *cKY="KY"; const char *cXT="XT"; const char *cVX="VX";
-  const char *cRU="RU"; const char *cPS="PS"; const char *cRD="RD"; 
+  
 
 /*-------------------------------------------------------------*
  * Specific CAT commands implementation                        *
  *-------------------------------------------------------------*/
+ 
 //*--- Get Freq VFO A
 void Command_GETFreqA()          //Get Frequency VFO (A)
 {
@@ -808,6 +1257,10 @@ void Command_RX()
   setWord(&SSW,CATTX,false);
   sprintf(hi,"%s",cRX0);
   Serial.print(hi);
+  #ifdef ANTIVOX
+      tavox=millis();
+      setWord(&TSW,AVOX,true);
+  #endif //ANTIVOX   
 }
 
 //*--- Place transceiver in TX mode
@@ -820,12 +1273,6 @@ void Command_TX()
   Serial.print(hi);
 }
 
-//*--- Response for VOX command
-void Command_VX()
-{
-  sprintf(hi,"VX%s;",(getWord(SSW,VOX)==true ? "1" : "0"));
-  Serial.print(hi);
-}
 
 //*---- Translate ADX mode into the TS-480 coding for mode
 char modeTS480() {
@@ -845,31 +1292,6 @@ char txstatus() {
 
   
 }
-//*--- Fake response for AS; command (not implemented)
-void Command_AS() {
-
-  sprintf(hi,"AS000%011ld%c;",freq,modeTS480());
-  Serial.print(hi);
-  return;
-}
-//*--- Fake response for XI; command (not implemented)
-void Command_XI() {
-
-  sprintf(hi,"XI%011ld%c0;",freq,modeTS480());
-  Serial.print(hi);
-  return;
-}
-
-//*--- Band change command (not implemented)
-void Command_BChange(int c) { //Change band up or down
-
-  Band_slot=changeBand(c);
-  Band_assign();
-  #ifdef DEBUG
-      _TRACELIST("%s() change=%d Band_slot=%d\n",__func__,c,Band_slot);
-  #endif //DEBUG 
-  
-}
 /*---------------------------------------------------------------------------------------------
  *  CAT Main command parser and dispatcher
  *---------------------------------------------------------------------------------------------*/
@@ -887,20 +1309,12 @@ void analyseCATcmd()
   if ((CATcmd[0] == 'M') && (CATcmd[1] == 'D') && (CATcmd[3] == ';'))  {Command_SetMD(); return;}
   if ((CATcmd[0] == 'R') && (CATcmd[1] == 'X'))                        {Command_RX(); return;}
   if ((CATcmd[0] == 'T') && (CATcmd[1] == 'X'))                        {Command_TX(); return;}
-  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'D'))                        {Command_BChange(-1); return;}
-  if ((CATcmd[0] == 'B') && (CATcmd[1] == 'U'))                        {Command_BChange(+1); return;}
-
-  
+ 
   strcmd[0]=CATcmd[0];
   strcmd[1]=CATcmd[1];
   strcmd[2]=0x00;
 
   if (strcmp(strcmd,cID)==0)                                                      {sprintf(hi,"%s",cIDr);Serial.print(hi);return;}
-  if (strcmp(strcmd,cFR)==0 || strcmp(strcmd,cFT)==0 || strcmp(strcmd,cEX)==0 ||
-      strcmp(strcmd,cVX)==0 || strcmp(strcmd,cXT)==0 || strcmp(strcmd,cKY)==0 ||
-      strcmp(strcmd,cRU)==0 || strcmp(strcmd,cPS)==0 || strcmp(strcmd,cRD)==0)    {sprintf(hi,"%s",CATcmd);Serial.print(hi);return;}
-
-             
   Serial.print("?;");
 }
 
@@ -909,7 +1323,7 @@ void analyseCATcmd()
  * Process incoming characters from the serial buffer assemble     *
  * commands and process responses according with the TS480 cat prot*
  *-----------------------------------------------------------------*/
-volatile uint16_t cat_ptr = 0;
+volatile uint8_t cat_ptr = 0;
 volatile char serialBuffer[CATCMD_SIZE];
 
 void serialEvent(){
@@ -924,7 +1338,6 @@ void serialEvent(){
   int rc=Serial.readBytes(buf,nread);
   if (rc<=0) {return;}
   buf[rc]=0x0;
-
   int k=0;
   for (int j=0;j<rc;j++){
     if (buf[j]!=0x0d && buf[j]!=0x0a) { 
@@ -934,13 +1347,13 @@ void serialEvent(){
   }
   
 #ifdef DEBUG  
-   _EXCPLIST("%s CAT received buffer=%s len=%d\n",__func__,serialBuffer,rc);
+  _TRACELIST("%s CAT received buffer=%s len=%d\n",__func__,serialBuffer,rc);
 #endif //DEBUG  
 
   if (strcmp((const char*)serialBuffer,strCmd)==0) { //coincidence
 
 #ifdef DEBUG
-     _EXCPLIST("%s Hit RX;ID; string\n",__func__);
+  _TRACELIST("%s Hit RX;ID; string\n",__func__);
 #endif //DEBUG
      
      Serial.write(strResp,10);
@@ -953,7 +1366,7 @@ void serialEvent(){
        CATcmd[cat_ptr++] = data;
 
 #ifdef DEBUG
-       _EXCPLIST("%s data=%c CATcmd[%d]=%c\n",__func__,data,i,CATcmd[i]);
+       _TRACELIST("%s data=%c CATcmd[%d]=%c\n",__func__,data,i,CATcmd[i]);
 #endif //DEBUG
 
        if(data == ';'){      
@@ -961,7 +1374,7 @@ void serialEvent(){
          cat_ptr = 0;            // reset for next CAT command
 
 #ifdef DEBUG
-        _EXCPLIST("%s() cmd(%s)\n",__func__,CATcmd);
+        _TRACELIST("%s() cmd(%s)\n",__func__,CATcmd);
 #endif //DEBUG
 
         analyseCATcmd();
@@ -972,7 +1385,7 @@ void serialEvent(){
       } else {
         if(cat_ptr > (CATCMD_SIZE - 1)){
            Serial.print("?;");  //Overrun, send error
-           cat_ptr = 0;         //Overrun, cleanse buffer
+           cat_ptr = 0;         //Overrun, cleanse buffer       
            Serial.flush();
            delay(50);
         }
@@ -980,6 +1393,7 @@ void serialEvent(){
    }   
  }
 }
+#endif //TS480
 #endif //CAT
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -991,6 +1405,7 @@ Si5351 si5351;
 /*--------------------------------------------------------------------------------------------*
  * Initialize DDS SI5351 object
  *--------------------------------------------------------------------------------------------*/
+
 void setup_si5351() {
 //------------------------------- SET SI5351 VFO -----------------------------------  
 // The crystal load value needs to match in order to have an accurate calibration
@@ -1007,7 +1422,7 @@ long cal = XT_CAL_F;
   si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);// Set for reduced power for RX 
 
   #ifdef DEBUG
-    _INFO;
+    _EXCP;
   #endif //DEBUG
 
 }
@@ -1034,10 +1449,12 @@ void resetLED() {               //Turn-off all LEDs
    clearLED(JS8);
    clearLED(FT4);
    clearLED(FT8);
-
+   
    #ifdef DEBUG
    _EXCP;
    #endif //DEBUG   
+
+ 
 }
 
 /*-----
@@ -1081,8 +1498,11 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 
    while (n>0) {
        setGPIO(LEDpin,HIGH);
+       
+
        delay(BDLY);
        setGPIO(LEDpin,LOW);
+
        delay(BDLY);
        n--;
 
@@ -1119,70 +1539,11 @@ void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
 //*                   BUTTON MANAGEMENT SUBSYSTEM                                               *
 //* Functions to operate the 3 push buttons the ADX board has                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+
 /**********************************************************************************************/
 /*                               PushButton Management                                        */
 /**********************************************************************************************/
-/*---
- * ISR Handler
- * Handle push button interrupt
- */
-ISR (PCINT2_vect) {
-
-  uint32_t timerDown=0;
-  byte     v=0;
-  
-  for (byte p=INT0;p<=INT2;p++){ 
-
-      #ifdef DEBUG
-         _EXCPLIST("%s check pin(%d)\n",__func__,p);
-      #endif //DEBUG      
-
-      switch (p) {
-        case INT0 : {v=UPPUSH;break;}
-        case INT1 : {v=DNPUSH;break;}
-        case INT2 : {v=TXPUSH;break;}
-      }
-      bool pstate=PIND & v;    
-      if (pstate != getWord(button[p],PUSHSTATE)) {   //Evaluate which pin changed
-
-//*--- Change detected
-
-         #ifdef DEBUG
-            _EXCPLIST("%s pin(%d) [%d]->[%d]\n",__func__,p,getWord(button[p],PUSHSTATE),pstate);
-         #endif //DEBUG         
-         
-         setWord(&button[p],PUSHSTATE,pstate);
-         if (pstate == LOW) {
-           downTimer[p]=millis();
-         } else {
-           timerDown=millis()-downTimer[p];
-           if (timerDown<bounce_time) {
-              #ifdef DEBUG
-                 _EXCPLIST("%s pin(%d) too short, ignored!\n",__func__,p);
-              #endif //DEBUG   
-              downTimer[p]=millis();  //fix weird Barb pushbutton with a 2nd train of bouncing signals
-            
-           }
-           setWord(&SSW,v,true);
-           if (timerDown<short_time){
-              setWord(&button[p],SHORTPUSH,true);
-              setWord(&button[p],LONGPUSH,false);
-              
-              #ifdef DEBUG
-                 _EXCPLIST("%s pin(%d) <SP>\n",__func__,p);
-              #endif //DEBUG
-
-           } else {
-              setWord(&button[p],SHORTPUSH,false);
-              setWord(&button[p],LONGPUSH,true);       
-              #ifdef DEBUG
-                 _EXCPLIST("%s pin(%d) <LP>\n",__func__,p);
-              #endif //DEBUG   
-           }       
-         }
-      }
-  }
-}
 /*-----------------------------------------------------------------------------*
  * detectKey                                                                   *
  * detect if a push button is pressed                                          *
@@ -1191,7 +1552,6 @@ bool detectKey(uint8_t k, bool v, bool w) {
 
    uint32_t tdown=millis();
    if (getGPIO(k)==v) {
-
       
       while (millis()-tdown<REPEAT_KEY) {
 
@@ -1219,7 +1579,6 @@ bool detectKey(uint8_t k, bool v, bool w) {
 #endif //WDT                                          
                  }
                  if (getGPIO(k)!=v) {
-   
                  #ifdef DEBUG
                    _EXCPLIST("%s switch(%d) value(%s)\n",__func__,k,BOOL2CHAR(v));
                  #endif //DEBUG   
@@ -1244,6 +1603,11 @@ bool detectKey(uint8_t k, bool v, bool w) {
  *---------------------------------------------------------------------------------------------*/
 void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 
+#ifdef DEBUG
+  if (t != getWord(SSW,TXON)) {
+      _EXCPLIST("%s (%s)\n",__func__,BOOL2CHAR(t));
+  } 
+#endif //DEBUG  
   
   if (t) {    //Set to TX
 /*-----------------------------------*
@@ -1252,7 +1616,6 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
  * been cleared.                     *
  *-----------------------------------*/
  #ifdef WDT
- 
       if (getWord(TSW,TX_WDT)==HIGH) {       
          return;
       }
@@ -1270,19 +1633,19 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
            freqtx=freq;
         }
         #ifdef DEBUG     
-        _EXCPLIST("%s TX+ (CW=%s) TX=%s ftx=%ld f=%ld\n",__func__,BOOL2CHAR(getWord(SSW,CWMODE)),BOOL2CHAR(getWord(SSW,TXON)),freqtx,freq);
+          _INFOLIST("%s TX+ (CW On) ftx=%ld f=%ld\n",__func__,freqtx,freq);
         #endif //DEBUG
      #else
         freqtx=freq;
         #ifdef DEBUG     
-        _EXCPLIST("%s TX+ f=%ld\n",__func__,freqtx);
+        _INFOLIST("%s TX+ f=%ld\n",__func__,freqtx);
         #endif //DEBUG
      #endif //CW
-          
+         
      si5351.set_freq(freqtx*100ULL, SI5351_CLK0);
      si5351.output_enable(SI5351_CLK0, 1);   // TX on
      
-     setGPIO(TX,HIGH);          
+     setGPIO(TX,HIGH);         
      setWord(&SSW,TXON,HIGH);
 
 #ifdef WDT
@@ -1291,7 +1654,6 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
               
      return;
   }
-
 /*------------------------------------*
  *                RX                  *
  *------------------------------------*/
@@ -1304,12 +1666,13 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
     
 #ifdef DEBUG
     if (getWord(SSW,TXON)==HIGH) {
-       _EXCPLIST("%s RX+ f=%ld\n",__func__,freq);
+       _TRACELIST("%s RX+ f=%ld\n",__func__,freq);
     }
 #endif //DEBUG
     
     si5351.set_freq(freq*100ULL, SI5351_CLK1);
-    si5351.output_enable(SI5351_CLK1, 1);   //RX on   
+    si5351.output_enable(SI5351_CLK1, 1);   //RX on
+    
     setGPIO(TX,0); 
     setWord(&SSW,TXON,LOW);
     setWord(&SSW,VOX,LOW);
@@ -1318,18 +1681,11 @@ void switch_RXTX(bool t) {  //t=False (RX) : t=True (TX)
 /*----------------------------------------------------------*
  * Manually turn TX while pressed                           *
  *----------------------------------------------------------*/
-bool getTXSW();  //prototype for forward reference
 void ManualTX(){
    
-    bool buttonTX=getTXSW();
     switch_RXTX(HIGH);
-    
-    #ifdef DEBUG
-       _EXCPLIST("%s ManualTX(HIGH)\n",__func__);
-    #endif //DEBUG   
-    
-    while(buttonTX==LOW) {
-
+      
+    while(detectKey(TXSW,LOW,false)==LOW) {
        #ifdef WDT      
           wdt_reset();
 
@@ -1344,105 +1700,14 @@ void ManualTX(){
              serialEvent();
           #endif //CAT
              
-       #endif //WDT
-       buttonTX=getTXSW();
-                
+       #endif //WDT                
     }
     switch_RXTX(LOW);
-    #ifdef DEBUG
-       _EXCPLIST("%s ManualTX(LOW)\n",__func__);
-    #endif //DEBUG   
     
-}
-/*---------------------------------------------------------------------*
- * getSwitchPL
- * Detect and clear the Long push condition on both UP/DOWN buttons 
- *---------------------------------------------------------------------*/
-bool getSwitchPL(uint8_t pin) {
-
-//*--- pin can be 2,3,4
-
-    byte p=pin-2;
-    byte v=0;
-    switch(p) {
-      case INT0: {v=UPPUSH;break;}
-      case INT1: {v=DNPUSH;break;}
-      case INT2: {v=TXPUSH;break;}
-    }
-
-    if (getWord(SSW,v) == true && getWord(button[p],LONGPUSH)==true) {
-
-       #ifdef DEBUG
-          _TRACELIST("%s (%d): <PL>\n",__func__,p);
-       #endif //DEBUG   
-
-       setWord(&SSW,v,false);
-       setWord(&button[p],LONGPUSH,false);
-       return LOW;
-    } else {    
-       return HIGH;
-    }     
-
-}
-/*----------------------------------------------------------*
- * get value for a digital pin and return after debouncing  *
- *----------------------------------------------------------*/
-bool getSwitch(uint8_t pin) {
-
-//*--- pin can be 2,3,4
-
-    byte p=pin-2;
-    byte v=0;
-    switch(p) {
-      case INT0: {v=UPPUSH;break;}
-      case INT1: {v=DNPUSH;break;}
-      case INT2: {v=TXPUSH;break;}
-    }
-
-    if (getWord(SSW,v) == true && getWord(button[p],SHORTPUSH)==true) {
-
-       #ifdef DEBUG
-          _EXCPLIST("%s (%d): <SP>\n",__func__,p);
-       #endif //DEBUG
-
-       setWord(&SSW,v,false);
-       setWord(&button[p],SHORTPUSH,false);
-       return LOW;
-    } else {    
-       return HIGH;
-    }              
-}
-/*----------------------------------------------------------*
- * read UP switch
- *----------------------------------------------------------*/
-bool getUPSSW() {
-
-    return getSwitch(UP);
-
-}
-/*----------------------------------------------------------*
- * read DOWN Switch
- *----------------------------------------------------------*/
-bool getDOWNSSW() {
-
-    return getSwitch(DOWN); 
-
-}
-/*--------------------------------------------------------------*
- * getTXSW() -- read TXSW switch
- * This switch still required debouncing but might operate
- * over long pulsing periods because of the manual TX function
- * and CW operation. It doesn't require to distinguish between 
- * short and long pulse though.
- *---------------------------------------------------------------*/
-bool getTXSW() {
-
-
-    if ( getWord(button[INT2],PUSHSTATE)==LOW && (millis()-downTimer[INT2]>bounce_time) ) {
-       return LOW;
-    }
-    return HIGH;
-
+    #ifdef ANTIVOX
+      tavox=millis();
+      setWord(&TSW,AVOX,true);
+    #endif //ANTIVOX   
 }
 /*==================================================================================================*
  * Clock (Si5351) Calibration methods                                                               *
@@ -1451,13 +1716,13 @@ bool getTXSW() {
  *     until a frequency counter shows 1 MHz, this way any offset on the clock will be compensated  *
  *     calibration factor will be stored in EEPROM and saved till next calibration                  *
  *==================================================================================================*/
-//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
-//*                                     ADX Calibration procedure (legacy,manual)                           *
-//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
+/*----------------------------------------------------------*
+ * Calibration function (LEGACY, Manual)
+ *----------------------------------------------------------*/
 void Calibration(){
   
   #ifdef DEBUG
-     _INFO;
+     _EXCP;
   #endif //DEBUG
 
   resetLED();
@@ -1489,8 +1754,7 @@ void Calibration(){
   
   si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
   si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
-
-   
+ 
   while (n>0) {
 
      #ifdef WDT
@@ -1516,10 +1780,8 @@ void Calibration(){
      }
 
 #ifdef DEBUG
-     _EXCPLIST("%s cal_fac=%ld\n",__func__,cal_factor);
+     _EXCPLIST("%s cal_factor=%ld\n",__func__,cal_factor);
 #endif //DEBUG
-     Serial.print("(+) cal=");
-     Serial.println(cal_factor);
   
   while (true) {
     
@@ -1536,13 +1798,8 @@ void Calibration(){
         
         si5351.set_correction(cal_factor, SI5351_PLL_INPUT_XO);
 
-        Serial.print("(+) cal=");
-        Serial.println(cal_factor);
-
 #ifdef DEBUG
-
-        _EXCPLIST("%s (-) cal_fac=%ld cal_f=%ld\n",__func__,cal_factor,Cal_freq);
-        
+        _INFOLIST("%s (-) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);      
 #endif //DEBUG
 
   // Set Calibration CLK output
@@ -1565,20 +1822,18 @@ void Calibration(){
  // Set Calbration Clock output
 #ifdef DEBUG
 
-        _EXCPLIST("%s (+) cal_fac=%ld cal_f=%ld\n",__func__,cal_factor,Cal_freq);
+        _INFOLIST("%s (+) cal_factor=%ld cal_freq=%ld\n",__func__,cal_factor,Cal_freq);
 
 #endif //DEBUG
-
-        Serial.print("(+) cal=");
-        Serial.println(cal_factor);
-      
+    
         si5351.set_freq(Cal_freq * 100ULL, SI5351_CLK2);
         si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA); // Set for lower power for Calibration
         si5351.set_clock_pwr(SI5351_CLK2, 1); // Enable clock2 
+
      }
+
   }
 }
-/*==========================================================================================================*/
 #ifdef EE
 /*------------------------------------------------------------------------------*
  * updateEEPROM                                                                 *
@@ -1594,12 +1849,13 @@ uint16_t build=BUILD;
    EEPROM.put(EEPROM_CAL,cal_factor);
    EEPROM.put(EEPROM_MODE,mode);
    EEPROM.put(EEPROM_BAND,Band_slot);
+  
    setWord(&SSW,SAVEEE,false);
 
 #ifdef DEBUG
-   _EXCPLIST("%s s(%d) c(%d) m(%d) s(%d) s=%d b=%d\n",__func__,save,cal_factor,mode,Band_slot,save,build)
+   _EXCPLIST("%s save(%d) cal(%d) m(%d) slot(%d) save=%d build=%d\n",__func__,save,cal_factor,mode,Band_slot,save,build);
 #endif //DEBUG
-   
+ 
 
 
 }
@@ -1614,8 +1870,7 @@ uint16_t build=BUILD;
 
    mode=0;
    Band_slot=0;
-   //* Retain calibration cal_factor=0;
-
+   
    updateEEPROM();
 }
 /*------
@@ -1626,7 +1881,7 @@ void checkEEPROM() {
     
     if((millis()-tout)>eeprom_tout && getWord(SSW,SAVEEE)==true ) {
        #ifdef DEBUG
-          _EXCPLIST("%s() Save EE\n",__func__);
+          _EXCPLIST("%s() Saving EEPROM...\n",__func__);
        #endif //DEBUG 
       
        updateEEPROM();
@@ -2047,6 +2302,7 @@ void keepAlive() {
  *----------------------------------------------------------*/
 void initADX(){
 
+
 #ifdef EE
 
  uint16_t temp=0;
@@ -2058,7 +2314,7 @@ void initADX(){
  EEPROM.get(EEPROM_BUILD,build);
 
  #ifdef DEBUG
-    _EXCPLIST("%s EE t(%d) & B(%d) B=%d\n",__func__,temp,build,uint16_t(BUILD));
+    _INFOLIST("%s EEPROM retrieved temp(%d) & Build(%d) BUILD=%d\n",__func__,temp,build,uint16_t(BUILD));
  #endif //DEBUG
  
  
@@ -2070,7 +2326,7 @@ void initADX(){
  if (build != uint16_t(BUILD)) {
     resetEEPROM();
     #ifdef DEBUG
-       _EXCPLIST("%s EEPROM Reset Build<>\n",__func__);
+       _INFOLIST("%s EEPROM Reset Build<> cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     #endif //DEBUG
     
  }
@@ -2080,7 +2336,7 @@ void initADX(){
     updateEEPROM();
     
     #ifdef DEBUG
-       _EXCPLIST("%s EEPROM Reset\n",__func__);
+       _INFOLIST("%s EEPROM Reset cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
     #endif //DEBUG
     
  } else {
@@ -2101,19 +2357,16 @@ void initADX(){
    
   EEPROM.get(EEPROM_MODE,mode);
   EEPROM.get(EEPROM_BAND,Band_slot);
-
+ 
   setup_si5351();
   
   #ifdef DEBUG
-     _EXCPLIST("%s EEPROM Rd cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
+     _INFOLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n",__func__,cal_factor,mode,Band_slot);
   #endif //DEBUG   
 }  
 
 #endif // EE
 
-  Serial.print("EEPROM cal_factor=");
-  Serial.println(cal_factor);
-  
   Band_assign();
   Freq_assign();
   Mode_assign();
@@ -2121,7 +2374,7 @@ void initADX(){
   delay(100);
 
 #ifdef DEBUG
-   _EXCPLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
+   _INFOLIST("%s setup m(%d) slot(%d) f(%ld)\n",__func__,mode,Band_slot,freq);
 #endif //DEBUG      
 }
 /*--------------------------------------------------------------------------*
@@ -2130,7 +2383,6 @@ void initADX(){
  * setup flow
  *--------------------------------------------------------------------------*/
 void definePinOut() {
-
 
    pinMode(UP,   INPUT);
    pinMode(DOWN, INPUT);
@@ -2151,22 +2403,21 @@ void definePinOut() {
 
 #ifdef DEBUG
    _EXCP;
-#endif //DEBUG      
-  
+#endif //DEBUG   
+
 }
 /*---------------------------------------------------------------------------------------------
  * setup()
  * This is the main setup cycle executed once on the Arduino architecture
  *---------------------------------------------------------------------------------------------*/
 void setup()
-{
-    
+{ 
 /*-----
  * Initialization is common for all uses of the serial port, specific variables and constants 
  * has been given proper initialization based on the protocol used
  *-----*/
 
-   //#if (defined(DEBUG) || defined(CAT))   
+   #if (defined(DEBUG) || defined(CAT))   
       Serial.begin(BAUD,SERIAL_8N2);
       while (!Serial) {
       #ifdef WDT      
@@ -2176,21 +2427,16 @@ void setup()
       delay(SERIAL_WAIT);
       Serial.flush();
       Serial.setTimeout(SERIAL_TOUT);    
-      Serial.println("Starting firmware");
-   //#endif //DEBUG or CAT
+   #endif //DEBUG or CAT
 
    #ifdef DEBUG
       const char * proc = "ATmega328P";
-      _EXCPLIST("%s: ADX V(%s) build(%d) board(%s)\n",__func__,VERSION,BUILD,proc);
-    
-      #ifdef DEBUG
-          #ifdef TS480
-             _EXCPLIST("%s: CAT subsystem TS480\n",__func__);
-          #endif
-      #endif //DEBUG    
-
+      _INFOLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n",__func__,VERSION,BUILD,proc);
    #endif //DEBUG
 
+/*---
+ * List firmware properties at run time
+ */
 
    definePinOut();
    blinkLED(TX);   
@@ -2200,16 +2446,6 @@ void setup()
       _EXCPLIST("%s setup_si5351 ok\n",__func__);
    #endif //DEBUG   
    
-   PCICR  |= B00000100; // Enable interrupts at PD port
-   PCMSK2 |= B00011100; // Signal interrupts for D2,D3 and D4 pins (UP/DOWN/TX)
-   setWord(&button[INT0],PUSHSTATE,HIGH);
-   setWord(&button[INT1],PUSHSTATE,HIGH);
-   setWord(&button[INT2],PUSHSTATE,HIGH);
-
-   #ifdef DEBUG
-      _EXCPLIST("%s INT ok\n",__func__);
-   #endif //DEBUG   
-
    initADX();
    #ifdef DEBUG
       _EXCPLIST("%s initADX ok\n",__func__);
@@ -2240,13 +2476,10 @@ void setup()
 /*------
  * Check if calibration is needed
  */
-
-   Serial.println("Checking calibration");
    if (detectKey(DOWN,LOW,WAIT)==LOW) { 
       #ifdef DEBUG
-        _EXCPLIST("%s Calibration set\n",__func__);
+        _EXCPLIST("%s Calibration mode detected\n",__func__);
       #endif //DEBUG
-      Serial.println("Calibration set\n");
       Calibration();
    }
   
@@ -2266,6 +2499,7 @@ void setup()
      _EXCPLIST("%s Counting algorithm TIMER1 set Ok\n",__func__);
   #endif //DEBUG   
 
+  
   switch_RXTX(LOW);
   #ifdef DEBUG
       _EXCPLIST("%s switch_RXTX Low ok\n",__func__);
@@ -2274,63 +2508,64 @@ void setup()
   Mode_assign(); 
 
   #ifdef WDT
-    
+ 
      wdt_disable();
-     wdt_enable(WDTO_8S);
-     
+     wdt_enable(WDTO_8S);    
      setWord(&TSW,TX_WDT,false);
-     #ifdef DEBUG
-        _EXCPLIST("%s watchdog configuration completed\n",__func__);
-     #endif //DEBUG   
-
   #endif //WDT
 
   #ifdef DEBUG
-     _EXCPLIST("%s watchdog configuration completed\n",__func__);
+     _INFOLIST("%s completed\n",__func__);
   #endif //DEBUG   
-
+ 
 }
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   Board Main Dispatched and operational loop                                *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 void loop()
 {  
-
+  
  //*--- Debug hook
- 
     keepAlive();
 
-/*---------------------------------------------------------------------------------*
- *  Manage the user interface (UP/DOWN/TX switches & combinations)                 *
- *  Change frequency, mode, band                                                   *
- *---------------------------------------------------------------------------------*/  
+//*--- changes in mode, band, frequency and operational status
     checkMode();
-/*---------------------------------------------------------------------------------*
- *  Save EEPROM if a change has been flagged anywhere in the logic                 *
- *---------------------------------------------------------------------------------*/  
+
+//*--- Manage anti-VOX timeout after avoxtime (mSec) the anti-vox condition is cleared
+
+    #ifdef ANTIVOX
+    
+    if (getWord(TSW,AVOX)==true) {
+       if (millis()-tavox > uint32_t(avoxtime)) {
+          setWord(&TSW,AVOX,false);
+          tavox=0;
+       }
+    }
+
+    #endif //ANTIVOX
+
     #ifdef EE
 //*--- if EEPROM enabled check if timeout to write has been elapsed
     checkEEPROM();
     #endif //EEPROM
 
-/*---------------------------------------------------------------------------------*
- *  ATU pulse width control, reset signal after the elapsed time elapsed happens   *
- *---------------------------------------------------------------------------------*/  
-   #ifdef ATUCTL
-   if ((millis()-tATU)>atu_delay && getWord(TSW,ATUCLK)==true) {
+    #ifdef ATUCTL
+
+//*--- ATU pulse width control
+
+    if ((millis()-tATU)>atu_delay && getWord(TSW,ATUCLK)==true) {
        setWord(&TSW,ATUCLK,false);
        setGPIO(atu,LOW);
     }
     #endif //ATUCTL       
 
-/*---------------------------------------------------------------------------------*
- *  Sample for CAT commands if enabled                                             *
- *---------------------------------------------------------------------------------*/  
     #ifdef CAT 
+//*--- if CAT enabled check for serial events (TS480 & IC746)
        serialEvent();
     #endif //CAT
 
-    #ifdef WDT      
+    #ifdef WDT
+       
        if ((millis() > (wdt_tout+uint32_t(WDT_MAX))) && getWord(SSW,TXON) == HIGH && getWord(SSW,CATTX)==true) {
           switch_RXTX(LOW);
           setWord(&TSW,TX_WDT,HIGH);
@@ -2341,17 +2576,13 @@ void loop()
        wdt_reset();
     #endif //WDT
 
-//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                                                                                *
-//*                      ADX Counting Algorithm                                    *
-//*                                                                                *
-//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-/*---------------------------------------------------------------------------------*
- * Timer1 (16 bits) with no pre-scaler (16 MHz) is checked to detect zero crossings*
- * if there is no overflow the frequency is calculated                             *
- * if activity is detected the TX is turned on                                     *
- * TX mode remains till no further activity is detected (operate like a VOX command*
- *---------------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------------*
+ * main transmission loop       (ADX)                                               *
+ * Timer1 (16 bits) with no pre-scaler (16 MHz) is checked to detect zero crossings *
+ * if there is no overflow the frequency is calculated                              *
+ * if activity is detected the TX is turned on                                      *
+ * TX mode remains till no further activity is detected (operate like a VOX command)*
+ *----------------------------------------------------------------------------------*/
 uint16_t n = VOX_MAXTRY;
     setWord(&SSW,VOX,false);
     while ( n > 0 ){                                 //Iterate up to 10 times looking for signal to transmit
@@ -2403,13 +2634,18 @@ uint16_t n = VOX_MAXTRY;
 /*-----------------------------------------------------*
  * end of waveform measurement, now check what is the  *
  * input frequency                                     *
- *-----------------------------------------------------*/   
+ *-----------------------------------------------------*/
+    
     if (TCNT1 < CNT_MAX){
        //if ((d2-d1) == 0) break;
        unsigned long codefreq = CPU_CLOCK/(d2-d1);
 
        if ((codefreq < FRQ_MAX) && (codefreq > 0)){
 
+#ifdef ANTIVOX
+          if (getWord(TSW,AVOX)==false) {
+#endif //ANTIVOX
+            
              if (getWord(SSW,VOX) == false){
                  switch_RXTX(HIGH);                 
              }
@@ -2417,18 +2653,25 @@ uint16_t n = VOX_MAXTRY;
              si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0); 
              setWord(&SSW,VOX,true);
 
-             #ifdef WDT
-                wdt_reset();
-             #endif //WDT
+#ifdef ANTIVOX             
+          }  else {
+            if (millis()-tavox > uint32_t(avoxtime)) {
+               setWord(&TSW,AVOX,false);
+               tavox=0;
+            }
+          }
+#endif //ANTIVOX
+
+       #ifdef WDT
+          wdt_reset();
+       #endif //WDT
+          
        }
-       
     } else {
        n--;
     }
 
-   /*----------------------*
-    * Sample CAT commands  *
-    *----------------------*/   
+    
     #ifdef CAT 
 //*--- if CAT enabled check for serial events (again)
        serialEvent();
@@ -2438,14 +2681,12 @@ uint16_t n = VOX_MAXTRY;
        wdt_reset();
     #endif //WDT
  }
-//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                               RX Cycle                                               *
-//=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-/*---------------------------------------------------------------------------------------*
- * TX cycle ends, fallback to RX mode                                                    *
- *---------------------------------------------------------------------------------------*/
-
+/*---------------------------------------------------------------------------------*
+ * when out of the loop no further TX activity is performed, therefore the TX is   *
+ * turned off and the board is set into RX mode                                    *
+ *---------------------------------------------------------------------------------*/
 #ifdef WDT
+
 /*-----------------------------------------------------------*
  * Check for watchdog                                        *
  * if activated blink TX LED and wait till a full timeout to *
@@ -2456,37 +2697,26 @@ uint16_t n = VOX_MAXTRY;
  * it will stay ready for the next TX command                *
  *                                                           *
  *-----------------------------------------------------------*/
-  if (getWord(TSW,TX_WDT)==HIGH) {
-    blinkLED(TX);
+ if (getWord(TSW,TX_WDT)==HIGH) {
+     blinkLED(TX);
  }
     
  if (getWord(SSW,TXON)==LOW && getWord(TSW,TX_WDT)==HIGH && (millis() > (wdt_tout+uint32_t(WDT_MAX)))) {
-    setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
-    #ifdef DEBUG
-       _EXCPLIST("%s TX watchdog condition cleared\n",__func__);
-    #endif //DEBUG
+     setWord(&TSW,TX_WDT,LOW);   //Clear watchdog condition
  }
+ 
 #endif //WDT
 
-/*----------------------*
- * Sample CAT commands  *
- *----------------------*/   
 #ifdef CAT
  serialEvent();
 #endif //CAT 
-
-/*------------------------------------------------------------*
- * At this point it must be in RX mode so perform the switch  *
- *------------------------------------------------------------*/   
+ 
  if (getWord(SSW,CATTX)!=true) {
     switch_RXTX(LOW);
     setWord(&SSW,VOX,false);
     setWord(&SSW,TXON,false);
  }   
-
-/*----------------------*
- * Reset watchdog       *
- *----------------------*/   
+ 
  #ifdef WDT
     wdt_reset();
  #endif //WDT     
