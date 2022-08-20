@@ -13,6 +13,21 @@
 #define PDX_common
 
 #include <stdint.h>
+#include "hardware/watchdog.h"
+#include "Wire.h"
+#include <EEPROM.h>
+#include "pico/stdlib.h"
+#include "pico/binary_info.h"
+#include "hardware/gpio.h"
+#include "hardware/sync.h"
+#include "hardware/structs/ioqspi.h"
+#include "hardware/structs/sio.h"
+#include <stdio.h>
+#include "hardware/pwm.h"
+#include "pico/multicore.h"
+#include "hardware/adc.h"
+#include "hardware/uart.h"
+
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
@@ -34,13 +49,13 @@
 //*                               (P)ico (D)igital (X)ceiver                                    *
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#define WDT             1      //Hardware and TX watchdog enabled
-#define EE              1      //Save in Flash emulation of EEPROM the configuration
-#define CAT             1      //Enable CAT protocol over serial port
+//#define WDT             1      //Hardware and TX watchdog enabled
+//#define EE              1      //Save in Flash emulation of EEPROM the configuration
+//#define CAT             1      //Enable CAT protocol over serial port
+//#define QUAD            1      //Support for QUAD board
+//#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
 
 //#define CW              1      //CW support
-//#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
-//#define QUAD            1      //Support for QUAD board
 //#define ONEBAND         1      //Define a single band
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -241,9 +256,9 @@
    Trace and debugging macros (only enabled if DEBUG is set
  *****************************************************************/
 
-//#define DEBUG  1
+#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-   //#define INFO  1   //Enable _INFO and _INFOLIST statements
+   #define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
@@ -270,8 +285,8 @@
 #endif
 
 #ifdef INFO
-#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);
-#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);
+#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);Serial.flush();
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);Serial.flush();
 #else
 #define _INFO _NOP
 #define _INFOLIST(...)  _INFO
@@ -308,7 +323,7 @@ uint16_t cwshift = CWSHIFT;
 #define EEPROM_BOUNCE_TIME  80
 #define EEPROM_SHORT_TIME   90
 #define EEPROM_MAX_BLINK   120
-#define EEPROM_EEPROM_TOUT 130
+#define EEPROM_EEPROM_TOUT 10000   //Timeout to commit to EEPROM any change
 #define EEPROM_AVOXTIME    170
 #define EEPROM_END         200
 #endif //TERMINAL
@@ -347,11 +362,25 @@ extern bool           getWord (uint8_t SysWord, uint8_t v);
 extern void           setWord(uint8_t* SysWord, uint8_t v, bool val);
 extern uint16_t       changeBand(uint16_t c);
 extern void           Band_assign(bool l);
+extern void           flipATU();
 void                  serialEvent();
 //void                setWord(uint8_t* SysWord, uint8_t v, bool val);
 void                  switch_RXTX(bool t);
 void                  setStdFreq(int i);
 void                  resetBand(int bs);
+
+#ifdef QUAD
+extern int            band2QUAD(uint16_t b);
+extern void           setQUAD(int LPFslot);
+#endif //QUAD
+
+#ifdef WDT
+extern uint32_t      wdt_tout;
+#endif //WDT
+
+#ifdef EE
+extern uint32_t      tout;
+#endif //EE
 
 extern const unsigned long slot[MAXBAND][MAXMODE];
 extern unsigned long f[MAXMODE];

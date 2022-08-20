@@ -3,7 +3,7 @@
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=**=*=*
 // Firmware Version 2.0
 //
-// Barb (Barbaros ASUROGLU) - WB2CBA - 2022
+// Barb (Barbaros Asuroglu) - WB2CBA - 2022
 // Dhiru (Dhiru Kholia)     - VU3CER - 2022
 // Pedro (Pedro Colla)      - LU7DZ  - 2022
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=**=*=*
@@ -39,20 +39,6 @@
 #include <Arduino.h>
 #include <stdint.h>
 #include <si5351.h>
-#include "Wire.h"
-#include <EEPROM.h>
-#include "pico/stdlib.h"
-#include "pico/binary_info.h"
-#include "hardware/gpio.h"
-#include "hardware/sync.h"
-#include "hardware/structs/ioqspi.h"
-#include "hardware/structs/sio.h"
-#include <stdio.h>
-#include "hardware/watchdog.h"
-#include "hardware/pwm.h"
-#include "pico/multicore.h"
-#include "hardware/adc.h"
-#include "hardware/uart.h"
 #include "pdx_common.h"
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -1472,8 +1458,8 @@ void Mode_assign() {
     ---------------------------------------*/
   if (freq != f[mode]) {    //@@@
     freq = f[mode];        //@@@
-  }                         //@@@
-  switch_RXTX(LOW);
+    switch_RXTX(LOW);
+  }                        //@@@
   setWord(&SSW, VOX, false);
   setWord(&SSW, TXON, false);
 #ifdef WDT
@@ -1551,12 +1537,16 @@ uint8_t band2Slot(uint16_t b) {
 */
 void setStdFreq(int k) {
 
-  for (int i = 0; i < MAXMODE; i++) {
+  for (int i = 0; i < MAXMODE-1; i++) {
     f[i] = slot[k][i];
 #ifdef WDT
     wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
 #endif //WDT
   }
+
+#ifdef DEBUG
+  _INFOLIST("%s Std frequency set f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f[4]=%ld Band_slot=%d mode=%d ok\n", __func__,f[0],f[1],f[2],f[3],f[4],Band_slot,mode);
+#endif //DEBUG
 
 }
 /*----------------------------------------------------------*
@@ -2361,10 +2351,13 @@ void definePinOut() {
   flipATU();
 #endif //ATUCTL
 
-
   Wire.setSDA(PDX_I2C_SDA);
   Wire.setSCL(PDX_I2C_SCL);
   Wire.begin();
+
+#ifdef DEBUG
+  _INFOLIST("%s completed\n",__func__);
+#endif //DEBUG
 
 }
 /*---------------------------------------------------------------------------------------------
@@ -2380,9 +2373,9 @@ void setup()
 
 #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) )
   Serial.begin(BAUD, SERIAL_8N1);
-#ifndef FT817
+  #ifndef FT817
   while (!Serial);
-#endif //!FT817   
+  #endif //!FT817 to manage the difference of working with and without a fixed driver
   Serial.flush();
 #endif //DEBUG or CAT or Terminal
 
@@ -2391,11 +2384,12 @@ void setup()
   _INFOLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
 #endif //DEBUG
 
+#ifdef EE
   EEPROM.begin(512);
 #ifdef DEBUG
   _INFOLIST("%s: EEPROM reserved (%d)\n", __func__, EEPROM.length());
 #endif //DEBUG
-
+#endif //EE
   /*---
      List firmware properties at run time
   */
@@ -2441,7 +2435,17 @@ void setup()
 #endif //DEBUG
 
   definePinOut();
+  
+#ifdef DEBUG
+  _INFOLIST("%s definePinOut() ok\n", __func__);
+#endif //DEBUG
+
   blinkLED(TX);
+
+#ifdef DEBUG
+  _INFOLIST("%s blink LED blink dance Ok\n", __func__);
+#endif //DEBUG
+
   setup_si5351();
 
 #ifdef DEBUG
@@ -2449,6 +2453,7 @@ void setup()
 #endif //DEBUG
 
   initTransceiver();
+  
 #ifdef DEBUG
   _INFOLIST("%s initTransceiver ok\n", __func__);
 #endif //DEBUG
@@ -2471,6 +2476,11 @@ void setup()
 #endif //WDT
     }
   }
+
+#ifdef DEBUG
+  _INFOLIST("%s calibration mode not required\n", __func__);
+#endif //DEBUG
+
 
   // trigger counting algorithm on the second core
   rp2040.idleOtherCore();
@@ -2658,7 +2668,7 @@ void loop()
 #endif //FSK_ADCZ
 
 #ifdef DEBUG
-      _TRACELIST("%s FIFO f=%ld\n", __func__, codefreq);
+      _INFOLIST("%s FIFO f=%ld\n", __func__, codefreq);
 #endif //DEBUG
 
       /*------------------------------------------------------*
@@ -2691,7 +2701,7 @@ void loop()
         if (pfo != fo) {
           si5351.set_freq(((freq + fo) * 100ULL), SI5351_CLK0);
 #ifdef DEBUG
-          _TRACELIST("%s Frequency change fo=%ld\n", __func__, fo);
+          _INFOLIST("%s Frequency change fo=%ld\n", __func__, fo);
 #endif //DEBUG
           pfo = fo;
           continue;
@@ -2702,7 +2712,7 @@ void loop()
         if (codefreq != prevfreq) {
           si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0);
 #ifdef DEBUG
-          _TRACELIST("%s Frequency change f=%ld prev=%ld\n", __func__, codefreq, prevfreq);
+          _INFOLIST("%s Frequency change f=%ld prev=%ld\n", __func__, codefreq, prevfreq);
 #endif //DEBUG
           prevfreq = codefreq;
         }
@@ -2721,6 +2731,9 @@ void loop()
       uint32_t tcnt = time_us_32() + uint32_t(FSK_IDLE);
       while (time_us_32() < tcnt);
       n--;
+      #ifdef WDT
+         wdt_reset();
+      #endif //WDT
     }
 
     /*----------------------*
