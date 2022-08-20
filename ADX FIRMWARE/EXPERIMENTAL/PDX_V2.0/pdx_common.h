@@ -337,7 +337,7 @@ extern const uint16_t Bands[BANDS];
  * Function references
  * 
  */
-extern void           Freq_assign();
+//@@@extern void           Freq_assign();
 extern int            getBand(uint32_t f);
 extern void           Mode_assign();
 extern int            findSlot(uint16_t i);
@@ -346,11 +346,13 @@ extern int            getMode(int i, uint32_t f);
 extern bool           getWord (uint8_t SysWord, uint8_t v);
 extern void           setWord(uint8_t* SysWord, uint8_t v, bool val);
 extern uint16_t       changeBand(uint16_t c);
-extern void           Band_assign();
+extern void           Band_assign(bool l);
 void                  serialEvent();
 //void                setWord(uint8_t* SysWord, uint8_t v, bool val);
 void                  switch_RXTX(bool t);
+void                  setStdFreq(int i);
+void                  resetBand(int bs);
 
 extern const unsigned long slot[MAXBAND][MAXMODE];
-
+extern unsigned long f[MAXMODE];
 #endif

@@ -140,6 +140,13 @@ int getBand(uint32_t f) {
   if (f >= 21000000 && f < 21450000) {
     b = 15;
   }
+
+//@@@ Fix for ADX too  
+
+  if (f >= 24890000 && f < 24990000) {
+    b = 12;
+  }
+
   if (f >= 28000000 && f < 29700000) {
     b = 10;
   }
@@ -190,15 +197,54 @@ int setSlot(uint32_t f) {
 
   return s;
 }
+/*-------------------------------------------------------*
+ * resetBand
+ * setup the band after a valid Band_slot has been set
+ * @@@ must be moved into ADX
+ */
+void resetBand(int bs) {
+  
+  int b=Bands[bs];
+  int i=band2Slot(b);
+  setStdFreq(i);
+  freq=f[mode];  
+  Band_assign(true);
+  //@@@Freq_assign();
+  Mode_assign();
+  
+  #ifdef QUAD
+     setupQUAD();
+     #ifdef DEBUG
+     _INFOLIST("%s setupQUAD ok\n", __func__);
+     #endif //DEBUG
+     /*---------
+       Initialize the QUAD board with the default band (at slot 0)
+      */
+     int q = band2QUAD(b);
+     if (q != -1) {
+        setQUAD(q);
+     }
+     #ifdef DEBUG
+       _INFOLIST("%s setQUAD Bands[%d]=%d quad=%d\n", __func__, Band_slot, b, q);
+     #endif //DEBUG
+  #endif //QUAD
 
+  #ifdef ATUCTL
+     flipATU();
+  #endif //ATUCTL
+
+}
 /*-----------------------------------------------------------------*
    getMode
    given the slot in the slot[][] array and the frequency returns
    the mode that should be assigned, -1 if none can be identified
+   this method shouldn't be called when operating on CW as it will
+   yield a not identified mode because CW can have a continuous 
+   tuning space (the space to scan is MAXMODE-2 (0.1.2.3)
   -----------------------------------------------------------------*/
 int getMode(int s, uint32_t f) {
   int m = -1;
-  for (int i = 0; i < MAXMODE; i++) {
+  for (int i = 0; i < MAXMODE-2; i++) {
     if (int32_t(slot[s][i]/1000) == int32_t(f/1000)) {
       m = i;
       break;

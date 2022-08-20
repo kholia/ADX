@@ -272,8 +272,8 @@ void flipATU() {
 // Forward reference prototypes
 void switch_RXTX(bool t);     //advanced definition for compilation purposes (interface only)
 void Mode_assign();           //advanced definition for compilation purposes
-void Freq_assign();
-void Band_assign();
+//void Freq_assign();
+void Band_assign(bool l);
 uint16_t changeBand(uint16_t c);
 
 
@@ -281,7 +281,7 @@ uint16_t changeBand(uint16_t c);
 
 boolean newCATcmd = false;
 
-char CATcmd[256] = {'0'};  
+char CATcmd[256] = {'0'};
 
 int  freq10GHz  = 0;
 int  freq1GHz   = 0;
@@ -851,11 +851,11 @@ void setup1() {
       fclk = pwm_get_counter(pwm_slice);
       fclk += f_hi << 16;
       error = fclk - Cal_freq;
-      
+
 #ifdef DEBUG
       _INFOLIST("%s Calibration VFO=%ld Hz target_freq=%ld error=%ld cal_factor=%ld\n", __func__, fclk, Cal_freq, error, cal_factor);
 #endif //DEBUG
-      
+
       if (labs(error) > int32_t(CAL_ERROR)) {
         b = !b;
         if (b) {
@@ -872,13 +872,13 @@ void setup1() {
       } else {
         n--;
         if (n == 0) {
-          
+
 #ifdef DEBUG
           _INFOLIST("%s Convergence achieved cal_factor=%ld\n", __func__, cal_factor);
 #endif //DEBUG
 
 #ifdef EE
-         updateEEPROM();
+          updateEEPROM();
 #endif //EE
 
           while (true) {
@@ -1451,7 +1451,9 @@ uint16_t changeBand(uint16_t c) {
    Mode assign
   ----------------------------------------------------------*/
 void Mode_assign() {
-  freq = f[mode];
+
+  //@@@ freq = f[mode];  //Fix
+
 #ifdef CW
   if (mode == MAXMODE - 1) {
     resetLED();
@@ -1464,8 +1466,13 @@ void Mode_assign() {
   setLED(LED[mode], true);
 #endif //CW
   /*---------------------------------------*
-     Change the DDS frequency
+     Change the frequency different from what
+     it is required by the mode and then
+     change the DDS accordingly
     ---------------------------------------*/
+  if (freq != f[mode]) {    //@@@
+    freq = f[mode];        //@@@
+  }                         //@@@
   switch_RXTX(LOW);
   setWord(&SSW, VOX, false);
   setWord(&SSW, TXON, false);
@@ -1476,11 +1483,10 @@ void Mode_assign() {
   /*--------------------------------------------*
      Update master frequency here
     --------------------------------------------*/
-
-#ifdef EE
-  tout = millis();
-  setWord(&SSW, SAVEEE, true);
-#endif //EE
+  //@@@#ifdef EE
+  //@@@  tout = millis();
+  //@@@  setWord(&SSW, SAVEEE, true);
+  //@@@#endif //EE
 
 #ifdef DEBUG
   _INFOLIST("%s mode(%d) f(%ld)\n", __func__, mode, f[mode]);
@@ -1491,7 +1497,7 @@ void Mode_assign() {
    Assign index in slot[x][] table based on the band
   ------------------------------------------------------------------*/
 uint8_t band2Slot(uint16_t b) {
-  uint8_t s = 3;
+  uint8_t s = -1;    //@@@ To be traslated to ADX
   switch (b) {
     case  80 : {
         s = 0;
@@ -1537,20 +1543,39 @@ uint8_t band2Slot(uint16_t b) {
   return s;
 
 }
+/*-----------------------------------------------------------*
+   setStdFreq
+   Set all standard frequencies for the band and transfer to
+   the f[] array
+   @@@ To implement on ADX
+*/
+void setStdFreq(int k) {
 
+  for (int i = 0; i < MAXMODE; i++) {
+    f[i] = slot[k][i];
+#ifdef WDT
+    wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
+#endif //WDT
+  }
+
+}
 /*----------------------------------------------------------*
    Frequency assign (band dependant)
+   @@@ Deprecated, no longer used has to be removed form ADX
   ----------------------------------------------------------*/
 void Freq_assign() {
   uint16_t Band = Bands[Band_slot];
   uint8_t  b = band2Slot(Band);
-  for (int i = 0; i < MAXMODE; i++) {
-    f[i] = slot[b][i];
-#ifdef WDT
-    wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
-#endif //WDT
 
-  }
+  setStdFreq(b);    //@@@ To transfer to ADX
+
+  //@@@  for (int i = 0; i < MAXMODE; i++) {
+  //@@@    f[i] = slot[b][i];
+  //@@@  #ifdef WDT
+  //@@@    wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
+  //@@@  #endif //WDT
+
+
   /*---------------------------------------*
      Update master frequency here
     ---------------------------------------*/
@@ -1601,15 +1626,19 @@ void Freq_assign() {
 
 /*----------------------------------------------------------*
    Band assignment based on selected slot
+   [@@@] just blink the leds since the actual frequency is
+   going to be changed by calling Freq_assign()
   ----------------------------------------------------------*/
-void Band_assign() {
-  resetLED();
-  blinkLED(LED[3 - Band_slot]);
+void Band_assign(bool l) {    //@@@ Change behaviour
 
-  delay(DELAY_WAIT);             //This delay should be changed
+  if (l == true) {
+    resetLED();
+    blinkLED(LED[3 - Band_slot]);
+    delay(DELAY_WAIT);             //This delay should be changed
+  }
 
-  Freq_assign();
-  Mode_assign();
+  //@@@Freq_assign();
+  //@@@Mode_assign();
 
 #ifdef DEBUG
   _INFOLIST("%s mode(%d) slot(%d) f=%ld\n", __func__, mode, Band_slot, freq);
@@ -1705,9 +1734,9 @@ void Band_Select() {
         if (millis() - tnow > RTIME) {
           setLED(WSPR, false);
           setLED(JS8, false);
-          setLED(FT4, false),
-                 setLED(FT8, false),
-                 delay(500);
+          setLED(FT4, false); //@@@ Correct , by ;
+          setLED(FT8, false); //@@@ Correct , by ;
+          delay(500);         //@@@ Correct , by ;
           resetLED();
           delay(500);
         }
@@ -1726,7 +1755,8 @@ void Band_Select() {
 #endif //EE
 
       setLED(TX, false);
-      Band_assign();
+      Band_assign(true);
+      resetBand(Band_slot);
       /*------------------------------------------*
          Update master frequency
         ------------------------------------------*/
@@ -1792,9 +1822,16 @@ void checkMode() {
     _INFOLIST("%s m+(%d)\n", __func__, mode);
 #endif //DEBUG
 
+    //@@@#ifdef EE
+    //@@@    EEPROM.put(EEPROM_MODE, mode);
+    //@@@#endif //EEPROM
+
+    //@@@ change from direct EEPROM write to delayed EEPROM write
 #ifdef EE
-    EEPROM.put(EEPROM_MODE, mode);
-#endif //EEPROM
+    tout = millis();
+    setWord(&SSW, SAVEEE, true);
+#endif //EE
+    //@@@
 
     Mode_assign();
 
@@ -2190,7 +2227,7 @@ void execTerminal() {
 /*----------------------------------------------------------*
    Initialization function from EEPROM
   ----------------------------------------------------------*/
-void initADX() {
+void initTransceiver() {
 
 
 #ifdef EE
@@ -2269,12 +2306,10 @@ void initADX() {
     _INFOLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n", __func__, cal_factor, mode, Band_slot);
 #endif //DEBUG
   }
-
 #endif // EE
 
-  Band_assign();
-  Freq_assign();
-  Mode_assign();
+  resetBand(Band_slot);  //@@@
+
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
   delay(100);
 
@@ -2345,9 +2380,9 @@ void setup()
 
 #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) )
   Serial.begin(BAUD, SERIAL_8N1);
-  #ifndef FT817
-     while(!Serial);
-  #endif //!FT817   
+#ifndef FT817
+  while (!Serial);
+#endif //!FT817   
   Serial.flush();
 #endif //DEBUG or CAT or Terminal
 
@@ -2413,42 +2448,21 @@ void setup()
   _INFOLIST("%s setup_si5351 ok\n", __func__);
 #endif //DEBUG
 
-  initADX();
+  initTransceiver();
 #ifdef DEBUG
-  _INFOLIST("%s initADX ok\n", __func__);
+  _INFOLIST("%s initTransceiver ok\n", __func__);
 #endif //DEBUG
-
-#ifdef QUAD
-  setupQUAD();
-#ifdef DEBUG
-  _INFOLIST("%s setupQUAD ok\n", __func__);
-#endif //DEBUG
-
-  /*---------
-     Initialize the QUAD board with the default band (at slot 0)
-
-  */
-  uint16_t s = Bands[Band_slot];
-  int q = band2QUAD(s);
-  if (q != -1) {
-    setQUAD(q);
-  }
-#ifdef DEBUG
-  _INFOLIST("%s Bands[%d]=%d quad=%d\n", __func__, Band_slot, s, q);
-#endif //DEBUG
-
-#endif //QUAD
-
 
   /*------
-     Check if calibration is needed
+    Check if calibration is needed
   */
 
   if (detectKey(DOWN, LOW, WAIT) == LOW) {
+
 #ifdef DEBUG
     _INFOLIST("%s Calibration mode detected\n", __func__);
 #endif //DEBUG
-#ifdef AUTOCAL       //Automatic calibration
+
     setWord(&QSW, QCAL, true);
     setWord(&QSW, QWAIT, true);
     while (true) {
@@ -2456,27 +2470,30 @@ void setup()
       wdt_reset();
 #endif //WDT
     }
-#endif // AUTOCAL
   }
 
   // trigger counting algorithm on the second core
   rp2040.idleOtherCore();
+
 #ifdef DEBUG
   _INFOLIST("%s Core1 stopped ok\n", __func__);
 #endif //DEBUG
 
   setWord(&QSW, QFSK, true);
   setWord(&QSW, QWAIT, true);
+
 #ifdef DEBUG
   _INFOLIST("%s FSK detection algorithm started QFSK=%s QWAIT=%s ok\n", __func__, BOOL2CHAR(getWord(QSW, QFSK)), BOOL2CHAR(getWord(QSW, QWAIT)));
 #endif //DEBUG
+
   delay(500);
   switch_RXTX(LOW);
+
 #ifdef DEBUG
   _INFOLIST("%s switch_RXTX Low ok\n", __func__);
 #endif //DEBUG
 
-  Mode_assign();
+  //@@@ Mode_assign();
 
 #ifdef WDT
   watchdog_enable(8000, 1);
@@ -2497,17 +2514,19 @@ void setup()
 
 
   /*------------
-     re-start the core1 where the FSK counting is performed
+     re-start the core1 where the FSK counting or ADC zero crossing algorithms
+     are used
   */
   rp2040.restartCore1();
   delay(1);
+
 #ifdef DEBUG
   _INFOLIST("%s Core1 resumed ok\n", __func__);
 #endif //DEBUG
 
 
 #ifdef DEBUG
-  _INFOLIST("%s watchdog configuration completed\n", __func__);
+  _INFOLIST("%s setup configuration completed\n", __func__);
 #endif //DEBUG
 
 }
