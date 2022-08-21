@@ -213,16 +213,19 @@ void resetBand(int bs) {
   #endif //DEBUG
 
   int b=Bands[bs];
+  
   #ifdef DEBUG
      _INFOLIST("%s Retrieved Band_slot=%d band=%d ok\n", __func__,Band_slot,b);
   #endif //DEBUG
   
   int i=band2Slot(b);
+  
   #ifdef DEBUG
      _INFOLIST("%s Retrieved Slot=%d Band_slot=%d ok\n", __func__,i,b);
   #endif //DEBUG
 
   setStdFreq(i);
+  
   #ifdef DEBUG
      _INFOLIST("%s Retrieved Std frequency set f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f[4]=%ld Slot=%d Band_slot=%d ok\n", __func__,f[0],f[1],f[2],f[3],f[4],i,b);
   #endif //DEBUG
@@ -280,7 +283,7 @@ void resetBand(int bs) {
   -----------------------------------------------------------------*/
 int getMode(int s, uint32_t fx) {
   int m = -1;
-  for (int i = 0; i < MAXMODE-2; i++) {
+  for (int i = 0; i < MAXMODE-1; i++) {
     if (int32_t(slot[s][i]/1000) == int32_t(fx/1000)) {
       m = i;
       break;

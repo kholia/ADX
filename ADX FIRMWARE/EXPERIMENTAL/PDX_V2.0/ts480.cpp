@@ -146,7 +146,6 @@ void Command_TX0()
   setWord(&SSW,CATTX,true);
   switch_RXTX(true);
   Serial.print("TX0;");
-
 }
 
 /*------
@@ -160,8 +159,9 @@ void Command_TX2()
   switch_RXTX(true);
   Serial.print("TX0;");
   #ifdef DEBUG
-     _INFOLIST("%s TX2;->TX0;\n",__func__);
-  #endif //DEBUG   
+     _EXCPLIST("%s TX2;->TX0;\n",__func__);
+  #endif //DEBUG 
+    
 
 }
 
@@ -180,6 +180,7 @@ void Command_MD()
   }
 #else
   Serial.print("MD2;");
+  Serial.flush();
 #endif //CW  
 }
 
@@ -189,11 +190,14 @@ void Command_MD()
  * therefore both VFOA and VFOB operates over the 
  * unique VFO
  */
+/*
 void Command_GETFreq() {
 
   freq2digit(freq);
 
-  Serial.print(freq10GHz);
+  sprintf(hi,"FA%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d;",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz);
+  Serial.print(hi);
+  /*
   Serial.print(freq1GHz);
   Serial.print(freq100MHz);
   Serial.print(freq10MHz);
@@ -205,24 +209,28 @@ void Command_GETFreq() {
   Serial.print(freq10Hz);
   Serial.print(freq1Hz);
   Serial.print(";");
-
+  
+  Serial.flush;
 }
-
+*/
 /*--------
  * Specific response header for the FA; command
  */
 void Command_GETFreqA()
 {
-  Serial.print("FA");
-  Command_GETFreq();
+  freq2digit(freq);
+  sprintf(hi,"FA%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d;",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz);
+  Serial.print(hi);
 }
 /*--------
  * Specific response header for the FB; command
  */
 void Command_GETFreqB()
 {
-  Serial.print("FB");
-  Command_GETFreq();
+  freq2digit(freq);
+  sprintf(hi,"FB%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d;",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz);
+  Serial.print(hi);
+
 }
 /*-------
  * Generic response to the FAx; or FBx; command
@@ -245,6 +253,9 @@ void Command_SETFreqB() {
 
   //Command_GETFreqA();               // now RSP with FA
 
+  sprintf(hi,"FB%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d;",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz);
+  Serial.print(hi);
+/*
   Serial.print("FB");
   Serial.print(freq10GHz);
   Serial.print(freq1GHz);
@@ -258,8 +269,12 @@ void Command_SETFreqB() {
   Serial.print(freq10Hz);
   Serial.print(freq1Hz);
   Serial.print(";");
-
-  freq = CalcFreq();
+*/
+  uint32_t fx = CalcFreq();
+  int i=updateFreq(fx);
+  if (i==0) {
+     freq=fx;
+  }
 
 }
 void Command_SETFreqA()
@@ -276,8 +291,9 @@ void Command_SETFreqA()
   freq10Hz   = CATcmd[11] - 48;
   freq1Hz    = CATcmd[12] - 48;
 
-  //Command_GETFreqA();               // now RSP with FA
-
+  sprintf(hi,"FA%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d;",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz);
+  Serial.print(hi);
+/*
   Serial.print("FA");
   Serial.print(freq10GHz);
   Serial.print(freq1GHz);
@@ -291,8 +307,12 @@ void Command_SETFreqA()
   Serial.print(freq10Hz);
   Serial.print(freq1Hz);
   Serial.print(";");
-
-  freq = CalcFreq();
+*/
+  uint32_t fx = CalcFreq();
+  int i=updateFreq(fx);
+  if (i==0) {
+     freq=fx;
+  }
 
 }
 
@@ -305,6 +325,13 @@ void Command_IF()
 {
   freq2digit(freq);
   
+  sprintf(hi,"IF%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d;00000+0000+%01d%01d0%01d%01d%s%s%01d%01d%01d%01d%01d%01d0;",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz,RIT,XIT,MEM1,MEM2,(getWord(SSW,TXON) == true ? "1" : "0"),VFO,SCAN,SIMPLEX,CTCSS,TONE1,TONE2);
+  Serial.print(hi);
+
+/*
+  sprintf(hi,"IF%d%d%d%d%d%d%d%d%d%d%d00000+0000;%d%d%s%s",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz);
+  Serial.print(hi);
+
   Serial.print("IF");
   Serial.print(freq10GHz);        // P1
   Serial.print(freq1GHz);
@@ -338,7 +365,10 @@ void Command_IF()
   Serial.print(TONE2);
   Serial.print("0");              // P15 Always 0
   Serial.print(";");
+*/
+
 }
+
 
 
 
@@ -419,6 +449,9 @@ void rxCATcmd()
       CATcmd[index] = ';';      // Indicate end of command
       CATcmd[index + 1] = '\0'; // terminate the array
       index = 0;                // reset for next CAT command
+      #ifdef DEBUG
+         _INFOLIST("%s <endMarker>\n",__func__);
+      #endif
       newCATcmd = true;
     }
   }
@@ -435,7 +468,7 @@ void analyseCATcmd()
     newCATcmd = false;        // reset for next CAT time, avoid re-entrancy issues
 
     #ifdef DEBUG
-        _TRACELIST("%s CAT->%s\n",__func__,CATcmd);
+        _INFOLIST("%s CAT->%s\n",__func__,CATcmd);
     #endif //DEBUG    
 
     if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';'))              // must be freq get command

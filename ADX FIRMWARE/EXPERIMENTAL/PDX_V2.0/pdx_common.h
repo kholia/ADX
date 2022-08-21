@@ -51,7 +51,8 @@
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //#define WDT             1      //Hardware and TX watchdog enabled
 //#define EE              1      //Save in Flash emulation of EEPROM the configuration
-//#define CAT             1      //Enable CAT protocol over serial port
+#define CAT             1      //Enable CAT protocol over serial port
+#define TS480           1      //
 //#define QUAD            1      //Support for QUAD board
 //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
 
@@ -363,11 +364,15 @@ extern void           setWord(uint8_t* SysWord, uint8_t v, bool val);
 extern uint16_t       changeBand(uint16_t c);
 extern void           Band_assign(bool l);
 extern void           flipATU();
-void                  serialEvent();
-//void                setWord(uint8_t* SysWord, uint8_t v, bool val);
-void                  switch_RXTX(bool t);
-void                  setStdFreq(int i);
-void                  resetBand(int bs);
+extern void           delay_uSec(uint16_t d);
+extern void           serialEvent();
+extern void           switch_RXTX(bool t);
+extern void           setStdFreq(int i);
+extern void           resetBand(int bs);
+
+#ifdef CAT
+extern int            updateFreq(uint32_t fx);
+#endif //CAT
 
 #ifdef QUAD
 extern int            band2QUAD(uint16_t b);

@@ -218,6 +218,16 @@ uint32_t      wdt_tout    = 0;
 //* General purpose procedures and functions needed to implement services through the code      *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 /*-------------------------------------------*
+   delay_uSec
+   A fast delay function
+  -------------------------------------------*/
+void delay_uSec(uint16_t d) {
+
+    uint32_t t = time_us_32() + d;
+    while (t > time_us_32());
+  
+}
+/*-------------------------------------------*
    getWord
    get boolean bitwise pseudo-variable
   -------------------------------------------*/
@@ -267,7 +277,7 @@ uint16_t changeBand(uint16_t c);
 
 boolean newCATcmd = false;
 
-char CATcmd[256] = {'0'};
+char CATcmd[256] = {'\0'};
 
 int  freq10GHz  = 0;
 int  freq1GHz   = 0;
@@ -452,6 +462,10 @@ bool detectKey(uint8_t k, bool v, bool w) {
       if (w == false) {
         return v;
       }
+
+#ifdef DEBUG
+       _INFOLIST("%s <STUCK> about to wait for switch(%d) value(%s) to go up\n", __func__, k, BOOL2CHAR(v));
+#endif //DEBUG
 
       while (true) {
 #ifdef WDT
@@ -885,6 +899,8 @@ void setup1() {
       }
     }
   } //Auto calibration mode
+
+#ifdef JUMPER
 
   //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   //* FSK detection algorithm                                                                                     *
@@ -1331,6 +1347,8 @@ void setup1() {
     } //FSM(QSTATE) infinite loop
 #endif //FSK_ADCZ
   }
+
+#endif //JUMPER  
 }
 /*==========================================================================================================*/
 
@@ -2290,7 +2308,6 @@ void initTransceiver() {
 #endif //TERMINAL
 
 
-    setup_si5351();
 
 #ifdef DEBUG
     _INFOLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n", __func__, cal_factor, mode, Band_slot);
@@ -2298,7 +2315,22 @@ void initTransceiver() {
   }
 #endif // EE
 
+  #ifdef DEBUG
+    _INFOLIST("%s entering setup_si5351()\n",__func__,Band_slot);
+  #endif //DEBUG  
+
+  setup_si5351();
+
+  #ifdef DEBUG
+    _INFOLIST("%s entering resetBand(%d)\n",__func__,Band_slot);
+  #endif //DEBUG  
+  
   resetBand(Band_slot);  //@@@
+
+  #ifdef DEBUG
+    _INFOLIST("%s completed resetBand(%d)\n",__func__,Band_slot);
+  #endif //DEBUG  
+
 
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
   delay(100);
@@ -2351,9 +2383,11 @@ void definePinOut() {
   flipATU();
 #endif //ATUCTL
 
+#ifdef JUMPER
   Wire.setSDA(PDX_I2C_SDA);
   Wire.setSCL(PDX_I2C_SCL);
   Wire.begin();
+#endif //JUMPER
 
 #ifdef DEBUG
   _INFOLIST("%s completed\n",__func__);
@@ -2373,9 +2407,11 @@ void setup()
 
 #if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) )
   Serial.begin(BAUD, SERIAL_8N1);
+  
   #ifndef FT817
   while (!Serial);
   #endif //!FT817 to manage the difference of working with and without a fixed driver
+  
   Serial.flush();
 #endif //DEBUG or CAT or Terminal
 
@@ -2394,6 +2430,7 @@ void setup()
      List firmware properties at run time
   */
 #ifdef DEBUG
+
 #ifdef EE
   _INFOLIST("%s EEPROM Sub-system activated\n", __func__);
 #endif //EE
@@ -2446,7 +2483,11 @@ void setup()
   _INFOLIST("%s blink LED blink dance Ok\n", __func__);
 #endif //DEBUG
 
+/*
+#ifdef JUMPER
   setup_si5351();
+#endif //JUMPER
+*/
 
 #ifdef DEBUG
   _INFOLIST("%s setup_si5351 ok\n", __func__);
@@ -2624,11 +2665,11 @@ void loop()
   uint32_t qTot = 0;
 
   setWord(&SSW, VOX, false);
+
+#ifdef JUMPER
+  
   while ( n > 0 ) {                                //Iterate up to 10 times looking for signal to transmit
 
-    /*-----------------------------*
-       if enabled manage watchdog
-      -----------------------------*/
 #ifdef WDT
     wdt_reset();
 
@@ -2646,7 +2687,8 @@ void loop()
       break;
     }
 #endif //WDT
-    /*-----------------------------------------------------*
+
+    /*-----------------------------------------------------
        frequency measurements are pushed from core1 when
        a sample is available. If no signal is available
        no sample is provided. Thus it's wait for a number
@@ -2750,7 +2792,7 @@ void loop()
     wdt_reset();
 #endif //WDT
   }
-
+#endif //JUMPER
   /*---------------------------------------------------------------------------------*
      when out of the loop no further TX activity is performed, therefore the TX is
      turned off and the board is set into RX mode
