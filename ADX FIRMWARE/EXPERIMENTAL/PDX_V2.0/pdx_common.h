@@ -286,8 +286,8 @@
 #endif
 
 #ifdef INFO
-#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);Serial.flush();
-#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);Serial.flush();
+#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);delay(40);Serial.flush();
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);delay(40);Serial.flush();
 #else
 #define _INFO _NOP
 #define _INFOLIST(...)  _INFO

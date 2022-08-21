@@ -353,7 +353,7 @@ void resetLED() {  // Turn-off all LEDs
   clearLED(LED_BUILTIN);
 
 #ifdef DEBUG
-  _EXCP;
+  _INFO;
 #endif //DEBUG
 }
 
@@ -376,7 +376,11 @@ void rstLED(uint8_t LEDpin, bool clrLED) {     //Turn-on LED {pin}
 */
 void setLED(uint8_t LEDpin, bool clrLED) {     //Turn-on LED {pin}
 
-  (clrLED == true ? resetLED() : void(_NOP));
+  if (clrLED == true) {
+     resetLED();
+  }
+  
+  //(clrLED == true ? resetLED() : void(_NOP));
   setGPIO(LEDpin, HIGH);
 
   if (LEDpin == uint8_t(TX)) {
@@ -384,7 +388,7 @@ void setLED(uint8_t LEDpin, bool clrLED) {     //Turn-on LED {pin}
   }
 
 #ifdef DEBUG
-  _EXCPLIST("%s(%d)\n", __func__, LEDpin);
+  _INFOLIST("%s(%d)\n", __func__, LEDpin);
 #endif //DEBUG
 }
 
@@ -900,8 +904,6 @@ void setup1() {
     }
   } //Auto calibration mode
 
-#ifdef JUMPER
-
   //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   //* FSK detection algorithm                                                                                     *
   //* Automatic input detection algorithm                                                                         *
@@ -1347,8 +1349,6 @@ void setup1() {
     } //FSM(QSTATE) infinite loop
 #endif //FSK_ADCZ
   }
-
-#endif //JUMPER  
 }
 /*==========================================================================================================*/
 
@@ -1468,6 +1468,9 @@ void Mode_assign() {
   }
 #else
   setLED(LED[mode], true);
+  #ifdef DEBUG
+     _INFOLIST("%s LED mode=%d LED=%d true\n",__func__,mode,LED[mode]);
+  #endif //DEBUG   
 #endif //CW
   /*---------------------------------------*
      Change the frequency different from what
@@ -2383,11 +2386,9 @@ void definePinOut() {
   flipATU();
 #endif //ATUCTL
 
-#ifdef JUMPER
   Wire.setSDA(PDX_I2C_SDA);
   Wire.setSCL(PDX_I2C_SCL);
   Wire.begin();
-#endif //JUMPER
 
 #ifdef DEBUG
   _INFOLIST("%s completed\n",__func__);
@@ -2482,12 +2483,6 @@ void setup()
 #ifdef DEBUG
   _INFOLIST("%s blink LED blink dance Ok\n", __func__);
 #endif //DEBUG
-
-/*
-#ifdef JUMPER
-  setup_si5351();
-#endif //JUMPER
-*/
 
 #ifdef DEBUG
   _INFOLIST("%s setup_si5351 ok\n", __func__);
@@ -2666,8 +2661,6 @@ void loop()
 
   setWord(&SSW, VOX, false);
 
-#ifdef JUMPER
-  
   while ( n > 0 ) {                                //Iterate up to 10 times looking for signal to transmit
 
 #ifdef WDT
@@ -2776,6 +2769,10 @@ void loop()
       #ifdef WDT
          wdt_reset();
       #endif //WDT
+      
+      #ifdef CAT
+        serialEvent();
+      #endif //CAT
     }
 
     /*----------------------*
@@ -2783,7 +2780,7 @@ void loop()
       ----------------------*/
 #ifdef CAT
     serialEvent();
-#endif
+#endif //CAT
 
     /*----------------------*
        Sample watchdog reset
@@ -2792,7 +2789,7 @@ void loop()
     wdt_reset();
 #endif //WDT
   }
-#endif //JUMPER
+
   /*---------------------------------------------------------------------------------*
      when out of the loop no further TX activity is performed, therefore the TX is
      turned off and the board is set into RX mode

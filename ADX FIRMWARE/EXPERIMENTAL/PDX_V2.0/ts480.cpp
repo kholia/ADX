@@ -94,6 +94,27 @@ void freq2digit(long int f) {
     freq10GHz = (f/10000000000) % 10;
     return;  
 }
+//*---- Translate ADX mode into the TS-480 coding for mode
+char modeTS480() {
+
+  if (mode==4) {
+     return '3';
+  }
+  return '2';
+
+}
+/*-------
+ * convert the tx status
+ */
+char txstatus() {
+  
+  if (getWord(SSW,CATTX)==false) {
+     return '0';
+  }
+  return '1';
+
+  
+}
 
 /*---------------------------------------------------------------*
  * Commands to manage TRX state (TX/RX)
@@ -325,9 +346,12 @@ void Command_IF()
 {
   freq2digit(freq);
   
-  sprintf(hi,"IF%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d;00000+0000+%01d%01d0%01d%01d%s%s%01d%01d%01d%01d%01d%01d0;",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz,RIT,XIT,MEM1,MEM2,(getWord(SSW,TXON) == true ? "1" : "0"),VFO,SCAN,SIMPLEX,CTCSS,TONE1,TONE2);
+  //sprintf(hi,"IF%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d%01d;00000+0000+%01d%01d0%01d%01d%s%s%01d%01d%01d%01d%01d%01d0;",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz,RIT,XIT,MEM1,MEM2,(getWord(SSW,TXON) == true ? "1" : "0"),VFO,SCAN,SIMPLEX,CTCSS,TONE1,TONE2);
+  //Serial.print(hi);
+  
+  sprintf(hi,"IF%011ld00000+000000000%c%c0000000;",freq,txstatus(),modeTS480());   //Freq & mode the rest is constant (fake)
   Serial.print(hi);
-
+  
 /*
   sprintf(hi,"IF%d%d%d%d%d%d%d%d%d%d%d00000+0000;%d%d%s%s",freq10GHz,freq1GHz,freq100MHz,freq10MHz,freq1MHz,freq100kHz,freq10kHz,freq1kHz,freq100Hz,freq10Hz,freq1Hz);
   Serial.print(hi);
@@ -431,11 +455,13 @@ void rxCATcmd()
   int index = 0;
   char endMarker = ';';
   char data;                    // CAT commands are ASCII characters
-
   while ((Serial.available() > 0) && (newCATcmd == false))
   {
+    
     data = Serial.read();
-
+    
+    if (data == 0x0d || data == 0x0a) { return; }
+    
     if (data != endMarker)
     {
       CATcmd[index] = data;
@@ -449,9 +475,6 @@ void rxCATcmd()
       CATcmd[index] = ';';      // Indicate end of command
       CATcmd[index + 1] = '\0'; // terminate the array
       index = 0;                // reset for next CAT command
-      #ifdef DEBUG
-         _INFOLIST("%s <endMarker>\n",__func__);
-      #endif
       newCATcmd = true;
     }
   }
@@ -466,10 +489,6 @@ void analyseCATcmd()
   if (newCATcmd == true)
   {
     newCATcmd = false;        // reset for next CAT time, avoid re-entrancy issues
-
-    #ifdef DEBUG
-        _INFOLIST("%s CAT->%s\n",__func__,CATcmd);
-    #endif //DEBUG    
 
     if ((CATcmd[0] == 'F') && (CATcmd[1] == 'A') && (CATcmd[2] == ';'))              // must be freq get command
       Command_GETFreqA();

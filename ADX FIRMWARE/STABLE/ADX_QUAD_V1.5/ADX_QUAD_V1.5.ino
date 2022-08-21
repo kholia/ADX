@@ -294,9 +294,9 @@ char hi[80];
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-//#define DEBUG  1
+#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-   //#define INFO  1   //Enable _INFO and _INFOLIST statements
+   #define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
@@ -1140,6 +1140,11 @@ void setFreqCAT() {
   }
   Catbuffer[11]='\0';
   uint32_t fx=(uint32_t)(atol(Catbuffer)*1000/1000);
+
+  #ifdef DEBUG
+     _EXCPLIST("%s freq=%ld fx=%ld mode=%d Band_slot=%d\n",__func__,freq,fx,mode,Band_slot);
+  #endif //DEBUG
+     
   int      b=setSlot(fx);
 
   if (b<0) {
