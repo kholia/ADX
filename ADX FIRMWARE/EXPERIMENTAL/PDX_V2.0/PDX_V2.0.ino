@@ -2349,8 +2349,8 @@ void setup()
   Serial.ignoreDTR();
 #endif
   Serial.begin(BAUD);
-  Serial1.setTX(12);
-  Serial1.setRX(13);
+  Serial1.setTX(UART_TX);
+  Serial1.setRX(UART_RX);
   Serial1.begin(BAUD);
 
 #ifdef DEBUG

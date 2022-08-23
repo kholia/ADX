@@ -257,24 +257,44 @@ void processCATCommand2(byte* cmd) {
 
     case 0x03:
       writeFreq(freq, response); // Put the frequency into the buffer
-      if (isUSB)
-        response[4] = 0x01; // USB
-      else
-        response[4] = 0x00; // LSB
+
+      if (mode >= 0 && mode <= 3) {
+         response[4]= 0x01; //USB
+      }
+
+#ifdef CW
+
+      if (mode == 4) {
+         response[4]=0x02; //CW
+      }
+
+#endif //CW
+        
       Serial.write(response, 5);
       Serial.flush();
       break;
 
     case 0x07: // set mode
-      if (cmd[0] == 0x00 || cmd[0] == 0x03)
-        isUSB = 0;
-      else
-        isUSB = 1;
+         response[0]=0x00;         //pre-empt a response for everybody to be happy with the timming
+         Serial.write(response,1); //If doing nothing for some reason the next status the remote will notice
+         Serial.flush();
 
-      response[0] = 0x00;
-      Serial.write(response, 1);
-      Serial.flush();
-      //freq = f; //No frequency change allowed this way
+#ifdef CW
+         if (cmd[0] == 0x02) {    //if the change is into CW do it, actually won't happen if CW is not enabled
+            if (mode != 0x04) {  //If it is already on CW do nothing
+               mode=0x04;
+               Mode_assign();
+            }    
+            break;
+         }
+#endif //CW      
+
+      if (cmd[0] == 0x01) {       //Accept only USB at this point
+         if (mode >= 0x03) {      //It is on something other than digital modes, perhaps CW
+            mode=0x00;            //When coming from CW reset to FT8
+            Mode_assign();        //This is not a band change therefore only align the frequency if needed
+         }
+      }
       break;
 
     case 0x08: // PTT On
@@ -288,8 +308,11 @@ void processCATCommand2(byte* cmd) {
       }
       Serial.write(response, 1);
       Serial.flush();
-      Serial1.write("PTT ON!\n");
-      Serial1.flush();
+      #ifdef DEBUG
+         _serial1("PTT ON!\n");
+         //Serial1.write("PTT ON!\n");
+         //Serial1.flush();
+      #endif //DEBUG   
       break;
 
     case 0x88: // PTT OFF
@@ -301,8 +324,11 @@ void processCATCommand2(byte* cmd) {
       response[0] = 0;
       Serial.write(response, 1);
       Serial.flush();
-      Serial1.write("PTT OFF!\n");
-      Serial1.flush();
+      #ifdef DEBUG
+         _serial1("PTT OFF\n");
+      #endif //DEBUG   
+      //Serial1.write("PTT OFF!\n");
+      //Serial1.flush();
       break;
 
     case 0x81:

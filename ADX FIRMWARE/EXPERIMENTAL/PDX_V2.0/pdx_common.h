@@ -118,8 +118,8 @@
 
 
 /*---
- * UART Pin
- */
+   UART Pin
+*/
 #define UART_TX    12
 #define UART_RX    13
 
@@ -264,9 +264,9 @@
    Trace and debugging macros (only enabled if DEBUG is set
  *****************************************************************/
 
-// #define DEBUG  1
+//#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-#define INFO  1   //Enable _INFO and _INFOLIST statements
+//#define INFO  1   //Enable _INFO and _INFOLIST statements
 //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
 //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
@@ -277,11 +277,12 @@
 #define _DEBUG           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);
 #define _DEBUGLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);
 #define print2(x,y) (Serial.print(x), Serial.println(y))
-
+#define _serial1(...)   Serial1.write(__VA_ARGS__);Serial1.flush();
 #else
 #define _DEBUG _NOP
 #define _DEBUGLIST(...)  _DEBUG
 #define print2(x,y) _DEBUG
+#define _serial1(...)   _DEBUG
 #endif
 
 #ifdef TRACE

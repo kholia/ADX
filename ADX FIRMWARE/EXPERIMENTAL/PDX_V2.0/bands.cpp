@@ -379,16 +379,19 @@ int updateFreq(uint32_t fx) {
      digital modes, this is needed because the LED on
      the board needs to be consistently lit.
   */
-  
-  int m = getMode(h,fx);
-      if (m == -1) {
+  int m=0;
+  if (mode != 4) {  
+     m = getMode(h,fx);
+     if (m == -1) {
 
-#ifdef DEBUG
-         _INFOLIST("%s Invalid mode definition Band ptr=%d mode=%d freq=%ld\n", __func__, i, m, fx);
-#endif //DEBUG
-         return m;    //this means a digital mode has not been recognized
-       }
-
+        #ifdef DEBUG
+            _INFOLIST("%s Invalid mode definition Band ptr=%d mode=%d freq=%ld\n", __func__, i, m, fx);
+        #endif //DEBUG
+        return m;    //this means a digital mode has not been recognized
+     }
+  } else {
+    m=4;   //Force to stay in CW
+  }
 #ifdef QUAD
   /*---------
      Now, if the QUAD filter is supported, based on the
