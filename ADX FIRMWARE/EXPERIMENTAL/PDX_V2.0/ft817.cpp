@@ -216,7 +216,7 @@ void catReadEEPRom(void)
   Serial.flush();
 }
 
-void setFrequency(unsigned long f);
+//void setFrequency(unsigned long f);
 
 void processCATCommand2(byte* cmd) {
   byte response[5];
@@ -243,6 +243,7 @@ void processCATCommand2(byte* cmd) {
       if (updateFreq(freq) != 0 ) {
          freq=fx;
       }
+      switch_RXTX(LOW);
       }
       break;
 
