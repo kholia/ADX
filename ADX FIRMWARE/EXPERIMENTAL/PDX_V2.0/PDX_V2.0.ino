@@ -1441,9 +1441,7 @@ void Mode_assign() {
     setLED(LED[mode], true);
   }
 #else
-  
   setLED(LED[mode], true);
-  
 #ifdef DEBUG
   _INFOLIST("%s LED mode=%d LED=%d true\n", __func__, mode, LED[mode]);
 #endif //DEBUG
@@ -1526,11 +1524,30 @@ uint8_t band2Slot(uint16_t b) {
   return s;
 
 }
+/*-----------------------------------------------------------*
+   setStdFreq
+   Set all standard frequencies for the band and transfer to
+   the f[] array
+   @@@ To implement on ADX
+*/
+void setStdFreq(int k) {
+
+  for (int i = 0; i < MAXMODE - 1; i++) {
+    f[i] = slot[k][i];
+#ifdef WDT
+    wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
+#endif //WDT
+  }
+
+#ifdef DEBUG
+  _INFOLIST("%s Std frequency set f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f[4]=%ld Band_slot=%d mode=%d ok\n", __func__, f[0], f[1], f[2], f[3], f[4], Band_slot, mode);
+#endif //DEBUG
+
+}
 /*----------------------------------------------------------*
    Frequency assign (band dependant)
    @@@ Deprecated, no longer used has to be removed form ADX
   ----------------------------------------------------------*/
-/*  
 void Freq_assign() {
   uint16_t Band = Bands[Band_slot];
   uint8_t  b = band2Slot(Band);
@@ -1543,9 +1560,16 @@ void Freq_assign() {
   //@@@    wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
   //@@@  #endif //WDT
 
+
+  /*---------------------------------------*
+     Update master frequency here
+    ---------------------------------------*/
   freq = f[mode];      //Actual frequency is set depending on the selected mode
 
 #ifdef QUAD
+  /*---------------------------------------*
+     Update filter selection for QUAD
+    ---------------------------------------*/
   int q = band2QUAD(Band);
   if (q != -1) {
     setQUAD(b);
@@ -1556,13 +1580,23 @@ void Freq_assign() {
 #endif //PA and LPF daughter board defined
 
 #ifdef ATUCTL
+  /*---------------------------------------*
+     Update ATU control
+    ---------------------------------------*/
   flipATU();
 
 #endif //ATUCTL
+  /*---------------------------------------*
+     Flag EEPROM to be updated
+    ---------------------------------------*/
 #ifdef EE
   tout = millis();
   setWord(&SSW, SAVEEE, true);
 #endif //EE
+
+  /*---------------------------------------*
+     Change the DDS frequency
+    ---------------------------------------*/
   switch_RXTX(LOW);
   setWord(&SSW, VOX, false);
   setWord(&SSW, TXON, false);
@@ -1574,7 +1608,7 @@ void Freq_assign() {
   _INFOLIST("%s B(%d) b[%d] m[%d] slot[%d] f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f=%ld\n", __func__, Band, b, mode, Band_slot, f[0], f[1], f[2], f[3], freq);
 #endif //DEBUG
 }
-*/
+
 /*----------------------------------------------------------*
    Band assignment based on selected slot
    [@@@] just blink the leds since the actual frequency is
@@ -2346,9 +2380,13 @@ void setup()
      has been given proper initialization based on the protocol used
     -----*/
 
+//#define HAVE_USB_PATCHES 1
+#ifdef HAVE_USB_PATCHES
+  Serial.ignoreDTR();
+#endif
   Serial.begin(BAUD);
-  Serial1.setTX(UART_TX);
-  Serial1.setRX(UART_RX);
+  Serial1.setTX(12);
+  Serial1.setRX(13);
   Serial1.begin(BAUD);
 
 #ifdef DEBUG
