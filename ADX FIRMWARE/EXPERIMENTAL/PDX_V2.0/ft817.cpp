@@ -213,6 +213,7 @@ void catReadEEPRom(void)
 
   // send the data
   Serial.write(cat, 2);
+  Serial.flush();
 }
 
 void setFrequency(unsigned long f);
@@ -231,11 +232,11 @@ void processCATCommand2(byte* cmd) {
       freq = f;
       response[0] = 0;
       Serial.write(response, 1);
+      Serial.flush();
       b = setSlot(freq);
       // If a band change is detected switch to the new band
       if (b != Band_slot) { // band change
         Band_slot = b;
-        Freq_assign();
       }
       // Properly register the mode if the frequency implies a WSJT mode change
       // (FT8,FT4,JS8,WSPR)
@@ -283,6 +284,7 @@ void processCATCommand2(byte* cmd) {
       else
         response[4] = 0x00; // LSB
       Serial.write(response, 5);
+      Serial.flush();
       break;
 
     case 0x07: // set mode
@@ -292,6 +294,7 @@ void processCATCommand2(byte* cmd) {
         isUSB = 1;
       response[0] = 0x00;
       Serial.write(response, 1);
+      Serial.flush();
       // setFrequency(frequency);
       freq = f;
       break;
@@ -306,6 +309,9 @@ void processCATCommand2(byte* cmd) {
         response[0] = 0xf0;
       }
       Serial.write(response, 1);
+      Serial.flush();
+      Serial1.write("PTT ON!\n");
+      Serial1.flush();
       break;
 
     case 0x88: // PTT OFF
@@ -316,12 +322,16 @@ void processCATCommand2(byte* cmd) {
       }
       response[0] = 0;
       Serial.write(response, 1);
+      Serial.flush();
+      Serial1.write("PTT OFF!\n");
+      Serial1.flush();
       break;
 
     case 0x81:
       // toggle the VFOs
       response[0] = 0;
       Serial.write(response, 1);
+      Serial.flush();
       break;
 
     case 0xBB: // Read FT-817 EEPROM Data
@@ -333,6 +343,7 @@ void processCATCommand2(byte* cmd) {
       // as we don't support ctcss, etc.
       response[0] = 0x09;
       Serial.write(response, 1);
+      Serial.flush();
       break;
 
     case 0xf7:
@@ -345,12 +356,14 @@ void processCATCommand2(byte* cmd) {
                       (0 << 4) + // dummy data
                       0x08; // P0 meter data
         Serial.write(response, 1);
+        Serial.flush();
       }
       break;
 
     default:
       response[0] = 0x00;
       Serial.write(response[0]);
+      Serial.flush();
   }
 
   insideCat = false;

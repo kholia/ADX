@@ -1,0 +1,20 @@
+name: Linux build
+on: [push]
+
+jobs:
+  run_tests:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run script file
+      run: |
+         chmod +x ./build.sh
+         ./build.sh
+      shell: bash
+
+    - name: Archive production artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: firmware
+        path: |
+          PDX_V2.0.ino.uf2
