@@ -2380,6 +2380,10 @@ void setup()
      has been given proper initialization based on the protocol used
     -----*/
 
+//#define HAVE_USB_PATCHES 1
+#ifdef HAVE_USB_PATCHES
+  Serial.ignoreDTR();
+#endif
   Serial.begin(BAUD);
   Serial1.setTX(12);
   Serial1.setRX(13);
