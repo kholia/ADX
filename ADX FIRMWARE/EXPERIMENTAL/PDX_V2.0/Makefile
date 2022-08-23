@@ -16,4 +16,4 @@ install_arduino_cli:
 	curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=~/.local/bin sh
 
 format:
-	astyle --options=formatter.conf PDX_V2.0.ino bands.cpp *.cpp
+	astyle --options=formatter.conf PDX_V2.0.ino bands.cpp *.cpp *.h
