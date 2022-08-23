@@ -233,6 +233,8 @@ void processCATCommand2(byte* cmd) {
       response[0] = 0;
       Serial.write(response, 1);
       Serial.flush();
+
+/*      
       b = setSlot(freq);
       // If a band change is detected switch to the new band
       if (b != Band_slot) { // band change
@@ -268,6 +270,9 @@ void processCATCommand2(byte* cmd) {
         setQUAD(x);
       }
 #endif //QUAD
+
+*/
+
       break;
 
     case 0x02:
