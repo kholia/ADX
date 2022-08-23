@@ -191,7 +191,6 @@ const uint8_t LED[4]    = {FT8, FT4, JS8, WSPR}; //A 5th virtual mode is handled
 uint8_t       button[3]   = {0, 0, 0};
 unsigned long downTimer[3] = {PUSHSTATE, PUSHSTATE, PUSHSTATE};
 
-
 double fsequences[NFS]; // Ring buffer for communication across cores
 int nfsi   = 0;
 double pfo = 0; // Previous output frequency
@@ -204,7 +203,6 @@ double pfo = 0; // Previous output frequency
 #ifdef EE
 uint16_t eeprom_tout = EEPROM_TOUT;
 #endif //EE
-
 
 #if (defined(ATUCTL) || defined(WDT))
 #endif //Either ATU or WDT has been defined
@@ -223,9 +221,9 @@ uint32_t      wdt_tout    = 0;
   -------------------------------------------*/
 void delay_uSec(uint16_t d) {
 
-    uint32_t t = time_us_32() + d;
-    while (t > time_us_32());
-  
+  uint32_t t = time_us_32() + d;
+  while (t > time_us_32());
+
 }
 /*-------------------------------------------*
    getWord
@@ -272,30 +270,6 @@ void Mode_assign();           //advanced definition for compilation purposes
 void Band_assign(bool l);
 uint16_t changeBand(uint16_t c);
 
-
-#ifdef TS480
-
-boolean newCATcmd = false;
-
-char CATcmd[256] = {'\0'};
-
-int  freq10GHz  = 0;
-int  freq1GHz   = 0;
-int  freq100MHz = 0;
-int  freq10MHz  = 0;
-int  freq1MHz   = 7;
-int  freq100kHz = 0;
-int  freq10kHz  = 7;
-int  freq1kHz   = 4;
-int  freq100Hz  = 0;
-int  freq10Hz   = 0;
-int  freq1Hz    = 0;
-
-int  RIT, XIT, MEM1, MEM2, RXSTAT, TXSTAT, VFO, SCAN, SIMPLEX, CTCSS, TONE1, TONE2 = 0;
-
-int  MODE = 2;
-
-#endif //TS480
 #endif //CAT
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -377,9 +351,9 @@ void rstLED(uint8_t LEDpin, bool clrLED) {     //Turn-on LED {pin}
 void setLED(uint8_t LEDpin, bool clrLED) {     //Turn-on LED {pin}
 
   if (clrLED == true) {
-     resetLED();
+    resetLED();
   }
-  
+
   //(clrLED == true ? resetLED() : void(_NOP));
   setGPIO(LEDpin, HIGH);
 
@@ -468,7 +442,7 @@ bool detectKey(uint8_t k, bool v, bool w) {
       }
 
 #ifdef DEBUG
-       _INFOLIST("%s <STUCK> about to wait for switch(%d) value(%s) to go up\n", __func__, k, BOOL2CHAR(v));
+      _INFOLIST("%s <STUCK> about to wait for switch(%d) value(%s) to go up\n", __func__, k, BOOL2CHAR(v));
 #endif //DEBUG
 
       while (true) {
@@ -1468,9 +1442,9 @@ void Mode_assign() {
   }
 #else
   setLED(LED[mode], true);
-  #ifdef DEBUG
-     _INFOLIST("%s LED mode=%d LED=%d true\n",__func__,mode,LED[mode]);
-  #endif //DEBUG   
+#ifdef DEBUG
+  _INFOLIST("%s LED mode=%d LED=%d true\n", __func__, mode, LED[mode]);
+#endif //DEBUG
 #endif //CW
   /*---------------------------------------*
      Change the frequency different from what
@@ -1558,7 +1532,7 @@ uint8_t band2Slot(uint16_t b) {
 */
 void setStdFreq(int k) {
 
-  for (int i = 0; i < MAXMODE-1; i++) {
+  for (int i = 0; i < MAXMODE - 1; i++) {
     f[i] = slot[k][i];
 #ifdef WDT
     wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
@@ -1566,7 +1540,7 @@ void setStdFreq(int k) {
   }
 
 #ifdef DEBUG
-  _INFOLIST("%s Std frequency set f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f[4]=%ld Band_slot=%d mode=%d ok\n", __func__,f[0],f[1],f[2],f[3],f[4],Band_slot,mode);
+  _INFOLIST("%s Std frequency set f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f[4]=%ld Band_slot=%d mode=%d ok\n", __func__, f[0], f[1], f[2], f[3], f[4], Band_slot, mode);
 #endif //DEBUG
 
 }
@@ -2318,21 +2292,21 @@ void initTransceiver() {
   }
 #endif // EE
 
-  #ifdef DEBUG
-    _INFOLIST("%s entering setup_si5351()\n",__func__,Band_slot);
-  #endif //DEBUG  
+#ifdef DEBUG
+  _INFOLIST("%s entering setup_si5351()\n", __func__, Band_slot);
+#endif //DEBUG
 
   setup_si5351();
 
-  #ifdef DEBUG
-    _INFOLIST("%s entering resetBand(%d)\n",__func__,Band_slot);
-  #endif //DEBUG  
-  
+#ifdef DEBUG
+  _INFOLIST("%s entering resetBand(%d)\n", __func__, Band_slot);
+#endif //DEBUG
+
   resetBand(Band_slot);  //@@@
 
-  #ifdef DEBUG
-    _INFOLIST("%s completed resetBand(%d)\n",__func__,Band_slot);
-  #endif //DEBUG  
+#ifdef DEBUG
+  _INFOLIST("%s completed resetBand(%d)\n", __func__, Band_slot);
+#endif //DEBUG
 
 
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
@@ -2391,7 +2365,7 @@ void definePinOut() {
   Wire.begin();
 
 #ifdef DEBUG
-  _INFOLIST("%s completed\n",__func__);
+  _INFOLIST("%s completed\n", __func__);
 #endif //DEBUG
 
 }
@@ -2406,15 +2380,10 @@ void setup()
      has been given proper initialization based on the protocol used
     -----*/
 
-#if (defined(DEBUG) || defined(CAT) || defined(TERMINAL) )
-  Serial.begin(BAUD, SERIAL_8N1);
-  
-  #ifndef FT817
-  while (!Serial);
-  #endif //!FT817 to manage the difference of working with and without a fixed driver
-  
-  Serial.flush();
-#endif //DEBUG or CAT or Terminal
+  Serial.begin(BAUD);
+  Serial1.setTX(12);
+  Serial1.setRX(13);
+  Serial1.begin(BAUD);
 
 #ifdef DEBUG
   const char * proc = "RP2040";
@@ -2473,7 +2442,7 @@ void setup()
 #endif //DEBUG
 
   definePinOut();
-  
+
 #ifdef DEBUG
   _INFOLIST("%s definePinOut() ok\n", __func__);
 #endif //DEBUG
@@ -2489,7 +2458,7 @@ void setup()
 #endif //DEBUG
 
   initTransceiver();
-  
+
 #ifdef DEBUG
   _INFOLIST("%s initTransceiver ok\n", __func__);
 #endif //DEBUG
@@ -2766,13 +2735,13 @@ void loop()
       uint32_t tcnt = time_us_32() + uint32_t(FSK_IDLE);
       while (time_us_32() < tcnt);
       n--;
-      #ifdef WDT
-         wdt_reset();
-      #endif //WDT
-      
-      #ifdef CAT
-        serialEvent();
-      #endif //CAT
+#ifdef WDT
+      wdt_reset();
+#endif //WDT
+
+#ifdef CAT
+      serialEvent();
+#endif //CAT
     }
 
     /*----------------------*

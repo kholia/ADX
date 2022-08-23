@@ -42,8 +42,8 @@
 #define PICODISPLAY 1
 #define wdt_reset() watchdog_update()
 
-//#define FT817      1
-#define TS480      1
+#define FT817      1
+//#define TS480      1
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                               (P)ico (D)igital (X)ceiver                                    *
@@ -52,7 +52,6 @@
 //#define WDT             1      //Hardware and TX watchdog enabled
 //#define EE              1      //Save in Flash emulation of EEPROM the configuration
 #define CAT             1      //Enable CAT protocol over serial port
-#define TS480           1      //
 //#define QUAD            1      //Support for QUAD board
 //#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
 
@@ -158,7 +157,7 @@
 /*----------------------------------------------------------------*
    Miscellaneour definitions
    ---------------------------------------------------------------*/
-#define BAUD             19200
+#define BAUD            38400
 
 #define INT0                0
 #define INT1                1
@@ -257,11 +256,11 @@
    Trace and debugging macros (only enabled if DEBUG is set
  *****************************************************************/
 
-#define DEBUG  1
+// #define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-   #define INFO  1   //Enable _INFO and _INFOLIST statements
-   //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
-   //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
+#define INFO  1   //Enable _INFO and _INFOLIST statements
+//#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
+//#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
 /*-------------------------------------------------------------------------*
    Define Info,Exception and Trace macros (replaced by NOP if not enabled)
@@ -339,8 +338,8 @@ uint16_t cwshift = CWSHIFT;
 //*                Definitions shared by all sub-systems
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=
 /*------------
- * Memory references
- */
+   Memory references
+*/
 extern char           hi[80];
 extern uint8_t        SSW;
 extern unsigned long  freq;
@@ -350,9 +349,9 @@ extern uint16_t       mode;
 extern const uint16_t Bands[BANDS];
 
 /*-----------
- * Function references
- * 
- */
+   Function references
+
+*/
 //@@@extern void           Freq_assign();
 extern int            getBand(uint32_t f);
 extern void           Mode_assign();
