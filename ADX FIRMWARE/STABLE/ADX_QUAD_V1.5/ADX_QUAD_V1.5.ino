@@ -294,9 +294,9 @@ char hi[80];
 /*****************************************************************
  * Trace and debugging macros (only enabled if DEBUG is set      *
  *****************************************************************/
-#define DEBUG  1
+//#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-   #define INFO  1   //Enable _INFO and _INFOLIST statements
+   //#define INFO  1   //Enable _INFO and _INFOLIST statements
    //#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
    //#define TRACE 1   //Enable _TRACE and _TRACELIST statements
 #endif //DEBUG
