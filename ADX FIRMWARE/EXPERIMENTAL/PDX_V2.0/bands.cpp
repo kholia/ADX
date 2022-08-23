@@ -143,8 +143,6 @@ int getBand(uint32_t fx) {
     b = 15;
   }
 
-  //@@@ Fix for ADX too
-
   if (fx >= 24890000 && fx < 24990000) {
     b = 12;
   }
@@ -184,6 +182,7 @@ int findSlot(uint16_t band) {
    set a slot consistent with the frequency, do not if not
    supported
   -------------------------------------------------------------*/
+/*
 int setSlot(uint32_t f) {
   int b = getBand(f);
   if (b == -1) {
@@ -197,7 +196,7 @@ int setSlot(uint32_t f) {
 
   return s;
 }
-
+*/
 /*-------------------------------------------------------*
    resetBand
    setup the band after a valid Band_slot has been set
@@ -269,7 +268,26 @@ void resetBand(int bs) {
   _INFOLIST("%s Band_slot=%d Band=%d slot=%d f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f[4]=%ld mode=%d freq=%ld\n", __func__, bs, b, i, f[0], f[1], f[2], f[3], f[4], mode, freq);
 #endif //DEBUG
 }
+/*-----------------------------------------------------------*
+   setStdFreq
+   Set all standard frequencies for the band and transfer to
+   the f[] array
+   @@@ To implement on ADX
+*/
+void setStdFreq(int k) {
 
+  for (int i = 0; i < MAXMODE - 1; i++) {
+    f[i] = slot[k][i];
+#ifdef WDT
+    wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
+#endif //WDT
+  }
+
+#ifdef DEBUG
+  _INFOLIST("%s Std frequency set f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f[4]=%ld Band_slot=%d mode=%d ok\n", __func__, f[0], f[1], f[2], f[3], f[4], Band_slot, mode);
+#endif //DEBUG
+
+}
 /*-----------------------------------------------------------------*
    getMode @@@
    given the slot in the slot[][] array and the frequency returns
@@ -279,11 +297,10 @@ void resetBand(int bs) {
    tuning space (the space to scan is MAXMODE-2 (0.1.2.3)
   -----------------------------------------------------------------*/
 int getMode(int s, uint32_t fx) {
-  int m = -1;
+
   for (int i = 0; i < MAXMODE - 1; i++) {
     if (int32_t(slot[s][i] / 1000) == int32_t(fx / 1000)) {
-      m = i;
-      break;
+      return i;
     }
   }
 
@@ -291,7 +308,7 @@ int getMode(int s, uint32_t fx) {
   _INFOLIST("%s slot=%d f=%ld m=%d\n", __func__, s, fx, m);
 #endif //DEBUG
 
-  return m;
+  return -1;
 }
 
 /*-----------------------------------------------------------*
@@ -304,14 +321,9 @@ int getMode(int s, uint32_t fx) {
    anything.
    The original frequency change structure of ADX (Freq_assign())
    is deprecated.
+   Returns 0 if successful and -1 if not
 */
 int updateFreq(uint32_t fx) {
-  /*--------
-     if the frequency isn't really changed leave
-  */
-  if (fx == freq) {
-    return 0;
-  }
 
   /*-------
      What band this frequency belongs to?
@@ -347,13 +359,14 @@ int updateFreq(uint32_t fx) {
      digital modes supported plus the QRP calling frequency
      for CW on each band
   */
-  int i = band2Slot(b);
-  if (i == -1) {
+  int h = band2Slot(b);
+  if (h == -1) {
+
 #ifdef DEBUG
-    _INFOLIST("%s Invalid band definition Band_slot=%d Band=%d freq=%ld\n", __func__, b, i, fx);
+    _INFOLIST("%s Invalid band definition Band_slot=%d Band=%d freq=%ld\n", __func__, b, h, fx);
 #endif //DEBUG
 
-    return i;   //no entry on slog[][] found
+    return h;   //no entry on slog[][] found
   }
 
   /*-------
@@ -366,22 +379,15 @@ int updateFreq(uint32_t fx) {
      digital modes, this is needed because the LED on
      the board needs to be consistently lit.
   */
-  int m = 0;
-  if (mode <= MAXMODE - 2) {
+  
+  int m = getMode(h,fx);
+      if (m == -1) {
 
-    m = getMode(i, fx);
-    if (m == -1) {
 #ifdef DEBUG
-      _INFOLIST("%s Invalid mode definition Band ptr=%d mode=%d freq=%ld\n", __func__, i, m, fx);
+         _INFOLIST("%s Invalid mode definition Band ptr=%d mode=%d freq=%ld\n", __func__, i, m, fx);
 #endif //DEBUG
-      return m;    //this means a digital mode has not been recognized
-    }
-#ifdef CW
-  }
-  else { //here is CW mode, so basically the mode can not be changed by merely changing the frequency
-    m = mode;
-#endif //CW
-  }
+         return m;    //this means a digital mode has not been recognized
+       }
 
 #ifdef QUAD
   /*---------
@@ -392,11 +398,12 @@ int updateFreq(uint32_t fx) {
   */
   int q = band2QUAD(b);
   if (q == -1) {
+    
 #ifdef DEBUG
-    _INFOLIST("%s Invalid QUAD filter Band=%d QUAD=%d freq=%ld\n", __func__, b, q, fx);
+      _INFOLIST("%s Invalid QUAD filter Band=%d QUAD=%d freq=%ld\n", __func__, b, q, fx);
 #endif //DEBUG
 
-    return -1;   //this would be odd, but still possible, no filter support
+     return -1;   //this would be odd, but still possible, no filter support
   }
 #endif //QUAD
 
@@ -405,33 +412,54 @@ int updateFreq(uint32_t fx) {
      is legit and can be supported, so let´s commit to it
      If a band change is detected then setup the transceiver to the new
      band.
+     b contains the band {80,..,10}
+     s contains the new Band_slot {0,..,3}
+     h contains the index on the slot[][] structure {0,..,9}
+     m contains the mode {0..3}
+     q contains the QUAD filter index {0,..,3}
   */
+
+
+/*---
+ * Check if the band changes with the new frequency
+ */
+  
   if (s != Band_slot) {
-    Band_assign(false);     //Set everything but don't waste time with LED lighting dance
+     Band_slot=s;
+     Band_assign(false);     //Set everything but don't waste time with LED lighting dance
+
 #ifdef QUAD
-    setQUAD(q);          //Set the filter before any TX is made
+     setQUAD(q);          //Set the filter before any TX is made
 #endif //QUAD
+
 #ifdef ATUCTL
     flipATU();           //Reset the ATU if present
 #endif//
     /*-------
        Prepare the frequency set for different modes in the new band
     */
-    for (int j = 0; j < MAXMODE - 3; j++) {
-      f[j] = slot[b][j];
-#ifdef WDT
-      wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
-#endif //WDT
+    mode=m;
+    setStdFreq(h);
 
-    }
-    Band_slot = s;
-#ifdef EE
-    tout = millis();
-    setWord(&SSW, SAVEEE, true);
-#endif //EE
-#ifdef DEBUG
-    _INFOLIST("%s Band changed Band_slot=%d f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld freq=%ld\n", __func__, s, f[0], f[1], f[2], f[3], fx);
-#endif //DEBUG
+    /*---
+     * Change the mode, primarily the LED associated to it
+     */
+    Mode_assign();
+    /*---
+     * Band_slot and mode are attributes stored in EEPROM so schedule an EEPROM
+     * update
+     */
+     #ifdef EE
+        tout = millis();
+        setWord(&SSW, SAVEEE, true);
+     #endif //EE
+
+     /*---
+      * Force a clock change with the new frequency
+      */
+     switch_RXTX(LOW);
+     return 0;
+
   }
   /*---------------
      At this point either no band change has been made or all the setup for a band
@@ -439,45 +467,21 @@ int updateFreq(uint32_t fx) {
      unless it's CW where the mode has been set already
   */
   if (m != mode) {
-    mode = m;
-    Mode_assign();       //Mode change
-#ifdef EE
-    tout = millis();
-    setWord(&SSW, SAVEEE, true);
-#endif //EE
-#ifdef DEBUG
-    _INFOLIST("%s Modechanged Band_slot=%d mode=%d freq=%ld\n", __func__, s, mode, fx);
-#endif //DEBUG
+     mode = m;
+     Mode_assign();       //Mode change
+
+     #ifdef EE
+         tout = millis();
+         setWord(&SSW, SAVEEE, true);
+     #endif //EE
+     
+     #ifdef DEBUG
+         _INFOLIST("%s Modechanged Band_slot=%d mode=%d freq=%ld\n", __func__, s, mode, fx);
+     #endif //DEBUG
   }
 
-  /*---------------
-     now make the frequency change happen
-
-  */
-  if (mode <= MAXMODE - 3) {
-
-    if (freq != f[mode]) {
-      freq = f[mode];
-#ifdef DEBUG
-      _INFOLIST("%s Frequency assigned Band_slot=%d mode=%d freq=%ld\n", __func__, Band_slot, mode, freq);
-#endif //DEBUG
-      switch_RXTX(LOW);
-    }
-  }
-#ifdef CW
-  else {
-    if (freq != fx) {
-      freq = fx;
-#ifdef DEBUG
-      _INFOLIST("%s Frequency [CW] assigned Band_slot=%d mode=%d freq=%ld\n", __func__, Band_slot, mode, freq);
-#endif //DEBUG
-      switch_RXTX(LOW);
-    }
-  }
-#endif //CW
-#ifdef DEBUG
-  _INFOLIST("%s Band_slot=%d mode=%d freq=%ld\n", __func__, Band_slot, mode, f[mode]);
-#endif //DEBUG
-
+  /*----
+   * This means the change to the frequency can be considered committed
+   */
   return 0;
 }

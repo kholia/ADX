@@ -226,58 +226,30 @@ void processCATCommand2(byte* cmd) {
 
   switch (cmd[4]) {
     case 0x01:
+      {
       // set frequency
       f = readFreq(cmd);
-      // setFrequency(f);
+      uint32_t fx=freq;
       freq = f;
       response[0] = 0;
       Serial.write(response, 1);
       Serial.flush();
-
-/*      
-      b = setSlot(freq);
-      // If a band change is detected switch to the new band
-      if (b != Band_slot) { // band change
-        Band_slot = b;
+      /*----- 
+       * Commit the frequency change if it's a valid one
+       * otherwise revert the change and let the caller handle
+       * the error as the newx query for frequency will return
+       * the old one
+       */
+      if (updateFreq(freq) != 0 ) {
+         freq=fx;
       }
-      // Properly register the mode if the frequency implies a WSJT mode change
-      // (FT8,FT4,JS8,WSPR)
-      i = getBand(freq);
-      if (i < 0) {
-        break;
       }
-      j = findSlot(i);
-      if (j < 0 || j > 3) {
-        break;
-      }
-      k = Bands[j];
-      q = band2Slot(k);
-      m = getMode(q, freq);
-      break;
-#ifdef DEBUG
-      _INFOLIST("%s f=%ld band=%d slot=%d Bands=%d b2s=%d m=%d mode=%d\n", __func__, freq, i, j, k, q, m, mode);
-#endif //DEBUG
-      if (getWord(SSW, CWMODE) == false) {
-        if (mode != m) {
-          mode = m;
-          Mode_assign();
-        }
-      }
-      // If enabled change filter from the LPF filter bank
-#ifdef QUAD // Set the PA & LPF filter board settings if defined
-      x = band2QUAD(k);
-      if (x != -1) {
-        setQUAD(x);
-      }
-#endif //QUAD
-
-*/
-
       break;
 
     case 0x02:
       // split on
       break;
+
     case 0x82:
       // split off
       break;
@@ -297,11 +269,11 @@ void processCATCommand2(byte* cmd) {
         isUSB = 0;
       else
         isUSB = 1;
+
       response[0] = 0x00;
       Serial.write(response, 1);
       Serial.flush();
-      // setFrequency(frequency);
-      freq = f;
+      //freq = f; //No frequency change allowed this way
       break;
 
     case 0x08: // PTT On
@@ -333,7 +305,7 @@ void processCATCommand2(byte* cmd) {
       break;
 
     case 0x81:
-      // toggle the VFOs
+      // toggle the VFOs, really a fake operation as the board doesn't has a dual VFO at this point
       response[0] = 0;
       Serial.write(response, 1);
       Serial.flush();
@@ -366,9 +338,11 @@ void processCATCommand2(byte* cmd) {
       break;
 
     default:
+      {
       response[0] = 0x00;
       Serial.write(response[0]);
       Serial.flush();
+      }
   }
 
   insideCat = false;

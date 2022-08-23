@@ -115,6 +115,14 @@
 */
 #define PDX_I2C_SDA    16      //I2C SDA
 #define PDX_I2C_SCL    17      //I2C SCL
+
+
+/*---
+ * UART Pin
+ */
+#define UART_TX    12
+#define UART_RX    13
+
 /*---
     Input lines
 */
@@ -353,6 +361,7 @@ extern const uint16_t Bands[BANDS];
 
 */
 //@@@extern void           Freq_assign();
+extern void           setLED(uint8_t LEDpin, bool clrLED);
 extern int            getBand(uint32_t f);
 extern void           Mode_assign();
 extern int            findSlot(uint16_t i);
