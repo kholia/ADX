@@ -113,6 +113,56 @@ void setupQUAD() {
 /*====================================================================================================*/
 /*                            Band and frequency management                                           */
 /*====================================================================================================*/
+/*------------------------------------------------------------------*
+   Assign index in slot[x][] table based on the band
+  ------------------------------------------------------------------*/
+uint8_t band2Slot(uint16_t b) {
+  uint8_t s = -1;    //@@@ To be traslated to ADX
+  switch (b) {
+    case  80 : {
+        s = 0;
+        break;
+      }
+    case  60 : {
+        s = 1;
+        break;
+      }
+    case  40 : {
+        s = 2;
+        break;
+      }
+    case  30 : {
+        s = 3;
+        break;
+      }
+    case  20 : {
+        s = 4;
+        break;
+      }
+    case  17 : {
+        s = 5;
+        break;
+      }
+    case  15 : {
+        s = 6;
+        break;
+      }
+    case  12 : {
+        s = 7;
+        break;
+      }
+    case  10 : {
+        s = 8;
+        break;
+      }
+  }
+#ifdef DEBUG
+  _INFOLIST("%s() band=%d slot=%d\n", __func__, b, s);
+#endif //DEBUG
+
+  return s;
+
+}
 
 /*---------------------------------------*
    getBand
@@ -300,13 +350,15 @@ int getMode(int s, uint32_t fx) {
 
   for (int i = 0; i < MAXMODE - 1; i++) {
     if (int32_t(slot[s][i] / 1000) == int32_t(fx / 1000)) {
+      #ifdef DEBUG
+         _INFOLIST("%s slot=%d f=%ld mode=%d\n",__func__,s,fx,i);
+      #endif //DEBUG   
       return i;
     }
   }
-
-#ifdef DEBUG
-  _INFOLIST("%s slot=%d f=%ld m=%d\n", __func__, s, fx, m);
-#endif //DEBUG
+  #ifdef DEBUG
+     _INFOLIST("%s slot=%d f=%ld mode not found\n",__func__,s,fx);
+  #endif //DEBUG   
 
   return -1;
 }
@@ -385,7 +437,7 @@ int updateFreq(uint32_t fx) {
      if (m == -1) {
 
         #ifdef DEBUG
-            _INFOLIST("%s Invalid mode definition Band ptr=%d mode=%d freq=%ld\n", __func__, i, m, fx);
+            _INFOLIST("%s Invalid mode definition slot=%d mode=%d freq=%ld\n", __func__, h, m, fx);
         #endif //DEBUG
         return m;    //this means a digital mode has not been recognized
      }

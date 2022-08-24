@@ -12,7 +12,20 @@
 #ifndef PDX_common
 #define PDX_common
 
+
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                            VERSION HEADER                                                   *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+#define VERSION        "2.0"
+#define BUILD          3
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                       External libraries used                                               *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #include <stdint.h>
+#include <si5351.h>
+
 #include "hardware/watchdog.h"
 #include "Wire.h"
 #include <EEPROM.h>
@@ -49,11 +62,12 @@
 //*                               (P)ico (D)igital (X)ceiver                                    *
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//#define WDT             1      //Hardware and TX watchdog enabled
-//#define EE              1      //Save in Flash emulation of EEPROM the configuration
-#define CAT             1      //Enable CAT protocol over serial port
-//#define QUAD            1      //Support for QUAD board
-//#define ATUCTL          1      //Brief 200 mSec pulse to reset ATU on each band change
+#define WDT               1      //Hardware and TX watchdog enabled
+#define EE                1      //Save in Flash emulation of EEPROM the configuration
+#define CAT               1      //Enable CAT protocol over serial port
+#define TERMINAL          1
+#define QUAD              1      //Support for QUAD board
+#define ATUCTL            1      //Brief 200 mSec pulse to reset ATU on each band change
 
 //#define CW              1      //CW support
 //#define ONEBAND         1      //Define a single band
@@ -120,8 +134,8 @@
 /*---
    UART Pin
 */
-#define UART_TX    12
-#define UART_RX    13
+#define UART_TX        12
+#define UART_RX        13
 
 /*---
     Input lines
@@ -236,9 +250,9 @@
 
 //*--- If CAT is defined then DEBUG  can not be activated simultaneously
 
-#if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
-#undef  DEBUG
-#endif // CAT && DEBUG
+//#if (defined(CAT) && defined(DEBUG))  //Rule for conflicting usage of the serial port
+//#undef  DEBUG
+//#endif // CAT && DEBUG
 
 //*--- If CAT is not defined then erase all conflicting definitions
 #if (!defined(CAT))  //Rule for conflicting usage of the CAT Protocol (can't activate extended without basic)
@@ -263,7 +277,6 @@
 /*****************************************************************
    Trace and debugging macros (only enabled if DEBUG is set
  *****************************************************************/
-
 //#define DEBUG  1
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
 //#define INFO  1   //Enable _INFO and _INFOLIST statements
@@ -274,10 +287,21 @@
    Define Info,Exception and Trace macros (replaced by NOP if not enabled)
   -------------------------------------------------------------------------*/
 #ifdef DEBUG
-#define _DEBUG           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);
-#define _DEBUGLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);
-#define print2(x,y) (Serial.print(x), Serial.println(y))
-#define _serial1(...)   Serial1.write(__VA_ARGS__);Serial1.flush();
+#define DEBUG_UART 1
+#ifdef DEBUG_UART
+#define _SERIAL Serial1
+#else 
+#define _SERIAL Serial
+#endif //DEBUG_UART
+#endif //DEBUG
+
+#ifdef DEBUG
+#define _serial1(...)       sprintf(hi,__VA_ARGS__);Serial1.write(hi);Serial1.flush();
+
+//#define print2(x,y)      (Serial.print(x), Serial.println(y))
+//#define _DEBUG           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
+//#define _DEBUGLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.print(hi);_SERIAL.flush();
+
 #else
 #define _DEBUG _NOP
 #define _DEBUGLIST(...)  _DEBUG
@@ -286,24 +310,24 @@
 #endif
 
 #ifdef TRACE
-#define _TRACE           sprintf(hi,"%s: Ok\n",__func__); Serial.print(strcat("@",hi));
-#define _TRACELIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);
+#define _TRACE           sprintf(hi,"%s: Ok\n",__func__); _SERIAL.print(strcat("@",hi));_SERIAL.flush();
+#define _TRACELIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.print(hi);_SERIAL.flush();
 #else
 #define _TRACE _NOP
 #define _TRACELIST(...)  _TRACE
 #endif
 
 #ifdef INFO
-#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);delay(40);Serial.flush();
-#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(hi);delay(40);Serial.flush();
+#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.print(hi);_SERIAL.flush();
 #else
 #define _INFO _NOP
 #define _INFOLIST(...)  _INFO
 #endif
 
 #ifdef EXCP
-#define _EXCP           sprintf(hi,"%s: Ok\n",__func__); Serial.print(strcat("@",hi));
-#define _EXCPLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.print(strcat("@",hi));
+#define _EXCP           sprintf(hi,"%s: Ok\n",__func__); _SERIAL.print(strcat("@",hi));_SERIAL.flush();
+#define _EXCPLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.print(strcat("@",hi));_SERIAL.flush();
 #else
 #define _EXCP           _NOP
 #define _EXCPLIST(...)  _EXCP
@@ -336,10 +360,11 @@ uint16_t cwshift = CWSHIFT;
 #define EEPROM_AVOXTIME    170
 #define EEPROM_END         200
 #endif //TERMINAL
-//#define EEPROM_CLR     1   //Initialize EEPROM (only to be used to initialize contents)
+
 #define EEPROM_SAVED  100     //Signature of EEPROM being updated at least once
 #define EEPROM_TOUT  2000     //Timeout in mSecs to wait till commit to EEPROM any change
 #endif //EEPROM
+
 #ifdef WDT
 #define       WDT_MAX     130000
 #endif //WDT
@@ -351,17 +376,42 @@ uint16_t cwshift = CWSHIFT;
 */
 extern char           hi[80];
 extern uint8_t        SSW;
+extern uint8_t        TSW;
+extern uint8_t        QSW;
 extern unsigned long  freq;
 extern int            setSlot(uint32_t f);
 extern uint16_t       Band_slot;
 extern uint16_t       mode;
 extern const uint16_t Bands[BANDS];
 
+
+extern uint16_t       bounce_time;
+extern uint16_t       short_time;
+extern uint16_t       vox_maxtry;
+extern int            cnt_max;
+extern uint16_t       max_blink;
+extern int32_t        cal_factor;
+extern unsigned long  Cal_freq; // Calibration Frequency: 1 Mhz = 1000000 Hz
+
+extern double         fsequences[NFS]; // Ring buffer for communication across cores
+extern int            nfsi;
+extern double         pfo; // Previous output frequency
+
+extern uint16_t       atu;
+extern uint16_t       atu_delay;
+extern uint32_t       tATU;
+
+extern uint16_t       eeprom_tout;
+
+
+
+
 /*-----------
    Function references
 
 */
-//@@@extern void           Freq_assign();
+extern void           rstLED(uint8_t LEDpin, bool clrLED);
+extern void           resetLED();
 extern void           setLED(uint8_t LEDpin, bool clrLED);
 extern int            getBand(uint32_t f);
 extern void           Mode_assign();
@@ -378,6 +428,12 @@ extern void           serialEvent();
 extern void           switch_RXTX(bool t);
 extern void           setStdFreq(int i);
 extern void           resetBand(int bs);
+extern void           calibrateLED();
+extern void           execTerminal();
+extern void           updateEEPROM();
+extern void           resetEEPROM();
+extern void           checkEEPROM();
+extern void           printMessage(char * token);
 
 #ifdef CAT
 extern int            updateFreq(uint32_t fx);
@@ -399,3 +455,49 @@ extern uint32_t      tout;
 extern const unsigned long slot[MAXBAND][MAXMODE];
 extern unsigned long f[MAXMODE];
 #endif
+
+extern Si5351                si5351;
+
+extern uint32_t       ffsk;
+extern int            pwm_slice;
+extern uint32_t       f_hi;
+extern uint32_t       fclk;
+extern int32_t        error;
+extern uint32_t       codefreq;
+extern uint32_t       prevfreq;
+
+/*------------------------------*
+   Epoch values
+  ------------------------------*/
+extern uint32_t t1[2];
+extern uint32_t t2[2];
+extern uint32_t v1[2];
+extern uint32_t v2[2];
+
+#ifdef ADCZ
+/*-------------------------------*
+   Sample data
+*/
+extern uint16_t adc_v1;
+extern uint16_t adc_v2;
+extern uint32_t adc_t1;
+extern uint32_t adc_t2;
+
+extern bool     adc_high;
+extern bool     adc_low;
+
+/*-------------------------------*
+   Computed frequency limits
+*/
+extern double   ffmin;
+extern double   ffmax;
+extern uint16_t adc_min;
+extern uint16_t adc_max;
+extern uint16_t adc_zero;
+extern uint16_t adc_uh;
+extern uint16_t adc_ul;
+/*--------------------------------*
+   FSM state variable
+  --------------------------------*/
+extern uint8_t  QSTATE;
+#endif //ADCZ

@@ -244,6 +244,10 @@ void processCATCommand2(byte* cmd) {
          freq=fx;
       }
       switch_RXTX(LOW);
+      #ifdef DEBUG
+         _serial1("%s frequency change=%ld\n",__func__,freq);
+      #endif //DEBUG   
+
       }
       break;
 
@@ -295,6 +299,9 @@ void processCATCommand2(byte* cmd) {
             Mode_assign();        //This is not a band change therefore only align the frequency if needed
          }
       }
+      #ifdef DEBUG
+         _serial1("%s mode change=%0x\n",__func__,cmd[0]);
+      #endif //DEBUG   
       break;
 
     case 0x08: // PTT On
@@ -309,9 +316,7 @@ void processCATCommand2(byte* cmd) {
       Serial.write(response, 1);
       Serial.flush();
       #ifdef DEBUG
-         _serial1("PTT ON!\n");
-         //Serial1.write("PTT ON!\n");
-         //Serial1.flush();
+         _serial1("%s PTT ON\n",__func__);
       #endif //DEBUG   
       break;
 
@@ -325,10 +330,9 @@ void processCATCommand2(byte* cmd) {
       Serial.write(response, 1);
       Serial.flush();
       #ifdef DEBUG
-         _serial1("PTT OFF\n");
+         _serial1("%s PTT OFF\n",__func__);
       #endif //DEBUG   
-      //Serial1.write("PTT OFF!\n");
-      //Serial1.flush();
+
       break;
 
     case 0x81:
@@ -374,7 +378,6 @@ void processCATCommand2(byte* cmd) {
 
   insideCat = false;
 }
-#ifdef FT817
 void serialEvent() {
   byte i;
 
@@ -412,5 +415,4 @@ void serialEvent() {
   processCATCommand2(cat);
   insideCat = 0;
 }
-#endif //FT817
 #endif //FT817

@@ -1,0 +1,365 @@
+#include <Arduino.h>
+#include "pdx_common.h"
+
+#ifdef TERMINAL
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*               DEFINITIONS SPECIFIC TO THE CONFIGURATION TERMINAL FUNCTION                   *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+#include <string.h>
+#include <stdlib.h>
+#define  CR '\r'
+#define  LF '\n'
+#define  BS '\b'
+#define  NULLCHAR '\0'
+#define  SPACE ' '
+
+#define  COMMAND_BUFFER_LENGTH        25                     //length of serial buffer for incoming commands
+char     cmdLine[COMMAND_BUFFER_LENGTH + 1];                 //Read commands into this buffer from Serial.  +1 in length for a termination char
+
+const char *delimiters            = ", \n";                  //commands can be separated by return, space or comma
+char     printBuffer[80];
+
+/*----------------------------------------------------------*
+   Serial configuration terminal commands
+  ----------------------------------------------------------*/
+#ifdef ATUCTL
+const char *atuToken        = "*atu";
+const char *atu_delayToken  = "*atd";
+#endif //ATUCTL
+
+const char *bounce_timeToken = "*bt";
+const char *short_timeToken = "*st";
+const char *max_blinkToken  = "*mbl";
+
+
+#ifdef EE
+const char *eeprom_toutToken = "*eet";
+const char *eeprom_listToken = "*list";
+#endif //EE
+
+
+const char *saveToken       = "*save";
+const char *quitToken       = "*quit";
+const char *resetToken      = "*reset";
+const char *helpToken       = "*help";
+const char *endList         = "XXX";
+
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                   Configuration Terminal Function                                           *
+//* This is an optional function allowing to modify operational parameters without recompiling  *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
+/*====================================================================================================*/
+/*                                     Command Line Terminal                                          */
+/*====================================================================================================*/
+/*----------------------------------------------------------------------------------------------------*
+   Simple Serial Command Interpreter
+   Code excerpts taken from Mike Farr (arduino.cc)
+
+  ---------------------------------------------------------------------------------------------------*/
+
+bool getCommand(char * commandLine)
+{
+  static uint8_t charsRead = 0;                      //note: COMAND_BUFFER_LENGTH must be less than 255 chars long
+  //read asynchronously until full command input
+
+  /*------------------------------------------*
+     Read till the serial buffer is exhausted
+    ------------------------------------------*/
+  while (Serial.available()) {
+    char c = tolower(Serial.read());
+    switch (c) {
+      case CR:      //likely have full command in buffer now, commands are terminated by CR and/or LS
+      case LF:
+        commandLine[charsRead] = NULLCHAR;       //null terminate our command char array
+        if (charsRead > 0)  {
+          charsRead = 0;                           //charsRead is static, so have to reset
+          Serial.println(commandLine);
+          return true;
+        }
+        break;
+      case BS:                                            // handle backspace in input: put a space in last char
+        if (charsRead > 0) {                              //and adjust commandLine and charsRead
+          commandLine[--charsRead] = NULLCHAR;
+          sprintf(hi, "%c%c%c", BS, SPACE, BS);
+          Serial.print(hi);
+        }
+        break;
+      default:
+        // c = tolower(c);
+        if (charsRead < COMMAND_BUFFER_LENGTH) {
+          commandLine[charsRead++] = c;
+        }
+        commandLine[charsRead] = NULLCHAR;     //just in case
+        break;
+    }
+  }
+  return false;
+}
+
+/*----------------------------------------------------------------------------------*
+   readNumber
+   Reads either a 8 or 16 bit number
+  ----------------------------------------------------------------------------------*/
+uint16_t readNumber () {
+  char * numTextPtr = strtok(NULL, delimiters);         //K&R string.h  pg. 250
+  return atoi(numTextPtr);                              //K&R string.h  pg. 251
+}
+/*----------------------------------------------------------------------------------*
+   readWord
+   Reads a string of characters
+*/
+char * readWord() {
+  char * word = strtok(NULL, delimiters);               //K&R string.h  pg. 250
+  return word;
+}
+/*----------------------------------------------------------------------------------*
+   nullCommand
+   Handle a command that hasn't been identified
+*/
+void nullCommand(char * ptrToCommandName) {
+  sprintf(hi, "Command not found <%s>\r\n", ptrToCommandName);
+  Serial.print(hi);
+}
+
+/*----------------------------------------------------------------------------------*
+   Command processor
+*/
+
+/*---
+   generic parameter update
+*/
+int updateWord(uint16_t *parm) {
+  int v = readNumber();
+  if (v == 0) {
+    return (*parm);
+  }
+  (*parm) = v;
+  return v;
+}
+/*
+   ---
+   save command
+*/
+void perform_saveToken () {
+#ifdef EE
+  updateEEPROM();
+  Serial.println();
+  Serial.print("EEPROM values saved\r\n>");
+#endif //EE
+  return;
+}
+/*---
+   reset command
+   all operational values are reset to default values and then saved on EEPROM
+*/
+void perform_resetToken () {
+
+#ifdef EE
+  resetEEPROM();
+  Serial.println();
+  Serial.print("EEPROM reset to default values\r\n>");
+#endif //EE
+
+  return;
+
+}
+
+#ifdef EE
+/*---
+   list command
+   List EEPROM content
+*/
+void perform_listToken () {
+
+  Serial.println();
+  Serial.println("EEPROM list");
+  int i = EEPROM_CAL;
+  while (i < EEPROM_END) {
+    sprintf(hi, "%05d -- ", i);
+    Serial.print(hi);
+    for (int j = 0; j < 10; j++) {
+      uint8_t b = EEPROM.read(i + j);
+      sprintf(hi, "%02x ", b);
+      Serial.print(hi);
+    }
+    Serial.println();
+    i = i + 10;
+  }
+  Serial.print(">");
+
+  return;
+}
+#endif //EE
+/*---
+   quit command
+*/
+void perform_quitToken () {
+  char msgQuit[] = "Exiting terminal mode";
+  printMessage(msgQuit);
+  delay(200);
+  resetFunc();
+  return;
+}
+/*---
+   help command
+   This is a spartan and limited yet efficient way to list all commands available.
+   All commands are defined contiguosly as pointers to text, therefore a pointer is initialized
+   with the first command in the list and all pointers are explored sequentially till a text with XXX
+   (which must be placed at the end of the list as a marker) is found.
+   However, the compiler for it's own superior reasons might alter the sequence of commands in memory
+   and even put other things which are unrelated to them, therefore only strings starting with '*' and
+   between 2 and 5 in size are eligible of being a command. The initial '*' is ignored from the listing and
+   from the command parsing by taken the pointer to the string + 1.
+*/
+void perform_helpToken() {
+  const char * p = atuToken;
+
+  while (strcmp(p, "XXX") != 0) {
+#ifdef WDT
+    wdt_reset();
+#endif
+    if (strlen(p) >= 2 && strlen(p) <= 5 && p[0] == '*') {
+      sprintf(hi, "%s, ", p + 1);
+      Serial.print(hi);
+    }
+    p = p + strlen(p) + 1;
+  }
+  Serial.print("\r\n>");
+
+}
+/*-----------------------------------------------------------------------------*
+   printCommand
+   print received command as a confirmation
+  -----------------------------------------------------------------------------*/
+void printCommand(char * token, uint16_t rc) {
+
+  sprintf(hi, "%s(%05d)\n\r>", token, rc);
+  Serial.print(hi);
+
+  return;
+}
+void printMessage(char * token) {
+  sprintf(hi, "%s\n\r>", token);
+  Serial.print(hi);
+}
+/*--------------------------------------------------*
+   execCommand
+   parse command and process recognized tokens return
+   result (which is always numeric
+  --------------------------------------------------*/
+void execCommand(char * commandLine) {
+  //  int result;
+
+  char * ptrToCommandName = strtok(commandLine, delimiters);
+  char msgSave[] = "Parameters saved";
+  char msgReset[] = "Reset to default values";
+
+#ifdef ATUCTL
+  if (strcmp(ptrToCommandName, atuToken + 1)         == 0) {
+    printCommand(ptrToCommandName, updateWord(&atu));
+    return;
+  }
+  if (strcmp(ptrToCommandName, atu_delayToken + 1)   == 0) {
+    printCommand(ptrToCommandName, updateWord(&atu_delay));
+    return;
+  }
+#endif //ATUCTL
+
+  if (strcmp(ptrToCommandName, bounce_timeToken + 1) == 0) {
+    printCommand(ptrToCommandName, updateWord(&bounce_time));
+    return;
+  }
+  if (strcmp(ptrToCommandName, short_timeToken + 1)  == 0) {
+    printCommand(ptrToCommandName, updateWord(&short_time));
+    return;
+  }
+  if (strcmp(ptrToCommandName, max_blinkToken + 1)   == 0) {
+    printCommand(ptrToCommandName, updateWord(&max_blink));
+    return;
+  }
+
+#ifdef EE
+  if (strcmp(ptrToCommandName, eeprom_toutToken + 1) == 0) {
+    printCommand(ptrToCommandName, updateWord(&eeprom_tout));
+    return;
+  }
+  if (strcmp(ptrToCommandName, eeprom_listToken + 1) == 0) {
+    perform_listToken();
+    return;
+  }
+  if (strcmp(ptrToCommandName, resetToken + 1)       == 0) {
+    perform_resetToken();
+    printMessage(msgReset);
+    return;
+  }
+#endif //EE
+
+  if (strcmp(ptrToCommandName, saveToken + 1)        == 0) {
+    perform_saveToken();
+    printMessage(msgSave);
+    return;
+  }
+  if (strcmp(ptrToCommandName, quitToken + 1)        == 0) {
+    perform_quitToken();
+    return;
+  }
+  if (strcmp(ptrToCommandName, helpToken + 1)        == 0) {
+    perform_helpToken();
+    return;
+  }
+
+  nullCommand(ptrToCommandName);
+  return;
+}
+/*-----------------------------------------------------------------------------*
+   execTerminal
+   executes the terminal processor if enabled                                  *
+  -----------------------------------------------------------------------------*/
+void execTerminal() {
+
+  sprintf(hi, "\n\rADX %s build(%03d) command interpreter\n\r", VERSION, uint16_t(BUILD));
+  Serial.print(hi);
+
+  uint8_t n = 3;
+  while (n > 0) {
+    resetLED();
+    delay(200);
+    setLED(FT8, false);
+    setLED(FT4, false);
+    setLED(WSPR, false);
+    setLED(JS8, false);
+    delay(200);
+    n--;
+#ifdef WDT
+    wdt_reset();
+#endif //WDT
+  }
+  while (getGPIO(UP) == LOW) {
+#ifdef WDT
+    wdt_reset();
+#endif //WDT
+  }
+  Serial.println("entering command mode, <quit> to finalize <help> for help\r\n>");
+  switch_RXTX(LOW);
+
+  while (true) {
+
+    //*--- TERMINAL serial configuration
+
+    if (getCommand(cmdLine)) {
+      execCommand(cmdLine);
+#ifdef WDT
+      wdt_reset();
+#endif //WDT
+    } else {
+#ifdef WDT
+      wdt_reset();
+#endif //WDT
+    }
+    checkEEPROM();
+
+  }
+
+}
+#endif //TERMINAL
