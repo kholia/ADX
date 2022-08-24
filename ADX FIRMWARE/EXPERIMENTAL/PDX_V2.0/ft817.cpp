@@ -22,7 +22,6 @@
 */
 
 unsigned char doingCAT = 0;
-bool txCAT             = false;        // turned on if the transmitting due to a CAT command
 char inTx              = 0;                // it is set to 1 if in transmit mode (whatever the reason : cw, ptt or cat)
 char isUSB             = 0;
 
@@ -34,7 +33,7 @@ unsigned int skipTimeCount              = 0;
 extern void startTx();
 extern void stopTx();
 
-// for broken protocol
+// timeout to control a broken protocol
 #define CAT_RECEIVE_TIMEOUT 500
 
 #define CAT_MODE_LSB            0x00
@@ -70,8 +69,11 @@ byte getLowNibble(byte b) {
   return b & 0x0f;
 }
 
-// Takes a number and produces the requested number of decimal digits, staring
-// from the least significant digit.
+/*------------------------------------------------------------------------------*
+ * getDecimalDigits                                                             *                                                                *
+ * Takes a number and produces the requested number of decimal digits, staring  *
+ * from the least significant digit.                                            *
+*/
 void getDecimalDigits(unsigned long number, byte* result, int digits) {
   for (int i = 0; i < digits; i++) {
     // "Mask off" (in a decimal sense) the LSD and return it
@@ -80,8 +82,10 @@ void getDecimalDigits(unsigned long number, byte* result, int digits) {
     number /= 10;
   }
 }
-
-// Takes a frequency and writes it into the CAT command buffer in BCD form.
+/*------------------------------------------------------------------------------*
+ * writeFreq                                                                    *                                                                *
+ * Takes a frequency and writes it into the CAT command buffer in BCD form.     *
+ */
 void writeFreq(unsigned long freq, byte* cmd) {
   // Convert the frequency to a set of decimal digits. We are taking 9 digits
   // so that we can get up to 999 MHz. But the protocol doesn't care about the
@@ -99,10 +103,12 @@ void writeFreq(unsigned long freq, byte* cmd) {
   cmd[0] = setHighNibble(cmd[0], digits[8]);
 }
 
-// This function takes a frequency that is encoded using 4 bytes of BCD
-// representation and turns it into an long measured in Hz.
-//
-// [12][34][56][78] = 123.45678? Mhz
+/*------------------------------------------------------------------------------*
+ * readFreq                                                                *                                                                *
+ * This function takes a frequency that is encoded using 4 bytes of BCD
+ * representation and turns it into an long measured in Hz.  
+ * [12][34][56][78] = 123.45678? Mhz
+ */
 unsigned long readFreq(byte* cmd) {
   // Pull off each of the digits
   byte d7 = getHighNibble(cmd[0]);
@@ -123,6 +129,11 @@ unsigned long readFreq(byte* cmd) {
     (unsigned long)d1 * 100L +
     (unsigned long)d0 * 10L;
 }
+
+/*------------------------------------------------------------------------------*
+ * catReadEEPRom                                                                *                                                                *
+ * FT817 EEPROM values (credible) falsification                                 *                                 
+ */
 
 // This function is to falsify some readings performed
 // into the volatile memory of a typical FT817 radio
@@ -216,7 +227,10 @@ void catReadEEPRom(void)
   Serial.flush();
 }
 
-//void setFrequency(unsigned long f);
+/*------------------------------------------------------------------------------*
+ * processCATCommand2                                                           *                                                                *
+ * this is the actual CAT command dispatcher                                    *                                 
+ */
 
 void processCATCommand2(byte* cmd) {
   byte response[5];
@@ -225,6 +239,10 @@ void processCATCommand2(byte* cmd) {
   int b, i, j, k, q, m;
 
   switch (cmd[4]) {
+
+    /*---
+     * Set Frequency
+     */
     case 0x01:
       {
       // set frequency
@@ -251,14 +269,23 @@ void processCATCommand2(byte* cmd) {
       }
       break;
 
+    /*---
+     * Split ON (not implemented)
+     */
     case 0x02:
       // split on
       break;
 
+    /*---
+     * Split OFF (not implemented)
+     */
     case 0x82:
       // split off
       break;
 
+    /*---
+     * General status
+     */
     case 0x03:
       writeFreq(freq, response); // Put the frequency into the buffer
 
@@ -278,13 +305,17 @@ void processCATCommand2(byte* cmd) {
       Serial.flush();
       break;
 
+    /*---
+     * set mode
+     * only USB and CW are supported, all other mode changes are ignored
+     */
     case 0x07: // set mode
          response[0]=0x00;         //pre-empt a response for everybody to be happy with the timming
          Serial.write(response,1); //If doing nothing for some reason the next status the remote will notice
          Serial.flush();
 
 #ifdef CW
-         if (cmd[0] == 0x02) {    //if the change is into CW do it, actually won't happen if CW is not enabled
+         if (cmd[0] == CAT_MODE_CW) {    //if the change is into CW do it, actually won't happen if CW is not enabled
             if (mode != 0x04) {  //If it is already on CW do nothing
                mode=0x04;
                Mode_assign();
@@ -293,7 +324,7 @@ void processCATCommand2(byte* cmd) {
          }
 #endif //CW      
 
-      if (cmd[0] == 0x01) {       //Accept only USB at this point
+      if (cmd[0] == CAT_MODE_USB){//Accept only USB at this point
          if (mode >= 0x03) {      //It is on something other than digital modes, perhaps CW
             mode=0x00;            //When coming from CW reset to FT8
             Mode_assign();        //This is not a band change therefore only align the frequency if needed
@@ -304,6 +335,9 @@ void processCATCommand2(byte* cmd) {
       #endif //DEBUG   
       break;
 
+    /*---
+     * PTT (On)
+     */
     case 0x08: // PTT On
       if (!inTx) {
         response[0] = 0;
@@ -320,6 +354,9 @@ void processCATCommand2(byte* cmd) {
       #endif //DEBUG   
       break;
 
+    /*---
+     *  PTT (Off)
+     */
     case 0x88: // PTT OFF
       if (inTx) {
         inTx = 0;
@@ -335,6 +372,9 @@ void processCATCommand2(byte* cmd) {
 
       break;
 
+    /*---
+     * Toggle VFO (not implemented)
+     */
     case 0x81:
       // toggle the VFOs, really a fake operation as the board doesn't has a dual VFO at this point
       response[0] = 0;
@@ -342,10 +382,16 @@ void processCATCommand2(byte* cmd) {
       Serial.flush();
       break;
 
+    /*---
+     * Return (fake) FT817 EEPROM data, not really documented
+     */
     case 0xBB: // Read FT-817 EEPROM Data
       catReadEEPRom();
       break;
 
+    /*---
+     * Receiver status or transmitter status (not implemented)
+     */
     case 0xe7:
       // Get receiver status, we have hardcoded this as
       // as we don't support ctcss, etc.
@@ -368,6 +414,9 @@ void processCATCommand2(byte* cmd) {
       }
       break;
 
+    /*---
+     * Clueless on what it was, probably an Ok will be harmless
+     */
     default:
       {
       response[0] = 0x00;
@@ -378,6 +427,11 @@ void processCATCommand2(byte* cmd) {
 
   insideCat = false;
 }
+/*------------------------------------------------------------------------------*
+ * serialEvent()                                                                *
+ * this is the CAT sub-system entry point, called periodically from different   *
+ * places.
+ */
 void serialEvent() {
   byte i;
 
