@@ -57,13 +57,17 @@ const char *endList         = "XXX";
    Code excerpts taken from Mike Farr (arduino.cc)
 
   ---------------------------------------------------------------------------------------------------*/
-CALLBACK upCall=NULL;
+CALLBACK   upCall=NULL;
+QSOCALL    FSMHandler;
 /*----------------------------------------
  * setup generic (sample) upcall
  */
-void setupCallback(CALLBACK s) {
+void setupCallback(CALLBACK s,QSOCALL q) {
    if (s != NULL) {
       upCall=s;
+   }
+   if (q != NULL) {
+      FSMHandler=q;
    }
 }
 /*---------------------------------------
@@ -72,6 +76,9 @@ void setupCallback(CALLBACK s) {
 void doupCall() {
   if (upCall != NULL) {
      upCall();
+  }
+  if (FSMHandler!=NULL) {
+     FSMHandler(NULL,NULL,NULL);
   }
 }
 

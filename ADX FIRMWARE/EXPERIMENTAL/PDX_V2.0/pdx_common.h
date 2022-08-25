@@ -277,10 +277,55 @@
 /*----------------------------------------
  * Callback structure
  */
+// --- IPC structures
+
+struct msg {
+       char timestamp[16];    // time stamp
+       byte slot;             //
+       bool CQ;
+        int snr;              // Signal SNR
+      float DT;               // Time Shift
+        int offset;           // Frequency offset
+       char t1[16];           // first token
+       char t2[16];           // second token
+       char t3[16];           // third token
+};
+
+struct header {
+      char  timestamp[16];
+      byte  slot;
+      bool  newheader;
+      bool  active;
+};
+
+struct qso {
+      byte  FSM;
+      int   nmsg;
+      char  hiscall[16];
+      char  hisgrid[16];
+      char  hissnr[16];
+      int   hisslot;
+      int   offset;
+      char  mycall[16];
+      char  mygrid[16];
+      char  mysnr[16];
+      int   myslot;
+      int   cnt;
+      char  lastsent[256];
+};
+struct Queue {
+      int   slot;
+      char  message[1024];
+};
+
 typedef void (*CALLBACK)();
+typedef void (*QSOCALL)(header* h,msg* m,qso* q);
+
+extern void    setupCallback(CALLBACK s,QSOCALL q);
+extern void    doupCall();
+
+extern QSOCALL FSMHandler;
 extern CALLBACK upCall;
-extern void setupCallback(CALLBACK s);
-extern void doupCall();
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEBUG SUPPORT MACRO DEFINITIONS                                               *
