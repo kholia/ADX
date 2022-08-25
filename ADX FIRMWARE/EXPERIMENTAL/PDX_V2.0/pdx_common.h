@@ -65,7 +65,8 @@
 #define WDT               1      //Hardware and TX watchdog enabled
 #define EE                1      //Save in Flash emulation of EEPROM the configuration
 #define CAT               1      //Enable CAT protocol over serial port
-#define TERMINAL          1
+#define FT817             1      //Yaesu FT817 CAT protocol
+#define TERMINAL          1      //Serial configuration terminal used
 #define QUAD              1      //Support for QUAD board
 #define ATUCTL            1      //Brief 200 mSec pulse to reset ATU on each band change
 
@@ -98,6 +99,8 @@
 #define SERIAL_WAIT   2
 #define CAT_RECEIVE_TIMEOUT 500
 #define numChars 256
+#define ATU_DELAY     200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
+
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      PIN ASSIGNMENTS                                                        *
@@ -278,14 +281,34 @@
    Trace and debugging macros (only enabled if DEBUG is set
  *****************************************************************/
 //#define DEBUG  1
+
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-//#define INFO  1   //Enable _INFO and _INFOLIST statements
-//#define EXCP  1   //Enable _EXCP and _EXCPLIST statements
-//#define TRACE 1   //Enable _TRACE and _TRACELIST statements
+//#define INFO   1   //Enable _INFO and _INFOLIST statements
+//#define EXCP   1   //Enable _EXCP and _EXCPLIST statements
+//#define TRACE  1   //Enable _TRACE and _TRACELIST statements
+//#define CORE   1   //Enable _CORE2 and _CORE2LIST statements (debugging of core 2 code)
 #endif //DEBUG
+
+/*------
+ * can not simultaneously use the serial port from both core, either one or the other will
+ * have that possibility. If CORE2 trace is made then no other trace is made
+ * otherwise a race condition, lockouts and buffer corruption might happen.
+ */
+#if (defined(DEBUG) && (defined(CORE2)))
+#undef EXCP
+#undef INFO
+#undef TRACE
+#endif //DEBUG && CORE2
+
 /*-------------------------------------------------------------------------*
    Define Info,Exception and Trace macros (replaced by NOP if not enabled)
   -------------------------------------------------------------------------*/
+
+/*---
+ * Define which serial port will be used for debugging, Serial is the USB serial
+ * whilst Serial1 is the UART based serial at pins GPIO16/17 (much more convenient
+ * for debugging purposes)
+ */
 #ifdef DEBUG
 #define DEBUG_UART 1
 #ifdef DEBUG_UART
@@ -296,17 +319,9 @@
 #endif //DEBUG
 
 #ifdef DEBUG
-#define _serial1(...)       sprintf(hi,__VA_ARGS__);Serial1.write(hi);Serial1.flush();
-
-//#define print2(x,y)      (Serial.print(x), Serial.println(y))
-//#define _DEBUG           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
-//#define _DEBUGLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.print(hi);_SERIAL.flush();
-
+#define _serial1(...)   sprintf(hi,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
 #else
-#define _DEBUG _NOP
-#define _DEBUGLIST(...)  _DEBUG
-#define print2(x,y) _DEBUG
-#define _serial1(...)   _DEBUG
+#define _serial1(...)   _NOP
 #endif
 
 #ifdef TRACE
@@ -316,6 +331,14 @@
 #define _TRACE _NOP
 #define _TRACELIST(...)  _TRACE
 #endif
+
+#ifdef CORE2
+#define _CORE2           sprintf(hi,"%s: Ok\n",__func__); _SERIAL.print(strcat("@",hi));_SERIAL.flush();
+#define _CORE2LIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.print(hi);_SERIAL.flush();
+#else
+#define _CORE2 _NOP
+#define _CORE2LIST(...)  _CORE2
+#endif //CORE2
 
 #ifdef INFO
 #define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
@@ -332,6 +355,10 @@
 #define _EXCP           _NOP
 #define _EXCPLIST(...)  _EXCP
 #endif
+
+
+
+
 #ifdef CW
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*       CW FEATURE IF PTT IS ACTIVATED BY BUTTON/CAT THE TX FREQUENCY WILL BE SHIFT UP        *
@@ -378,6 +405,7 @@ extern char           hi[80];
 extern uint8_t        SSW;
 extern uint8_t        TSW;
 extern uint8_t        QSW;
+
 extern unsigned long  freq;
 extern int            setSlot(uint32_t f);
 extern uint16_t       Band_slot;
@@ -397,11 +425,6 @@ extern double         fsequences[NFS]; // Ring buffer for communication across c
 extern int            nfsi;
 extern double         pfo; // Previous output frequency
 
-extern uint16_t       atu;
-extern uint16_t       atu_delay;
-extern uint32_t       tATU;
-
-extern uint16_t       eeprom_tout;
 
 
 
@@ -410,34 +433,54 @@ extern uint16_t       eeprom_tout;
    Function references
 
 */
+extern const uint8_t  LED[4];
 extern void           rstLED(uint8_t LEDpin, bool clrLED);
 extern void           resetLED();
 extern void           setLED(uint8_t LEDpin, bool clrLED);
-extern int            getBand(uint32_t f);
+extern void           blinkLED(uint8_t LEDpin);
+extern void           calibrateLED();
+
 extern void           Mode_assign();
+extern void           switch_RXTX(bool t);
+
+extern bool           getWord (uint8_t SysWord, uint8_t v);
+extern void           setWord(uint8_t* SysWord, uint8_t v, bool val);
+extern void           delay_uSec(uint16_t d);
+
+extern void           serialEvent();
+
+
+extern int            getBand(uint32_t f);
 extern int            findSlot(uint16_t i);
 extern uint8_t        band2Slot(uint16_t k);
 extern int            getMode(int i, uint32_t f);
-extern bool           getWord (uint8_t SysWord, uint8_t v);
-extern void           setWord(uint8_t* SysWord, uint8_t v, bool val);
 extern uint16_t       changeBand(uint16_t c);
 extern void           Band_assign(bool l);
-extern void           flipATU();
-extern void           delay_uSec(uint16_t d);
-extern void           serialEvent();
-extern void           switch_RXTX(bool t);
 extern void           setStdFreq(int i);
 extern void           resetBand(int bs);
-extern void           calibrateLED();
+
 extern void           execTerminal();
+extern void           printMessage(char * token);
+extern int            updateFreq(uint32_t fx);
+
+#ifdef ATUCTL
+extern void           initATU();
+extern void           flipATU();
+extern void           checkATU();
+extern uint16_t       atu;
+extern uint16_t       atu_delay;
+extern uint32_t       tATU;
+#endif //ATUCTL
+
+#ifdef EE
 extern void           updateEEPROM();
 extern void           resetEEPROM();
 extern void           checkEEPROM();
-extern void           printMessage(char * token);
-
-#ifdef CAT
-extern int            updateFreq(uint32_t fx);
-#endif //CAT
+extern void           flagEEPROM();
+extern void           initEEPROM();
+extern uint16_t       eeprom_tout;
+extern uint32_t       tout;
+#endif //EE
 
 #ifdef QUAD
 extern int            band2QUAD(uint16_t b);
@@ -448,15 +491,11 @@ extern void           setQUAD(int LPFslot);
 extern uint32_t      wdt_tout;
 #endif //WDT
 
-#ifdef EE
-extern uint32_t      tout;
-#endif //EE
 
 extern const unsigned long slot[MAXBAND][MAXMODE];
 extern unsigned long f[MAXMODE];
-#endif
 
-extern Si5351                si5351;
+extern Si5351         si5351;
 
 extern uint32_t       ffsk;
 extern int            pwm_slice;
@@ -465,6 +504,7 @@ extern uint32_t       fclk;
 extern int32_t        error;
 extern uint32_t       codefreq;
 extern uint32_t       prevfreq;
+
 
 /*------------------------------*
    Epoch values
@@ -501,3 +541,4 @@ extern uint16_t adc_ul;
   --------------------------------*/
 extern uint8_t  QSTATE;
 #endif //ADCZ
+#endif //

@@ -89,23 +89,6 @@ uint8_t  QSTATE = 0;
 #endif //ADCZ
 
 
-#ifdef ATUCTL
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*               ATU RESET FUNCTION SUPPORT                                                    *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#define ATU_DELAY    200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
-
-uint16_t atu       =  ATU;
-uint16_t atu_delay =  ATU_DELAY;
-uint32_t tATU = 0;
-
-#endif //ATUCTL
-
-
-#ifdef EE
-uint32_t tout = 0;
-#endif //EE
-
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*       GLOBAL VARIABLE DEFINITION                                                            *
@@ -158,12 +141,6 @@ double pfo = 0; // Previous output frequency
 //*       GLOBAL VARIABLE DEFINITION CONDITIIONAL TO DIFFERENT OPTIONAL FUNCTIONS               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
-#ifdef EE
-uint16_t eeprom_tout = EEPROM_TOUT;
-#endif //EE
-
-#if (defined(ATUCTL) || defined(WDT))
-#endif //Either ATU or WDT has been defined
 
 #ifdef WDT
 uint32_t      wdt_tout    = 0;
@@ -202,22 +179,6 @@ void setWord(uint8_t* SysWord, uint8_t v, bool val) {
   }
 }
 
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*==*
-//*                    ATU DEVICE MANAGEMENT                                                     *
-//*this is an optional function that creates a brief pulse aimed to reset the ATU on band changes*
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#ifdef ATUCTL
-void flipATU() {
-
-  setGPIO(atu, HIGH);
-  setWord(&TSW, ATUCLK, true);
-  tATU = millis();
-
-#ifdef DEBUG
-  _INFO;
-#endif //DEBUG
-}
-#endif //ATUCTL
 
 #ifdef CAT
 
@@ -577,90 +538,6 @@ bool getTXSW() {
   ==================================================================================================*/
 
 
-#ifdef EE
-/*------------------------------------------------------------------------------*
-   updateEEPROM
-   selectively sets values into EEPROM
-  ------------------------------------------------------------------------------*/
-void updateEEPROM() {
-  uint16_t save = EEPROM_SAVED;
-  uint16_t build = BUILD;
-
-  EEPROM.put(EEPROM_TEMP, save);
-  EEPROM.put(EEPROM_BUILD, build);
-  EEPROM.put(EEPROM_CAL, cal_factor);
-  EEPROM.put(EEPROM_MODE, mode);
-  EEPROM.put(EEPROM_BAND, Band_slot);
-
-#ifdef TERMINAL
-
-#ifdef ATUCTL
-  EEPROM.put(EEPROM_ATU, atu);
-  EEPROM.put(EEPROM_ATU_DELAY, atu_delay);
-#endif //ATUCTL
-
-  EEPROM.put(EEPROM_BOUNCE_TIME, bounce_time);
-  EEPROM.put(EEPROM_SHORT_TIME, short_time);
-  EEPROM.put(EEPROM_MAX_BLINK, max_blink);
-  EEPROM.put(EEPROM_EEPROM_TOUT, eeprom_tout);
-
-#endif //TERMINAL
-
-  EEPROM.commit();
-#ifdef DEBUG
-  _INFOLIST("%s commit()\n", __func__)
-#endif //DEBUG
-  setWord(&SSW, SAVEEE, false);
-
-#ifdef DEBUG
-  _INFOLIST("%s save(%d) cal(%d) m(%d) slot(%d) save=%d build=%d\n", __func__, save, cal_factor, mode, Band_slot, save, build)
-#endif //DEBUG
-}
-
-/*------------------------------------------------------------------------------*
-   resetEEPROM
-   reset to pinche defaults
-  ------------------------------------------------------------------------------*/
-void resetEEPROM() {
-  uint16_t save = EEPROM_SAVED;
-  uint16_t build = BUILD;
-
-  mode = 0;
-  Band_slot = 0;
-  //* Retain calibration cal_factor=0;
-
-#ifdef TERMINAL
-
-#ifdef ATUCTL
-  atu        = ATU;
-  atu_delay  = ATU_DELAY;
-#endif //ATUCTL
-
-  bounce_time = BOUNCE_TIME;
-  short_time = SHORT_TIME;
-  max_blink  = MAX_BLINK;
-  eeprom_tout = EEPROM_TOUT;
-
-#endif //TERMINAL
-
-  updateEEPROM();
-}
-
-/*------
-   checkEEPROM
-   check if there is a pending EEPROM save that needs to be committed
-*/
-void checkEEPROM() {
-  if ((millis() - tout) > eeprom_tout && getWord(SSW, SAVEEE) == true ) {
-#ifdef DEBUG
-    _INFOLIST("%s() Saving EEPROM...\n", __func__);
-#endif //DEBUG
-
-    updateEEPROM();
-  }
-}
-
-#endif //EE
 /**********************************************************************************************/
 /*                               Operational state management                                 */
 /**********************************************************************************************/
@@ -714,24 +591,6 @@ void Mode_assign() {
   _INFOLIST("%s mode(%d) f(%ld)\n", __func__, mode, f[mode]);
 #endif //DEBUG
 }
-/*----------------------------------------------------------*
-   Band assignment based on selected slot
-   [@@@] just blink the leds since the actual frequency is
-   going to be changed by calling Freq_assign()
-  ----------------------------------------------------------*/
-void Band_assign(bool l) {    //@@@ Change behaviour
-
-  if (l == true) {
-    resetLED();
-    blinkLED(LED[3 - Band_slot]);
-    delay(DELAY_WAIT);             //This delay should be changed
-  }
-
-#ifdef DEBUG
-  _INFOLIST("%s mode(%d) slot(%d) f=%ld\n", __func__, mode, Band_slot, freq);
-#endif //DEBUG
-}
-
 /*----------------------------------------------------------*
    Select band to operate
   ----------------------------------------------------------*/
@@ -836,9 +695,9 @@ void Band_Select() {
       }
 #endif //RESET
 
+   
 #ifdef EE
-      tout = millis();
-      setWord(&SSW, SAVEEE, true);
+      flagEEPROM();
 #endif //EE
 
       setLED(TX, false);
@@ -910,8 +769,7 @@ void checkMode() {
 #endif //DEBUG
 
 #ifdef EE
-    tout = millis();
-    setWord(&SSW, SAVEEE, true);
+    flagEEPROM();
 #endif //EE
 
     Mode_assign();
@@ -945,8 +803,7 @@ void checkMode() {
 #endif //CW
 
 #ifdef EE
-    tout = millis();
-    setWord(&SSW, SAVEEE, true);
+    flagEEPROM();
 #endif //EE Avoid the tear and wear of the EEPROM because of successive changes
 
 #ifdef DEBUG
@@ -992,80 +849,7 @@ void initTransceiver() {
 
 
 #ifdef EE
-
-  uint16_t temp = 0;
-  uint16_t save = EEPROM_SAVED;
-  uint16_t build = 0;
-
-
-  EEPROM.get(EEPROM_TEMP, temp);
-  EEPROM.get(EEPROM_BUILD, build);
-
-#ifdef DEBUG
-  _INFOLIST("%s EEPROM retrieved temp(%d) & Build(%d) BUILD=%d\n", __func__, temp, build, uint16_t(BUILD));
-#endif //DEBUG
-
-
-#ifdef EEPROM_CLR
-  temp = -1;
-#endif //EEPROM_CLR
-
-
-  if (build != uint16_t(BUILD)) {
-    resetEEPROM();
-#ifdef DEBUG
-    _INFOLIST("%s EEPROM Reset Build<> cal(%ld) m(%d) slot(%d)\n", __func__, cal_factor, mode, Band_slot);
-#endif //DEBUG
-
-  }
-
-  if (temp != save) {
-
-    updateEEPROM();
-
-#ifdef DEBUG
-    _INFOLIST("%s EEPROM Reset cal(%ld) m(%d) slot(%d)\n", __func__, cal_factor, mode, Band_slot);
-#endif //DEBUG
-
-  } else {
-
-    /*-----------------------------------------------*
-       get configuration initialization from EEPROM  *
-      ------------------------------------------------*/
-
-    EEPROM.get(EEPROM_CAL, cal_factor);
-
-    /*---- Kludge Fix
-           to overcome wrong initial values, should not difficult calibration
-    */
-    if (cal_factor < -31000) {
-      cal_factor = 0;
-    }
-    /* end of kludge */
-
-    EEPROM.get(EEPROM_MODE, mode);
-    EEPROM.get(EEPROM_BAND, Band_slot);
-
-#ifdef TERMINAL
-
-#ifdef ATUCTL
-    EEPROM.get(EEPROM_ATU, atu);
-    EEPROM.get(EEPROM_ATU_DELAY, atu_delay);
-#endif //ATUCTL
-
-    EEPROM.get(EEPROM_BOUNCE_TIME, bounce_time);
-    EEPROM.get(EEPROM_SHORT_TIME, short_time);
-    EEPROM.get(EEPROM_MAX_BLINK, max_blink);
-    EEPROM.get(EEPROM_EEPROM_TOUT, eeprom_tout);
-
-#endif //TERMINAL
-
-
-
-#ifdef DEBUG
-    _INFOLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n", __func__, cal_factor, mode, Band_slot);
-#endif //DEBUG
-  }
+  initEEPROM();
 #endif // EE
 
 #ifdef DEBUG
@@ -1130,11 +914,10 @@ void definePinOut() {
 
   gpio_set_dir(FSK, GPIO_IN);
 
-#ifdef ATUCTL
-  gpio_init(uint8_t(atu));
-  gpio_set_dir (uint8_t(atu), GPIO_OUT);
-  flipATU();
-#endif //ATUCTL
+  #ifdef ATUCTL
+     initATU();
+  #endif //ATUCTL   
+
 
   Wire.setSDA(PDX_I2C_SDA);
   Wire.setSCL(PDX_I2C_SCL);
@@ -1160,6 +943,7 @@ void setup()
 #ifdef HAVE_USB_PATCHES
   Serial.ignoreDTR();
 #endif
+
   Serial.begin(BAUD);
   Serial1.setTX(UART_TX);
   Serial1.setRX(UART_RX);
@@ -1170,12 +954,6 @@ void setup()
   _INFOLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
 #endif //DEBUG
 
-#ifdef EE
-  EEPROM.begin(512);
-#ifdef DEBUG
-  _INFOLIST("%s: EEPROM reserved (%d)\n", __func__, EEPROM.length());
-#endif //DEBUG
-#endif //EE
   /*---
      List firmware properties at run time
   */
@@ -1349,10 +1127,7 @@ void loop()
       ATU pulse width control, reset signal after the elapsed time elapsed happens
     ---------------------------------------------------------------------------------*/
 #ifdef ATUCTL
-  if ((millis() - tATU) > atu_delay && getWord(TSW, ATUCLK) == true) {
-    setWord(&TSW, ATUCLK, false);
-    setGPIO(atu, LOW);
-  }
+  checkATU();
 #endif //ATUCTL
 
   /*---------------------------------------------------------------------------------*

@@ -113,6 +113,24 @@ void setupQUAD() {
 /*====================================================================================================*/
 /*                            Band and frequency management                                           */
 /*====================================================================================================*/
+/*----------------------------------------------------------*
+   Band assignment based on selected slot
+   [@@@] just blink the leds since the actual frequency is
+   going to be changed by calling Freq_assign()
+  ----------------------------------------------------------*/
+void Band_assign(bool l) {    //@@@ Change behaviour
+
+  if (l == true) {
+    resetLED();
+    blinkLED(LED[3 - Band_slot]);
+    delay(DELAY_WAIT);             //This delay should be changed
+  }
+
+#ifdef DEBUG
+  _INFOLIST("%s mode(%d) slot(%d) f=%ld\n", __func__, mode, Band_slot, freq);
+#endif //DEBUG
+}
+
 /*------------------------------------------------------------------*
    Assign index in slot[x][] table based on the band
   ------------------------------------------------------------------*/
