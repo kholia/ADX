@@ -273,6 +273,15 @@
 
 //*--- if both supported CAT protocols are simultaneously selected then keep one
 #define NFS 32
+
+/*----------------------------------------
+ * Callback structure
+ */
+typedef void (*CALLBACK)();
+extern CALLBACK upCall;
+extern void setupCallback(CALLBACK s);
+extern void doupCall();
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEBUG SUPPORT MACRO DEFINITIONS                                               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*

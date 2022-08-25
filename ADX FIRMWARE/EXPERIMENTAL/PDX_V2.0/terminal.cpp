@@ -57,6 +57,23 @@ const char *endList         = "XXX";
    Code excerpts taken from Mike Farr (arduino.cc)
 
   ---------------------------------------------------------------------------------------------------*/
+CALLBACK upCall=NULL;
+/*----------------------------------------
+ * setup generic (sample) upcall
+ */
+void setupCallback(CALLBACK s) {
+   if (s != NULL) {
+      upCall=s;
+   }
+}
+/*---------------------------------------
+ * execute generic (sample) upcall
+ */
+void doupCall() {
+  if (upCall != NULL) {
+     upCall();
+  }
+}
 
 bool getCommand(char * commandLine)
 {
