@@ -945,13 +945,16 @@ void setup()
 #endif
 
   Serial.begin(BAUD);
+  
   Serial1.setTX(UART_TX);
-  Serial1.setRX(UART_RX);
+  Serial1.setRX(UART_RX);  
   Serial1.begin(BAUD);
 
 #ifdef DEBUG
   const char * proc = "RP2040";
-  _INFOLIST("%s: ADX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
+  _INFOLIST("%s: PDX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
+  sprintf(hi,"%s: PDX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
+  Serial1.write(hi);
 #endif //DEBUG
 
   /*---

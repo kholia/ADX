@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "pdx_common.h"
 
+#ifdef CAT
 #ifdef FT817
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO FT817 CAT PROTOCOL                                    *
@@ -470,3 +471,4 @@ void serialEvent() {
   insideCat = 0;
 }
 #endif //FT817
+#endif //CAT

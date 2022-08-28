@@ -42,14 +42,17 @@ void updateEEPROM() {
 #endif //TERMINAL
 
   EEPROM.commit();
+
 #ifdef DEBUG
-  _INFOLIST("%s commit()\n", __func__)
+  _INFOLIST("%s commit()\n", __func__);
 #endif //DEBUG
+
   setWord(&SSW, SAVEEE, false);
 
 #ifdef DEBUG
-  _INFOLIST("%s save(%d) cal(%d) m(%d) slot(%d) save=%d build=%d\n", __func__, save, cal_factor, mode, Band_slot, save, build)
+  _INFOLIST("%s save(%d) cal(%d) m(%d) slot(%d) save=%d build=%d\n", __func__, save, cal_factor, mode, Band_slot, save, build);
 #endif //DEBUG
+
 }
 
 /*------------------------------------------------------------------------------*

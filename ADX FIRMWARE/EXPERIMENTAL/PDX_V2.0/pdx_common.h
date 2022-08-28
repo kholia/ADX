@@ -340,7 +340,7 @@ extern CALLBACK upCall;
 //#define INFO   1   //Enable _INFO and _INFOLIST statements
 //#define EXCP   1   //Enable _EXCP and _EXCPLIST statements
 //#define TRACE  1   //Enable _TRACE and _TRACELIST statements
-//#define CORE   1   //Enable _CORE2 and _CORE2LIST statements (debugging of core 2 code)
+//#define CORE2   1   //Enable _CORE2 and _CORE2LIST statements (debugging of core 2 code)
 #endif //DEBUG
 
 /*------
@@ -396,7 +396,7 @@ extern CALLBACK upCall;
 
 #ifdef INFO
 #define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
-#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.print(hi);_SERIAL.flush();
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
 #else
 #define _INFO _NOP
 #define _INFOLIST(...)  _INFO
