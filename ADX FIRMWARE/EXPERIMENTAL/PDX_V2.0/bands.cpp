@@ -332,6 +332,7 @@ void resetBand(int bs) {
   flipATU();
 #endif //ATUCTL
 
+
 #ifdef DEBUG
   _INFOLIST("%s Band_slot=%d Band=%d slot=%d f[0]=%ld f[1]=%ld f[2]=%ld f[3]=%ld f[4]=%ld mode=%d freq=%ld\n", __func__, bs, b, i, f[0], f[1], f[2], f[3], f[4], mode, freq);
 #endif //DEBUG

@@ -62,13 +62,13 @@
 //*                               (P)ico (D)igital (X)ceiver                                    *
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#define WDT               1      //Hardware and TX watchdog enabled
-#define EE                1      //Save in Flash emulation of EEPROM the configuration
-#define CAT               1      //Enable CAT protocol over serial port
-#define FT817             1      //Yaesu FT817 CAT protocol
-#define TERMINAL          1      //Serial configuration terminal used
-#define QUAD              1      //Support for QUAD board
-#define ATUCTL            1      //Brief 200 mSec pulse to reset ATU on each band change
+//#define WDT               1      //Hardware and TX watchdog enabled
+//#define EE                1      //Save in Flash emulation of EEPROM the configuration
+//#define CAT               1      //Enable CAT protocol over serial port
+//#define FT817             1      //Yaesu FT817 CAT protocol
+//#define TERMINAL          1      //Serial configuration terminal used
+//#define QUAD              1      //Support for QUAD board
+//#define ATUCTL            1      //Brief 200 mSec pulse to reset ATU on each band change
 
 //#define CW              1      //CW support
 //#define ONEBAND         1      //Define a single band
@@ -109,6 +109,7 @@
    Output control lines
 */
 #define RX              2      //RX Switch
+
 #ifdef ATUCTL
 #define ATU            15     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
 #endif //ATUCTL
@@ -118,8 +119,21 @@
 */
 #define WSPR            7      //WSPR LED
 #define JS8             6      //JS8 LED
-#define FT4             5      //FT4 LED
-#define FT8             4      //FT8 LED
+
+/*-------
+ * Temporary patch, to be removed in the future
+ * this is because my testing board has a fried GPIO4 and GPIO5 ports 
+ * and I did reroute them to GPIO0 and GPIO1 to continue the testing
+ */
+//#define FRIED_BOARD     1
+#ifdef  FRIED_BOARD
+   #define FT4             1
+   #define FT8             0
+#else
+   #define FT4             5      //FT4 LED
+   #define FT8             4      //FT8 LED
+#endif //LU7DZ testing board with fried GPIO4 & GPIO5 pins
+
 #define TX              3      //TX LED
 /*---
    Switches
@@ -363,6 +377,7 @@ extern CALLBACK upCall;
  * whilst Serial1 is the UART based serial at pins GPIO16/17 (much more convenient
  * for debugging purposes)
  */
+
 #ifdef DEBUG
 #define DEBUG_UART 1
 #ifdef DEBUG_UART

@@ -346,6 +346,11 @@ void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
    detect if a push button is pressed
   -----------------------------------------------------------------------------*/
 bool detectKey(uint8_t k, bool v, bool w) {
+
+  #ifdef DEBUG
+      _INFOLIST("%s switch(%d) value(%s)\n", __func__, k, BOOL2CHAR(getGPIO(k)));
+  #endif //DEBUG
+
   uint32_t tdown = millis();
   if (getGPIO(k) == v) {
     while (millis() - tdown < REPEAT_KEY) {
