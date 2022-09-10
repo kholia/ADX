@@ -37,12 +37,12 @@ static inline pio_sm_config freqPIO_program_get_default_config(uint offset) {
 }
 
     /**
-     * Initializer for the fake isr program program
+     * Initializer for the freqPIO program
      * @param[in] pio the PIO instance to use
      * @param[in] sm state machine to use for the PIO instance
      * @param[in] offset Offset into PIO memory to place the program into
+     * @param[in] pin used to receive the signal to watch
      */
-//    static inline void freqPIO_program_init(PIO pio, uint sm, uint offset) {
     static inline void freqPIO_program_init(PIO pio, uint sm, uint offset, uint pin) {
         // Enable the IRQ source
         // The reason for doing interrupt0 + sm:
@@ -60,9 +60,10 @@ static inline pio_sm_config freqPIO_program_get_default_config(uint offset) {
         // for input from software.
         // params are (config, shift_right (ignored here), autopull (true), pull threshold (1 bit))
         sm_config_set_out_shift(&config, true, true, 1);
-        // Load the config and execute the state machine
+        // Map the GPIO pin to be used to the state machine running the firmware
         sm_config_set_in_pins(&config, pin);
         pio_gpio_init(pio, pin);
+        // Load the config and execute the state machine
         pio_sm_init(pio, sm, offset, &config);
         pio_sm_set_enabled(pio, sm, true);
     }
