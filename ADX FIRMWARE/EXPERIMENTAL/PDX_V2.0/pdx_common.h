@@ -18,7 +18,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "2.0"
-#define BUILD          3
+#define BUILD          5
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                       External libraries used                                               *
@@ -55,7 +55,7 @@
 #define PICODISPLAY 1
 #define wdt_reset() watchdog_update()
 
-#define FT817      1
+//#define FT817      1
 //#define TS480      1
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -125,15 +125,8 @@
  * this is because my testing board has a fried GPIO4 and GPIO5 ports 
  * and I did reroute them to GPIO0 and GPIO1 to continue the testing
  */
-//#define FRIED_BOARD     1
-#ifdef  FRIED_BOARD
-   #define FT4             1
-   #define FT8             0
-#else
-   #define FT4             5      //FT4 LED
-   #define FT8             4      //FT8 LED
-#endif //LU7DZ testing board with fried GPIO4 & GPIO5 pins
-
+#define FT4             5      //FT4 LED
+#define FT8             4      //FT8 LED
 #define TX              3      //TX LED
 /*---
    Switches
@@ -171,7 +164,7 @@
 #define UPPUSH      0B00000100    //UP button pressed
 #define DNPUSH      0B00001000    //DOWN button pressed
 #define TXPUSH      0B00010000    //TXSW button pressed
-#define CATTX       0B00100000  // TX turned on via CAT (disable VOX)
+#define CATTX       0B00100000    // TX turned on via CAT (disable VOX)
 #define SAVEEE      0B01000000    //Mark of EEPROM updated
 #define CWMODE      0B10000000    //CW Mode active
 /*----------------------------------------------------------------*
@@ -184,7 +177,6 @@
 #define ATUCLK      0B00010000    //control the width of the ATU pulse
 #define TX_WDT      0B00100000    //TX Watchdog has been activated
 #define AVOX        0B01000000    //ANTI-VOX has been activated
-#define UNUSED      0B10000000    //Counter mode semaphore
 
 /*----------------------------------------------------------------*
    IPC Management
@@ -192,7 +184,7 @@
 #define QWAIT       0B00000001    //Semaphore Wait
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
-
+#define PIOIRQ      0B00001000    //Signal IRQ interrupt
 /*----------------------------------------------------------------*
    Miscellaneour definitions
    ---------------------------------------------------------------*/
@@ -208,24 +200,30 @@
 #define  CAL_COMMIT      12
 #define  CAL_ERROR       1
 
+#define FSK_FREQPIO        1
 //#define  FSK_ADCZ        1
-#if !defined(FSK_ADCZ)
-#define FSK_ZCD      1
-#endif
+//#define  FSK_ZCD         1
 
 #define FSKMIN             300    //Minimum FSK frequency computed
 #define FSKMAX            3000    //Maximum FSK frequency computed
+#define FSK_USEC       1000000    //Constant to convert T to f
+#define FSK_IDLE          1000    //Standard wait without signal
+#define FSK_ERROR            4
+/*---------------------------------------------------------------
+ * FSK_ZCD algorithm
+ * definitions
+ */
 #ifdef FSK_ZCD
-
-#define FSK_USEC                  1000000
 #define FSK_SAMPLE                   1000
-#define FSK_ERROR                       4
 #define FSK_RA                         20
+#undef  FSK_IDLE
 #define FSK_IDLE      5*FSK_SAMPLE*FSK_RA
 
 #endif //FSK_ZCD
 
-
+/*--------------------------------------------
+ * FSK_ADCZ algorithm
+ */
 #ifdef FSK_ADCZ
 /* Extract analog values from the selected ADC pin
    The signal might have any level of DC and might have some noise
@@ -251,9 +249,11 @@
 #define  ADCMIN         0
 #define  ADCZERO     (ADCMAX+ADCMIN)/2
 #define  ADCSAMPLE      1
-#define  FSK_IDLE       1000
 
 #endif //FSK_ADCZ
+
+
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      CONSISTENCY RULES                                                      *
 //* Feature definition might conflict among them so some consistency rules are applied to remove*
@@ -378,14 +378,19 @@ extern CALLBACK upCall;
  * for debugging purposes)
  */
 
+/*
 #ifdef DEBUG
 #define DEBUG_UART 1
+
 #ifdef DEBUG_UART
 #define _SERIAL Serial1
 #else 
 #define _SERIAL Serial
 #endif //DEBUG_UART
+
 #endif //DEBUG
+*/
+#define _SERIAL Serial
 
 #ifdef DEBUG
 #define _serial1(...)   sprintf(hi,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
@@ -410,8 +415,11 @@ extern CALLBACK upCall;
 #endif //CORE2
 
 #ifdef INFO
-#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
-#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
+//#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
+//#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
+#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);Serial.flush();
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.write(hi);Serial.flush();
+
 #else
 #define _INFO _NOP
 #define _INFOLIST(...)  _INFO
@@ -559,6 +567,13 @@ extern void           setQUAD(int LPFslot);
 #ifdef WDT
 extern uint32_t      wdt_tout;
 #endif //WDT
+
+#ifdef FSK_FREQPIO
+extern void               PIO_init();
+extern volatile uint32_t   period;
+
+
+#endif //FSK_FREQPIO
 
 
 extern const unsigned long slot[MAXBAND][MAXMODE];

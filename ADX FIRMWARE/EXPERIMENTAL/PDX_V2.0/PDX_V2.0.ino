@@ -347,10 +347,6 @@ void bandLED(uint16_t b) {         //b would be 0..3 for standard ADX or QUAD
   -----------------------------------------------------------------------------*/
 bool detectKey(uint8_t k, bool v, bool w) {
 
-  #ifdef DEBUG
-      _INFOLIST("%s switch(%d) value(%s)\n", __func__, k, BOOL2CHAR(getGPIO(k)));
-  #endif //DEBUG
-
   uint32_t tdown = millis();
   if (getGPIO(k) == v) {
     while (millis() - tdown < REPEAT_KEY) {
@@ -949,7 +945,10 @@ void setup()
   Serial.ignoreDTR();
 #endif
 
+#ifdef DEBUG
   Serial.begin(BAUD);
+  while (!Serial);
+#endif //DEBUG
   
   Serial1.setTX(UART_TX);
   Serial1.setRX(UART_RX);  
@@ -960,6 +959,7 @@ void setup()
   _INFOLIST("%s: PDX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
   sprintf(hi,"%s: PDX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
   Serial1.write(hi);
+  Serial.write(hi);
 #endif //DEBUG
 
   /*---
@@ -1003,7 +1003,15 @@ void setup()
 
 #ifdef FSK_ZCD
   _INFOLIST("%s ZCD decoding algorithm used\n", __func__);
-#endif //ONEBAND
+#endif //FSK_ZCD
+
+#ifdef FSK_ADCZ
+  _INFOLIST("%s ACDZ decoding algorithm used\n", __func__);
+#endif //FSK_ADCZ
+
+#ifdef FSK_FREQPIO
+  _INFOLIST("%s FREQPIO decoding algorithm used\n", __func__);
+#endif //FREQPIO
 
 #endif //DEBUG
 
@@ -1066,6 +1074,20 @@ void setup()
 #ifdef DEBUG
   _INFOLIST("%s FSK detection algorithm started QFSK=%s QWAIT=%s ok\n", __func__, BOOL2CHAR(getWord(QSW, QFSK)), BOOL2CHAR(getWord(QSW, QWAIT)));
 #endif //DEBUG
+
+/*-----
+ * If the PIO based counting algorithm is activated the whole PIO setup
+ * is performed
+ */
+#ifdef FSK_FREQPIO
+
+  PIO_init();
+  
+#ifdef DEBUG
+  _INFOLIST("%s PIO firmware loaded and sm setup\n", __func__);
+#endif //DEBUG 
+
+#endif //FSK_FREQPIO
 
   delay(500);
   switch_RXTX(LOW);
@@ -1193,6 +1215,11 @@ void loop()
 
   while ( n > 0 ) {                                //Iterate up to 10 times looking for signal to transmit
 
+/*----
+ * Follows a section not related to the actual detection but to the care of a racing condition
+ * leaving the TX turned on. To avoid this situation to result in a large transmission period
+ * with potential damage to the finals the watchdog is used to prevent that
+ */
 #ifdef WDT
     wdt_reset();
 
@@ -1211,6 +1238,13 @@ void loop()
     }
 #endif //WDT
 
+
+#if defined(FSK_ADCZ) || defined(FSK_ZCD)
+/*----------------------------------------------------------------------------------------------*
+ * The core2 is running the counting algorithms (either ZCD or ADCZ) and pushing results thru   *
+ * the IPC FIFO for the main process at loop() to get the frequencies and process them          *
+ * The following code segregates the code for this case                                         *
+ * ============================================================================================ *
     /*-----------------------------------------------------
        frequency measurements are pushed from core1 when
        a sample is available. If no signal is available
@@ -1263,12 +1297,12 @@ void loop()
            the VOX on then switch the frequency to it
           -----------------------------------------------------*/
 #ifdef FSK_ZCD
-        if (pfo != fo) {
-          si5351.set_freq(((freq + fo) * 100ULL), SI5351_CLK0);
+        if (pfo != codefreq) {
+          si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0);
 #ifdef DEBUG
-          _INFOLIST("%s Frequency change fo=%ld\n", __func__, fo);
+          _INFOLIST("%s Frequency change fo=%ld\n", __func__, codefreq);
 #endif //DEBUG
-          pfo = fo;
+          pfo = codefreq;
           continue;
         }
 #endif //PSK_ZCD
@@ -1289,7 +1323,66 @@ void loop()
 #ifdef WDT
       wdt_reset();
 #endif //WDT
-    } else {
+}
+#endif //End the processing made by the ADCZ and ZCD algorithms    
+//*===================================================================================================================    
+
+#if defined(FSK_FREQPIO)
+/*--------------
+ * Just wait for IRQ request made by the PIO sequential machine signaling
+ * a complete cycle measurement. Each time a full cycle has been measured
+ * the result is communicated and can be used
+ */
+
+if (getWord(QSW,PIOIRQ) == true) {
+   setWord(&QSW,PIOIRQ,false); 
+   n=VOX_MAXTRY;
+   if (period>0) {             
+      codefreq=FSK_USEC/period;
+   } else {
+      codefreq=0;   
+   }
+   /*------------------------------------------------------*
+    Filter out frequencies outside the allowed bandwidth
+    ------------------------------------------------------*/
+   if (codefreq >= uint32_t(FSKMIN) && codefreq <= uint32_t(FSKMAX)) {
+    
+      n = VOX_MAXTRY;
+      qTot++;
+
+      /*----------------------------------------------------*
+       if VOX is off then pass into TX mode
+       Frequency IS NOT changed on the first sample
+       ----------------------------------------------------*/
+      if (getWord(SSW, VOX) == false) {
+#ifdef DEBUG
+         _INFOLIST("%s VOX activated n=%d f=%ld\n", __func__, n, codefreq);
+#endif //DEBUG
+          switch_RXTX(HIGH);
+          setWord(&SSW, VOX, true);
+          prevfreq = 0;
+          n = VOX_MAXTRY;
+          continue;
+      }
+      /*-----------------------------------------------------
+       * Avoid producing jitter by changing the frequency 
+       * by less than 4 Hz.
+       */
+      if (abs(int(codefreq-prevfreq))>=FSK_ERROR) {
+         si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0);
+#ifdef DEBUG
+         _INFOLIST("%s Frequency change period=%ld f=%ld prev=%ld\n", __func__, period,codefreq, prevfreq);
+#endif //DEBUG
+         prevfreq = codefreq;
+      }
+   }        
+}
+
+#endif //End the processing made by the FSK_FREQPIO algorithms    
+//*===================================================================================================================    
+    
+    
+    else {   //within the nth loop but no signal is detected, so it's a waiting pattern to turn off the VOX or CAT
       /*--------------------
          Waiting for signal
         --------------------*/
@@ -1318,7 +1411,8 @@ void loop()
 #ifdef WDT
     wdt_reset();
 #endif //WDT
-  }
+
+  } //This is the anchor footer of the nth loop waiting for signal to appear below here is processed when no signal is present
 
   /*---------------------------------------------------------------------------------*
      when out of the loop no further TX activity is performed, therefore the TX is
