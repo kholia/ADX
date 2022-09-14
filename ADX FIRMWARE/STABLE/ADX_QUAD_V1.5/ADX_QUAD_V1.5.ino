@@ -114,7 +114,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "1.5"
-#define BUILD          221
+#define BUILD          222
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
@@ -135,15 +135,16 @@ void(* resetFunc) (void) = 0;  // declare reset fuction at address 0 //resetFunc
    #define EE             1      //User EEPROM for persistence
    #define CAT            1      //Enable CAT protocol over serial port
    #define TS480          1      //CAT Protocol is Kenwood 480
-   #define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
    #define ATUCTL         1      //Control external ATU device
+   #define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter    
+
 /*
  * The following definitions are disabled but can be enabled selectively
  */
 
+   //#define QUAD           1      //Enable the usage of the QUAD 4-band filter daughter board
    //#define RESET          1      //Allow a board reset (*)-><Band Select> -> Press & hold TX button for more than 2 secs will reset the board (EEPROM preserved)
    //#define ANTIVOX        1      //Anti-VOX enabled, VOX system won't operate for AVOXTIME mSecs after the TX has been shut down by the CAT system
-   //#define ONEBAND        1      //Forces a single band operation in order not to mess up because of a wrong final filter    
    //#define CW             1      //CW support
    //#define CAL_RESET      1      //If enabled reset cal_factor when performing a new calibration()
    //#define DEBUG          1      //DEBUG turns on different debug, information and trace capabilities, it is nullified when CAT is enabled to avoid conflicts
@@ -1516,7 +1517,30 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
        #endif //WDT       
    }
 }
+/*-------
+ * Blink all LEDs
+ */
 
+void blinkAllLED() {
+   uint8_t n=(max_blink-1);
+
+   while (n>0) {
+       for (int j=0;j<4;j++) {
+           setGPIO(WSPR+j,HIGH);
+       }
+       delay(BDLY);
+       for (int j=0;j<4;j++) {
+           setGPIO(WSPR+j,LOW);
+       }
+       delay(BDLY);
+       n--;
+
+       #ifdef WDT       
+          wdt_reset();
+       #endif //WDT       
+   }
+  
+}
 /*-----
  * LED on calibration mode
  */
@@ -2041,10 +2065,13 @@ void Freq_assign(){
 void Band_assign(){
 
     resetLED();
+#ifdef ONEBAND    
+    blinkAllLED();
+#else    
     blinkLED(LED[3-Band_slot]);
+#endif //ONEBAND
     
-    delay(DELAY_WAIT);             //This delay should be changed
-    
+    delay(DELAY_WAIT);             //This delay should be changed    
     Freq_assign();
     Mode_assign();
 

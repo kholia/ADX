@@ -31,19 +31,16 @@ const char *bounce_timeToken = "*bt";
 const char *short_timeToken = "*st";
 const char *max_blinkToken  = "*mbl";
 
-
 #ifdef EE
 const char *eeprom_toutToken = "*eet";
 const char *eeprom_listToken = "*list";
 #endif //EE
-
 
 const char *saveToken       = "*save";
 const char *quitToken       = "*quit";
 const char *resetToken      = "*reset";
 const char *helpToken       = "*help";
 const char *endList         = "XXX";
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   Configuration Terminal Function                                           *
 //* This is an optional function allowing to modify operational parameters without recompiling  *
@@ -235,21 +232,62 @@ void perform_quitToken () {
    and even put other things which are unrelated to them, therefore only strings starting with '*' and
    between 2 and 5 in size are eligible of being a command. The initial '*' is ignored from the listing and
    from the command parsing by taken the pointer to the string + 1.
+
+const char *saveToken       = "*save";
+const char *quitToken       = "*quit";
+const char *resetToken      = "*reset";
+const char *helpToken       = "*help";
+
 */
 void perform_helpToken() {
-  const char * p = atuToken;
 
-  while (strcmp(p, "XXX") != 0) {
+  sprintf(hi,"%s, ",bounce_timeToken);
+  Serial.print(hi);
+
+  sprintf(hi,"%s, ",short_timeToken);
+  Serial.print(hi);
+
+  sprintf(hi,"%s, ",max_blinkToken);
+  Serial.print(hi);
+
+#ifdef EE
+  sprintf(hi,"%s, ",eeprom_toutToken);
+  Serial.print(hi);
+  
+  sprintf(hi,"%s, ",eeprom_listToken);
+  Serial.print(hi);
+#endif //EE
+
+#ifdef ATUCTL
+
+  sprintf(hi,"%s, ",atuToken);
+  Serial.print(hi);
+  
+  sprintf(hi,"%s, ",atu_delayToken);
+  Serial.print(hi);
+  
+#endif //ATUCTL
+
+  
+  sprintf(hi,"%s, ",saveToken);
+  Serial.print(hi);
+  
+  sprintf(hi,"%s, ",quitToken);
+  Serial.print(hi);
+
+  sprintf(hi,"%s, ",resetToken);
+  Serial.print(hi);
+
+  sprintf(hi,"%s",helpToken);
+  Serial.print(hi);
+
+  sprintf(hi,"\n\r>");
+  Serial.print(hi);
+
+  const char * p = atuToken;
 #ifdef WDT
     wdt_reset();
 #endif
-    if (strlen(p) >= 2 && strlen(p) <= 5 && p[0] == '*') {
-      sprintf(hi, "%s, ", p + 1);
-      Serial.print(hi);
-    }
-    p = p + strlen(p) + 1;
-  }
-  Serial.print("\r\n>");
 
 }
 /*-----------------------------------------------------------------------------*
@@ -267,6 +305,8 @@ void printMessage(char * token) {
   sprintf(hi, "%s\n\r>", token);
   Serial.print(hi);
 }
+
+
 /*--------------------------------------------------*
    execCommand
    parse command and process recognized tokens return
@@ -347,18 +387,17 @@ void execTerminal() {
 
   uint8_t n = 3;
   while (n > 0) {
-    resetLED();
-    delay(200);
-    setLED(FT8, false);
-    setLED(FT4, false);
-    setLED(WSPR, false);
-    setLED(JS8, false);
-    delay(200);
+    for (int j=0;j<4;j++) {
+      resetLED();
+      setLED(FT8+j,false);
+      delay(200);
+    }
     n--;
 #ifdef WDT
     wdt_reset();
 #endif //WDT
   }
+  resetLED();
   while (getGPIO(UP) == LOW) {
 #ifdef WDT
     wdt_reset();

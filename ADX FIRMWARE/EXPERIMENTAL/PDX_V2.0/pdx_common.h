@@ -62,16 +62,17 @@
 //*                               (P)ico (D)igital (X)ceiver                                    *
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//#define WDT               1      //Hardware and TX watchdog enabled
-//#define EE                1      //Save in Flash emulation of EEPROM the configuration
+#define WDT               1      //Hardware and TX watchdog enabled
+#define EE                1      //Save in Flash emulation of EEPROM the configuration
+#define ATUCTL            1      //Brief 200 mSec pulse to reset ATU on each band change
+#define ONEBAND           1      //Define a single band (defined when Bands[] are selected)..
+
 //#define CAT               1      //Enable CAT protocol over serial port
 //#define FT817             1      //Yaesu FT817 CAT protocol
-//#define TERMINAL          1      //Serial configuration terminal used
+#define TERMINAL          1      //Serial configuration terminal used
 //#define QUAD              1      //Support for QUAD board
-//#define ATUCTL            1      //Brief 200 mSec pulse to reset ATU on each band change
 
 //#define CW              1      //CW support
-//#define ONEBAND         1      //Define a single band
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
@@ -119,14 +120,9 @@
 */
 #define WSPR            7      //WSPR LED
 #define JS8             6      //JS8 LED
-
-/*-------
- * Temporary patch, to be removed in the future
- * this is because my testing board has a fried GPIO4 and GPIO5 ports 
- * and I did reroute them to GPIO0 and GPIO1 to continue the testing
- */
 #define FT4             5      //FT4 LED
 #define FT8             4      //FT8 LED
+
 #define TX              3      //TX LED
 /*---
    Switches
@@ -348,10 +344,10 @@ extern CALLBACK upCall;
 /*****************************************************************
    Trace and debugging macros (only enabled if DEBUG is set
  *****************************************************************/
-//#define DEBUG  1
+#define DEBUG  1
 
 #ifdef DEBUG        //Remove comment on the following #define to enable the type of debug macro
-//#define INFO   1   //Enable _INFO and _INFOLIST statements
+#define INFO   1   //Enable _INFO and _INFOLIST statements
 //#define EXCP   1   //Enable _EXCP and _EXCPLIST statements
 //#define TRACE  1   //Enable _TRACE and _TRACELIST statements
 //#define CORE2   1   //Enable _CORE2 and _CORE2LIST statements (debugging of core 2 code)
@@ -378,9 +374,10 @@ extern CALLBACK upCall;
  * for debugging purposes)
  */
 
-/*
+
 #ifdef DEBUG
 #define DEBUG_UART 1
+//#undef DEBUG_UART
 
 #ifdef DEBUG_UART
 #define _SERIAL Serial1
@@ -389,8 +386,8 @@ extern CALLBACK upCall;
 #endif //DEBUG_UART
 
 #endif //DEBUG
-*/
-#define _SERIAL Serial
+
+//#define _SERIAL Serial
 
 #ifdef DEBUG
 #define _serial1(...)   sprintf(hi,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
@@ -417,8 +414,8 @@ extern CALLBACK upCall;
 #ifdef INFO
 //#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
 //#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
-#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);Serial.flush();
-#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.write(hi);Serial.flush();
+#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial1.print(hi);Serial1.flush();
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial1.write(hi);Serial1.flush();
 
 #else
 #define _INFO _NOP
@@ -515,6 +512,7 @@ extern void           rstLED(uint8_t LEDpin, bool clrLED);
 extern void           resetLED();
 extern void           setLED(uint8_t LEDpin, bool clrLED);
 extern void           blinkLED(uint8_t LEDpin);
+extern void           blinkAllLED();
 extern void           calibrateLED();
 
 extern void           Mode_assign();

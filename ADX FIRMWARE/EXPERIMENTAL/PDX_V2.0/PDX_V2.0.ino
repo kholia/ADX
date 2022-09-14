@@ -317,6 +317,31 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
   }
 }
 
+/*-------
+ * Blink all LEDs
+ */
+
+void blinkAllLED() {
+   uint8_t n=(max_blink-1);
+
+   while (n>0) {
+       for (int j=0;j<4;j++) {
+           setGPIO(FT8+j,HIGH);
+       }
+       delay(BDLY);
+       for (int j=0;j<4;j++) {
+           setGPIO(FT8+j,LOW);
+       }
+       delay(BDLY);
+       n--;
+
+       #ifdef WDT       
+          wdt_reset();
+       #endif //WDT       
+   } 
+}
+
+
 /*-----
    LED on calibration mode
 */
@@ -945,10 +970,10 @@ void setup()
   Serial.ignoreDTR();
 #endif
 
-#ifdef DEBUG
+//#if defined(DEBUG) || defined(TERMINAL)
   Serial.begin(BAUD);
-  while (!Serial);
-#endif //DEBUG
+//  while (!Serial);
+//#endif //DEBUG
   
   Serial1.setTX(UART_TX);
   Serial1.setRX(UART_RX);  
@@ -988,9 +1013,9 @@ void setup()
 #endif //ATUCTL
 
 #ifdef ONEBAND
-  _INFOLIST("%s ONE BAND feature activated\n", __func__);
+  _INFOLIST("%s ONE BAND feature activated Band[%d]\n", __func__,Bands[0]);
 #else
-  _INFOLIST("%s MULTI BAND feature activated\n", __func__);
+  _INFOLIST("%s MULTI BAND feature activated Bands[%d,%d,%d,%d]\n", __func__,Bands[0],Bands[1],Bands[2],Bands[3]);
 #endif //ONEBAND
 
 #ifdef QUAD
@@ -1002,15 +1027,15 @@ void setup()
 #endif //ONEBAND
 
 #ifdef FSK_ZCD
-  _INFOLIST("%s ZCD decoding algorithm used\n", __func__);
+  _INFOLIST("%s ZCD decoding algorithm used (@core2)\n", __func__);
 #endif //FSK_ZCD
 
 #ifdef FSK_ADCZ
-  _INFOLIST("%s ACDZ decoding algorithm used\n", __func__);
+  _INFOLIST("%s ACDZ decoding algorithm used (@core2)\n", __func__);
 #endif //FSK_ADCZ
 
 #ifdef FSK_FREQPIO
-  _INFOLIST("%s FREQPIO decoding algorithm used\n", __func__);
+  _INFOLIST("%s FREQPIO decoding algorithm used (@core1)\n", __func__);
 #endif //FREQPIO
 
 #endif //DEBUG
@@ -1071,9 +1096,11 @@ void setup()
   setWord(&QSW, QFSK, true);
   setWord(&QSW, QWAIT, true);
 
+#if defined (FSK_ZCD) || defined(FSK_ADCZ)
 #ifdef DEBUG
   _INFOLIST("%s FSK detection algorithm started QFSK=%s QWAIT=%s ok\n", __func__, BOOL2CHAR(getWord(QSW, QFSK)), BOOL2CHAR(getWord(QSW, QWAIT)));
 #endif //DEBUG
+#endif //FSK_ZCD or FSK_ADCZ, otherwise core2 won't be activated and it will sit idle on loop1()
 
 /*-----
  * If the PIO based counting algorithm is activated the whole PIO setup
@@ -1212,7 +1239,7 @@ void loop()
   uint32_t qTot = 0;
 
   setWord(&SSW, VOX, false);
-
+  int k=0;
   while ( n > 0 ) {                                //Iterate up to 10 times looking for signal to transmit
 
 /*----
@@ -1371,7 +1398,11 @@ if (getWord(QSW,PIOIRQ) == true) {
       if (abs(int(codefreq-prevfreq))>=FSK_ERROR) {
          si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0);
 #ifdef DEBUG
-         _INFOLIST("%s Frequency change period=%ld f=%ld prev=%ld\n", __func__, period,codefreq, prevfreq);
+         k++;
+         if (k=1000) {
+         _INFOLIST("%s T=%ld fsk=%ld fskprev=%ld\n", __func__, period,codefreq, prevfreq);
+         k=0;
+         }
 #endif //DEBUG
          prevfreq = codefreq;
       }

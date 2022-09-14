@@ -622,3 +622,4 @@ void setup1() {
 #endif //FSK_ADCZ
   }
 }
+void loop1(){};

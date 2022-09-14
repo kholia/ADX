@@ -122,7 +122,21 @@ void Band_assign(bool l) {    //@@@ Change behaviour
 
   if (l == true) {
     resetLED();
-    blinkLED(LED[3 - Band_slot]);
+    
+    #ifdef ONEBAND
+       blinkAllLED();
+#ifdef DEBUG
+       _INFOLIST("%s blinkAllLED()\n", __func__);
+#endif //DEBUG
+
+    #else   
+       blinkLED(LED[3 - Band_slot]);
+#ifdef DEBUG
+       _INFOLIST("%s blinkLED(%d)\n", __func__,LED[3-Band_slot]);
+#endif //DEBUG
+
+    #endif //ONEBAND
+       
     delay(DELAY_WAIT);             //This delay should be changed
   }
 
@@ -345,7 +359,7 @@ void resetBand(int bs) {
 */
 void setStdFreq(int k) {
 
-  for (int i = 0; i < MAXMODE - 1; i++) {
+  for (int i = 0; i < MAXMODE ; i++) {
     f[i] = slot[k][i];
 #ifdef WDT
     wdt_reset();    //Although quick don't allow loops to occur without a wdt_reset()
