@@ -41,6 +41,39 @@
 #include "pdx_common.h"
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+//*                         Compilation conditional messages                                    *
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+#pragma message( "Compiling " __FILE__ )
+#pragma message( "Last modified on " __TIMESTAMP__ )
+
+#ifdef DEBUG
+#pragma message ("* Debug messages enabled  *")
+#ifdef DEBUG_UART
+#pragma message ("* Debug messages output thru the UART1 (serial) output  *")
+#else
+#pragma message ("* Debug messages output thru the USB Serial output      *")
+#endif
+#endif //DEBUG 
+
+/*-----------------------------------------------------------------------------------------------*
+ * In order to establish the initial WiFi credentials at compilation time you might create it
+ * editing a file named wifi_credentials.h with the following content
+ * 
+ * #define WIFI_SSID     "your-ssid"         //(i.e  #define WIFI_SSID "Fibertel WiFi996 2.4GHz")
+ * #define WIFI_PASW     "your-password"     //(i.e. #define WIFI_PASW "1234567890"
+
+ * Place this file in the same directory the rest of the firmware is in order to be incorporated
+ * as part of the compilation process if the TCP/IP functionality is enabled (#define WIFI 1)
+ *------------------------------------------------------------------------------------------------*/
+#ifdef WIFI
+#if __has_include("wifi_credentials.h")
+#pragma message("Wifi credentials found")
+#else
+#pragma message("Wifi credentials not found, please supply to enable TCP/IP related functionality")
+#undef WIFI
+#endif
+#endif //WIFI
+//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            Data definitions                                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
@@ -227,10 +260,6 @@ void setup_si5351() {
 void clearLED(uint8_t LEDpin) {
   setGPIO(LEDpin, LOW);
 
-  if (LEDpin == uint8_t(TX)) {
-    setGPIO(LED_BUILTIN, LOW);
-  }
-
 #ifdef DEBUG
   _EXCPLIST("%s pin=%d\n", __func__, LEDpin);
 #endif //DEBUG
@@ -243,10 +272,9 @@ void resetLED() {  // Turn-off all LEDs
   clearLED(JS8);
   clearLED(FT4);
   clearLED(FT8);
-  clearLED(LED_BUILTIN);
 
 #ifdef DEBUG
-  _INFO;
+  _EXCP;
 #endif //DEBUG
 }
 
@@ -276,12 +304,9 @@ void setLED(uint8_t LEDpin, bool clrLED) {     //Turn-on LED {pin}
   //(clrLED == true ? resetLED() : void(_NOP));
   setGPIO(LEDpin, HIGH);
 
-  if (LEDpin == uint8_t(TX)) {
-    setGPIO(LED_BUILTIN, HIGH);
-  }
 
 #ifdef DEBUG
-  _INFOLIST("%s(%d)\n", __func__, LEDpin);
+  _EXCPLIST("%s(%d)\n", __func__, LEDpin);
 #endif //DEBUG
 }
 
@@ -298,16 +323,8 @@ void blinkLED(uint8_t LEDpin) {    //Blink 3 times LED {pin}
 
   while (n > 0) {
     setGPIO(LEDpin, HIGH);
-
-    if (LEDpin == uint8_t(TX)) {
-      setGPIO(LED_BUILTIN, HIGH);
-    }
-
     delay(BDLY);
     setGPIO(LEDpin, LOW);
-    if (LEDpin == uint8_t(TX)) {
-      setGPIO(LED_BUILTIN, LOW);
-    }
     delay(BDLY);
     n--;
 
@@ -464,7 +481,6 @@ void switch_RXTX(bool t) { // t = False (RX) : t = True (TX)
     si5351.output_enable(SI5351_CLK0, 1);   // TX on
 
     setGPIO(TX, HIGH);
-    setGPIO(LED_BUILTIN, HIGH);
     setWord(&SSW, TXON, HIGH);
 
 #ifdef WDT
@@ -495,7 +511,6 @@ void switch_RXTX(bool t) { // t = False (RX) : t = True (TX)
   si5351.output_enable(SI5351_CLK1, 1); // RX on
 
   setGPIO(TX, 0);
-  setGPIO(LED_BUILTIN, LOW);
   setWord(&SSW, TXON, LOW);
   setWord(&SSW, VOX, LOW);
 }
@@ -746,17 +761,18 @@ void checkMode() {
      TX button short press
      Transmit mode
     --------------------------------*/
+      
   if ((detectKey(TXSW, LOW, NOWAIT) == LOW) && (getWord(SSW, TXON) == false)) {
 
-#ifdef DEBUG
-    _INFOLIST("%s TX+\n", __func__);
-#endif //DEBUG
+     #ifdef DEBUG
+       _INFOLIST("%s TX+\n", __func__);
+     #endif //DEBUG
 
-    ManualTX();
+     ManualTX();
 
-#ifdef DEBUG
-    _INFOLIST("%s TX-\n", __func__);
-#endif //DEBUG
+     #ifdef DEBUG
+       _INFOLIST("%s TX-\n", __func__);
+     #endif //DEBUG
   }
 
   /*-------------------------------------------------------------*
@@ -770,14 +786,16 @@ void checkMode() {
 
     Band_Select();
 
-#ifdef DEBUG
-    _INFOLIST("%s U+D f=%ld", __func__, freq);
-#endif //DEBUG
+    #ifdef DEBUG
+       _INFOLIST("%s U+D f=%ld", __func__, freq);
+    #endif //DEBUG
   }
 
 #endif //ONEBAND
 
   if ((detectKey(DOWN, LOW, NOWAIT) == LOW) && (getWord(SSW, TXON) == false)) {
+
+
     while (detectKey(DOWN, LOW, NOWAIT) == LOW) {}
 
     if (mode == 0) {
@@ -807,7 +825,9 @@ void checkMode() {
   }
 
   if ((detectKey(UP, LOW, NOWAIT) == LOW) && (getWord(SSW, TXON) == false)) {
+
     while (detectKey(UP, LOW, NOWAIT) == LOW) {}
+
     mode++;
     /*---
        CW enables a 5th mode
@@ -910,7 +930,6 @@ void initTransceiver() {
 void definePinOut() {
 
   gpio_init(TX);
-  gpio_init(LED_BUILTIN);
   gpio_init(UP);
   gpio_init(DOWN);
   gpio_init(TXSW);
@@ -932,7 +951,6 @@ void definePinOut() {
 
   gpio_set_dir(RX, GPIO_OUT);
   gpio_set_dir(TX, GPIO_OUT);
-  gpio_set_dir(LED_BUILTIN, GPIO_OUT);
   gpio_set_dir(WSPR, GPIO_OUT);
   gpio_set_dir(JS8, GPIO_OUT);
   gpio_set_dir(FT4, GPIO_OUT);
@@ -972,7 +990,7 @@ void setup()
 
 //#if defined(DEBUG) || defined(TERMINAL)
   Serial.begin(BAUD);
-//  while (!Serial);
+  while (!Serial);
 //#endif //DEBUG
   
   Serial1.setTX(UART_TX);
@@ -1039,6 +1057,14 @@ void setup()
 #endif //FREQPIO
 
 #endif //DEBUG
+
+#ifdef WIFI
+  init_WiFi();
+#ifdef DEBUG
+  _INFOLIST("%s WiFi connectivity triggered\n", __func__);
+#endif //DEBUG
+#endif //WIFI
+
 
   definePinOut();
 
@@ -1153,6 +1179,7 @@ void setup()
 #endif //DEBUG
 
 
+
 #ifdef DEBUG
   _INFOLIST("%s setup configuration completed\n", __func__);
 #endif //DEBUG
@@ -1172,6 +1199,7 @@ void loop()
       Change frequency, mode, band
     ---------------------------------------------------------------------------------*/
   checkMode();
+
   /*---------------------------------------------------------------------------------*
       Save EEPROM if a change has been flagged anywhere in the logic
     ---------------------------------------------------------------------------------*/
@@ -1204,6 +1232,12 @@ void loop()
   //*--- if WDT enabled reset the watchdog
   wdt_reset();
 #endif //WDT
+/*---------------------------------------------------------------------------------*
+ * Manage WiFi connection status while not transmitting
+ *---------------------------------------------------------------------------------*/
+#ifdef WIFI
+  check_WiFi();
+#endif //WIFI
 
   //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   //*                                                                                *
@@ -1211,12 +1245,14 @@ void loop()
   //*                                                                                *
   //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   /*---------------------------------------------------------------------------------*
-     setup1 () is running on a different thread at core1 and sampling the frequency
-     using either a pwm counting (FSK_PEG) or a pseudo zero crossing (FSK_ZCD) method
+     The counting algorithm runs either at core1 (ZCD & ADCZ) or on a PIO RISC (FREQPIO)
+     in the case of core1 the algorithms runs at setup1() and sampling the frequency
+     using either a pwm counting (FSK_PEG, deprecated) or a pseudo zero crossing (FSK_ZCD)
+     method (digital) or the ADCZ zero cross detector (analog).
      Whenever the frequency falls within the [FSKMIN,FSKMAX] limits it's FIFOed here
      Additional heuristic of validation are also applied to manage counting common
      counting errors.
-     FSK_PEG
+     FSK_PEG (deprecated, way too much error)
      The counting algorithm has a common error of +/- 1 count because of the moment
      the sampling starts (which might include or exclude one edge), because of the
      window measurement applied this is translated into a +/- FSK_MULT (Hz) error
@@ -1227,17 +1263,17 @@ void loop()
      and thus ignored. Other counting errors can produce an actual shift of the
      transmitting frequency and thus a decoding issue on the other side. Actual
      measurement seems to point to error<0.2%
-     FSK_ZCD
+     FSK_ZCD (adopted, requires a comparator/shaper)
      The counting algorithm has rounding errors in the range of <500 uSec because the
      error in the triggering level and the residual +/- 1 uSec counting error
      the frequency is filtered by the bandwidth level and also a rounding error of
      1 Hz, thus if the sampled frequency is off by +/- 1 Hz the difference is less
-     than the change on the PSK tone and thus ignored
+     than the change on the PSK tone and thus ignored, further filtering is made
+     by not allowing the frequency to change if below a threshold.
+     ADCZ works on a different ground as well as FREQPIO
     ---------------------------------------------------------------------------------*/
-  uint16_t n = VOX_MAXTRY;
-  uint32_t qBad = 0;
-  uint32_t qTot = 0;
-
+  uint16_t n = vox_maxtry;
+  
   setWord(&SSW, VOX, false);
   int k=0;
   while ( n > 0 ) {                                //Iterate up to 10 times looking for signal to transmit
@@ -1285,12 +1321,12 @@ void loop()
       int index = rp2040.fifo.pop();
       double fo = fsequences[index];
       codefreq = uint32_t(round(fo));
-      n = VOX_MAXTRY;
+      n = vox_maxtry;
 #endif //FSK_ZCD
 
 #ifdef FSK_ADCZ
       codefreq = rp2040.fifo.pop();
-      n = VOX_MAXTRY;
+      n = vox_maxtry;
 #endif //FSK_ADCZ
 
 #ifdef DEBUG
@@ -1301,8 +1337,7 @@ void loop()
          Filter out frequencies outside the allowed bandwidth
         ------------------------------------------------------*/
       if (codefreq >= uint32_t(FSKMIN) && codefreq <= uint32_t(FSKMAX)) {
-        n = VOX_MAXTRY;
-        qTot++;
+        n = vox_maxtry;
 
         /*----------------------------------------------------*
            if VOX is off then pass into TX mode
@@ -1316,7 +1351,7 @@ void loop()
           switch_RXTX(HIGH);
           setWord(&SSW, VOX, true);
           prevfreq = 0;
-          n = VOX_MAXTRY;
+          n = vox_maxtry;
           continue;
         }
         /*-----------------------------------------------------*
@@ -1363,7 +1398,7 @@ void loop()
 
 if (getWord(QSW,PIOIRQ) == true) {
    setWord(&QSW,PIOIRQ,false); 
-   n=VOX_MAXTRY;
+   n=vox_maxtry;
    if (period>0) {             
       codefreq=FSK_USEC/period;
    } else {
@@ -1374,8 +1409,7 @@ if (getWord(QSW,PIOIRQ) == true) {
     ------------------------------------------------------*/
    if (codefreq >= uint32_t(FSKMIN) && codefreq <= uint32_t(FSKMAX)) {
     
-      n = VOX_MAXTRY;
-      qTot++;
+      n = vox_maxtry;
 
       /*----------------------------------------------------*
        if VOX is off then pass into TX mode
@@ -1388,7 +1422,7 @@ if (getWord(QSW,PIOIRQ) == true) {
           switch_RXTX(HIGH);
           setWord(&SSW, VOX, true);
           prevfreq = 0;
-          n = VOX_MAXTRY;
+          n = vox_maxtry;
           continue;
       }
       /*-----------------------------------------------------
@@ -1449,25 +1483,6 @@ if (getWord(QSW,PIOIRQ) == true) {
      when out of the loop no further TX activity is performed, therefore the TX is
      turned off and the board is set into RX mode
     ---------------------------------------------------------------------------------*/
-
-  /*------------------------------*
-     This is a development probe
-     to measure the counting
-     error obtained into the
-     frequency checking
-    ------------------------------*/
-#ifdef DEBUG
-#ifdef FSK_ZCD
-  if (qTot != 0) {
-    float r = 100.0 * (float(qBad * 1.0) / float(qTot * 1.0));
-#ifdef DEBUG
-    _INFOLIST("%s <eof> qBad=%ld qTot=%ld error=%.6f\n", __func__, qBad, qTot, r);
-#endif //DEBUG
-    qBad = 0;
-    qTot = 0;
-  }
-#endif //FSK_ZCD
-#endif //DEBUG
   //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   //*                               RX Cycle                                               *
   //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -1492,9 +1507,9 @@ if (getWord(QSW,PIOIRQ) == true) {
 
   if (getWord(SSW, TXON) == LOW && getWord(TSW, TX_WDT) == HIGH && (millis() > (wdt_tout + uint32_t(WDT_MAX)))) {
     setWord(&TSW, TX_WDT, LOW); //Clear watchdog condition
-#ifdef DEBUG
-    _INFOLIST("%s TX watchdog condition cleared\n", __func__);
-#endif //DEBUG
+    #ifdef DEBUG
+       _INFOLIST("%s TX watchdog condition cleared\n", __func__);
+    #endif //DEBUG
 
     /*-----
        Clear FIFO

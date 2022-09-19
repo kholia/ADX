@@ -11,9 +11,8 @@
   Now the new selected band bank will flash 3 times and then stored mode LED will be lit.
   TX won't activate when changing bands so don't worry on pressing TX button when changing bands in band mode.
   Assign your preferred bands to B1,B2,B3 and B4
-  Supported Bands are: 80m, 40m, 30m, 20m,17m, 15m
+  Supported Bands are: 80m, 40m, 30m, 20m,17m, 15m unless the #define ONEBAND directive is set
 */
-
 
 #ifdef ONEBAND                                      // If defined selects a single band to avoid mistakes with PA filter
 const uint16_t Bands[BANDS] = {10, 10, 10, 10};     // All bands the same (change to suit needs)
@@ -239,7 +238,6 @@ int getBand(uint32_t fx) {
 
   return b;
 }
-
 /*------------------------------------------------------------*
    findSlot
    find the slot [0..3] on the Bands array (band slot)
@@ -259,26 +257,6 @@ int findSlot(uint16_t band) {
   return s;
 }
 
-/*-------------------------------------------------------------*
-   setSlot
-   set a slot consistent with the frequency, do not if not
-   supported
-  -------------------------------------------------------------*/
-/*
-int setSlot(uint32_t f) {
-  int b = getBand(f);
-  if (b == -1) {
-    return Band_slot;
-  }
-  int s = findSlot(b);
-
-#ifdef DEBUG
-  _INFOLIST("%s() f=%ld band=%d slot=%d\n", __func__, f, b, s);
-#endif //DEBUG
-
-  return s;
-}
-*/
 /*-------------------------------------------------------*
    resetBand
    setup the band after a valid Band_slot has been set
@@ -317,8 +295,6 @@ void resetBand(int bs) {
 #ifdef DEBUG
   _INFOLIST("%s Band_assign Ok freq=%ld ok\n", __func__, freq);
 #endif //DEBUG
-
-  //@@@Freq_assign();
 
   Mode_assign();
 #ifdef DEBUG

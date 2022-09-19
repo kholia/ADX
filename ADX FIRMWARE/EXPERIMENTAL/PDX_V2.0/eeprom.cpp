@@ -38,6 +38,7 @@ void updateEEPROM() {
   EEPROM.put(EEPROM_SHORT_TIME, short_time);
   EEPROM.put(EEPROM_MAX_BLINK, max_blink);
   EEPROM.put(EEPROM_EEPROM_TOUT, eeprom_tout);
+  EEPROM.put(EEPROM_MAXTRY,vox_maxtry);
 
 #endif //TERMINAL
 
@@ -50,7 +51,7 @@ void updateEEPROM() {
   setWord(&SSW, SAVEEE, false);
 
 #ifdef DEBUG
-  _INFOLIST("%s save(%d) cal(%d) m(%d) slot(%d) save=%d build=%d\n", __func__, save, cal_factor, mode, Band_slot, save, build);
+  _INFOLIST("%s save(%d) cal(%d) m(%d) slot(%d) save=%d build=%d vox=%d\n", __func__, save, cal_factor, mode, Band_slot, save, build,vox_maxtry);
 #endif //DEBUG
 
 }
@@ -77,6 +78,7 @@ void resetEEPROM() {
   bounce_time = BOUNCE_TIME;
   short_time = SHORT_TIME;
   max_blink  = MAX_BLINK;
+  vox_maxtry = VOX_MAXTRY;
   eeprom_tout = EEPROM_TOUT;
 
 #endif //TERMINAL
@@ -184,6 +186,7 @@ void initEEPROM() {
     EEPROM.get(EEPROM_SHORT_TIME, short_time);
     EEPROM.get(EEPROM_MAX_BLINK, max_blink);
     EEPROM.get(EEPROM_EEPROM_TOUT, eeprom_tout);
+    EEPROM.get(EEPROM_MAXTRY,vox_maxtry);
 
 #endif //TERMINAL
 

@@ -18,7 +18,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "2.0"
-#define BUILD          5
+#define BUILD          10
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                       External libraries used                                               *
@@ -55,9 +55,6 @@
 #define PICODISPLAY 1
 #define wdt_reset() watchdog_update()
 
-//#define FT817      1
-//#define TS480      1
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                               (P)ico (D)igital (X)ceiver                                    *
 //*                            FEATURE CONFIGURATION PROPERTIES                                 *
@@ -66,10 +63,11 @@
 #define EE                1      //Save in Flash emulation of EEPROM the configuration
 #define ATUCTL            1      //Brief 200 mSec pulse to reset ATU on each band change
 #define ONEBAND           1      //Define a single band (defined when Bands[] are selected)..
+#define TERMINAL          1      //Serial configuration terminal used
+#define WIFI              1      //Enable TCP/IP connectivity thru a WiFi AP
 
 //#define CAT               1      //Enable CAT protocol over serial port
 //#define FT817             1      //Yaesu FT817 CAT protocol
-#define TERMINAL          1      //Serial configuration terminal used
 //#define QUAD              1      //Support for QUAD board
 
 //#define CW              1      //CW support
@@ -111,9 +109,6 @@
 */
 #define RX              2      //RX Switch
 
-#ifdef ATUCTL
-#define ATU            15     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
-#endif //ATUCTL
 
 /*---
    LED
@@ -124,6 +119,11 @@
 #define FT8             4      //FT8 LED
 
 #define TX              3      //TX LED
+
+#ifdef ATUCTL
+#define ATU            15     //ATU Device control line (flipped HIGH during 200 mSecs at a band change)
+#endif //ATUCTL
+
 /*---
    Switches
 */
@@ -135,7 +135,6 @@
 */
 #define PDX_I2C_SDA    16      //I2C SDA
 #define PDX_I2C_SCL    17      //I2C SCL
-
 
 /*---
    UART Pin
@@ -181,6 +180,7 @@
 #define QCAL        0B00000010    //Calibration (using 2 cores)
 #define QFSK        0B00000100    //FSK detection
 #define PIOIRQ      0B00001000    //Signal IRQ interrupt
+#define WIFIOK      0B00010000    //Wifi Connection status
 /*----------------------------------------------------------------*
    Miscellaneour definitions
    ---------------------------------------------------------------*/
@@ -269,24 +269,17 @@
 
 //*--- If CAT is not defined then erase all conflicting definitions
 #if (!defined(CAT))  //Rule for conflicting usage of the CAT Protocol (can't activate extended without basic)
-#undef  TS480
 #undef  FT817
-#endif // CAT && DEBUG
+#endif // CAT
 
-#if (defined(CAT) && (!defined(FT817) && !defined(TS480)))
-#define FT817      1
-#endif // CAT && FT817 forced if no CAT protocol indicated
-
-#if (defined(CAT) && defined(FT817))
-#undef TS480
-#endif // CAT && TS480
-
-//*--- if both supported CAT protocols are simultaneously selected then keep one
-#define NFS 32
 
 /*----------------------------------------
  * Callback structure
  */
+
+//*--- Parameters for the IPC FIFO between core1 and core2
+#define NFS 32
+
 // --- IPC structures
 
 struct msg {
@@ -376,8 +369,9 @@ extern CALLBACK upCall;
 
 
 #ifdef DEBUG
-#define DEBUG_UART 1
-//#undef DEBUG_UART
+
+//#define DEBUG_UART 1
+#undef DEBUG_UART
 
 #ifdef DEBUG_UART
 #define _SERIAL Serial1
@@ -387,12 +381,25 @@ extern CALLBACK upCall;
 
 #endif //DEBUG
 
+
 //#define _SERIAL Serial
 
 #ifdef DEBUG
 #define _serial1(...)   sprintf(hi,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
 #else
 #define _serial1(...)   _NOP
+#endif
+
+#ifdef INFO
+#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
+//#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);Serial.flush();
+//#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.write(hi);Serial.flush();
+
+#else
+
+#define _INFO _NOP
+#define _INFOLIST(...)  _INFO
 #endif
 
 #ifdef TRACE
@@ -411,16 +418,6 @@ extern CALLBACK upCall;
 #define _CORE2LIST(...)  _CORE2
 #endif //CORE2
 
-#ifdef INFO
-//#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
-//#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
-#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial1.print(hi);Serial1.flush();
-#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial1.write(hi);Serial1.flush();
-
-#else
-#define _INFO _NOP
-#define _INFOLIST(...)  _INFO
-#endif
 
 #ifdef EXCP
 #define _EXCP           sprintf(hi,"%s: Ok\n",__func__); _SERIAL.print(strcat("@",hi));_SERIAL.flush();
@@ -429,9 +426,6 @@ extern CALLBACK upCall;
 #define _EXCP           _NOP
 #define _EXCPLIST(...)  _EXCP
 #endif
-
-
-
 
 #ifdef CW
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -456,6 +450,7 @@ uint16_t cwshift = CWSHIFT;
 #define EEPROM_ATU_DELAY    70
 #define EEPROM_BOUNCE_TIME  80
 #define EEPROM_SHORT_TIME   90
+#define EEPROM_MAXTRY      100
 #define EEPROM_MAX_BLINK   120
 #define EEPROM_EEPROM_TOUT 10000   //Timeout to commit to EEPROM any change
 #define EEPROM_AVOXTIME    170
@@ -499,13 +494,8 @@ extern double         fsequences[NFS]; // Ring buffer for communication across c
 extern int            nfsi;
 extern double         pfo; // Previous output frequency
 
-
-
-
-
 /*-----------
    Function references
-
 */
 extern const uint8_t  LED[4];
 extern void           rstLED(uint8_t LEDpin, bool clrLED);
@@ -546,6 +536,13 @@ extern uint16_t       atu;
 extern uint16_t       atu_delay;
 extern uint32_t       tATU;
 #endif //ATUCTL
+
+#ifdef WIFI
+extern void           init_WiFi();
+extern void           check_WiFi();
+extern uint32_t       tout_WIFI;
+
+#endif //WIFI
 
 #ifdef EE
 extern void           updateEEPROM();

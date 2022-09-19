@@ -2,8 +2,6 @@
 #include "pdx_common.h"
 
 
-
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                                      CORE2 Processing                                       *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -78,9 +76,11 @@ uint16_t getADCsample() {
     adc_zero = calibrateADC(adc_min, adc_max);
     adc_uh = adc_zero * 110 / 100;
     adc_ul = adc_zero * 90 / 100;
+
 #ifdef DEBUG
     _TRACELIST("%s calibration (min) adc_max=%d adc_min=%d adc_Zero=%d\n", __func__, adc_max, adc_min, adc_zero);
 #endif //DEBUG
+
     return v;
   }
   if (v >= adc_uh) {
@@ -235,7 +235,7 @@ void setup1() {
   //* Automatic input detection algorithm                                                                         *
   //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   if (getWord(QSW, QFSK) == true) {
-    ffsk = 0;
+     ffsk = 0;
 
 #ifdef FSK_ZCD
     /*----------------------------------------*
@@ -267,6 +267,7 @@ void setup1() {
       irq_set_exclusive_handler(PWM_IRQ_WRAP, pwm_int);
       irq_set_enabled(PWM_IRQ_WRAP, true);
       f_hi = 0;
+
 #ifdef FSK_ZCD
       uint32_t t = time_us_32() + 2;                     //Allow all the settings to stabilize
       while (t > time_us_32());                          //

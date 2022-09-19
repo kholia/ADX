@@ -27,6 +27,7 @@ const char *atuToken        = "*atu";
 const char *atu_delayToken  = "*atd";
 #endif //ATUCTL
 
+const char *max_tryToken = "*vox";
 const char *bounce_timeToken = "*bt";
 const char *short_timeToken = "*st";
 const char *max_blinkToken  = "*mbl";
@@ -232,59 +233,62 @@ void perform_quitToken () {
    and even put other things which are unrelated to them, therefore only strings starting with '*' and
    between 2 and 5 in size are eligible of being a command. The initial '*' is ignored from the listing and
    from the command parsing by taken the pointer to the string + 1.
-
-const char *saveToken       = "*save";
-const char *quitToken       = "*quit";
-const char *resetToken      = "*reset";
-const char *helpToken       = "*help";
-
 */
 void perform_helpToken() {
 
-  sprintf(hi,"%s, ",bounce_timeToken);
+  sprintf(hi,"%s, ",bounce_timeToken + 1);
   Serial.print(hi);
 
-  sprintf(hi,"%s, ",short_timeToken);
+  sprintf(hi,"%s, ",max_tryToken + 1);
   Serial.print(hi);
 
-  sprintf(hi,"%s, ",max_blinkToken);
+  sprintf(hi,"%s, ",short_timeToken + 1);
   Serial.print(hi);
 
+  sprintf(hi,"%s, ",max_blinkToken + 1);
+  Serial.print(hi);
+
+/*--------
+ * EEPROM specific commands
+ */
 #ifdef EE
-  sprintf(hi,"%s, ",eeprom_toutToken);
+  sprintf(hi,"%s, ",eeprom_toutToken + 1);
   Serial.print(hi);
   
-  sprintf(hi,"%s, ",eeprom_listToken);
+  sprintf(hi,"%s, ",eeprom_listToken + 1);
   Serial.print(hi);
 #endif //EE
 
+/*--------
+ * ATU specific commands
+ */
 #ifdef ATUCTL
 
-  sprintf(hi,"%s, ",atuToken);
+  sprintf(hi,"%s, ",atuToken + 1);
   Serial.print(hi);
   
-  sprintf(hi,"%s, ",atu_delayToken);
+  sprintf(hi,"%s, ",atu_delayToken + 1);
   Serial.print(hi);
   
 #endif //ATUCTL
 
   
-  sprintf(hi,"%s, ",saveToken);
+  sprintf(hi,"%s, ",saveToken + 1);
   Serial.print(hi);
   
-  sprintf(hi,"%s, ",quitToken);
+  sprintf(hi,"%s, ",quitToken + 1);
   Serial.print(hi);
 
-  sprintf(hi,"%s, ",resetToken);
+  sprintf(hi,"%s, ",resetToken + 1);
   Serial.print(hi);
 
-  sprintf(hi,"%s",helpToken);
+  sprintf(hi,"%s",helpToken + 1);
   Serial.print(hi);
 
   sprintf(hi,"\n\r>");
   Serial.print(hi);
 
-  const char * p = atuToken;
+  
 #ifdef WDT
     wdt_reset();
 #endif
@@ -338,6 +342,11 @@ void execCommand(char * commandLine) {
     printCommand(ptrToCommandName, updateWord(&short_time));
     return;
   }
+  if (strcmp(ptrToCommandName, max_tryToken + 1)  == 0) {
+    printCommand(ptrToCommandName, updateWord(&vox_maxtry));
+    return;
+  }
+
   if (strcmp(ptrToCommandName, max_blinkToken + 1)   == 0) {
     printCommand(ptrToCommandName, updateWord(&max_blink));
     return;
@@ -382,7 +391,7 @@ void execCommand(char * commandLine) {
   -----------------------------------------------------------------------------*/
 void execTerminal() {
 
-  sprintf(hi, "\n\rADX %s build(%03d) command interpreter\n\r", VERSION, uint16_t(BUILD));
+  sprintf(hi, "\n\rPDX %s build(%03d) command interpreter\n\r", VERSION, uint16_t(BUILD));
   Serial.print(hi);
 
   uint8_t n = 3;
@@ -420,8 +429,9 @@ void execTerminal() {
       wdt_reset();
 #endif //WDT
     }
+#ifdef EE    
     checkEEPROM();
-
+#endif //EE
   }
 
 }
