@@ -40,21 +40,6 @@
 #include <stdint.h>
 #include "pdx_common.h"
 
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-//*                         Compilation conditional messages                                    *
-//*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
-#pragma message( "Compiling " __FILE__ )
-#pragma message( "Last modified on " __TIMESTAMP__ )
-
-#ifdef DEBUG
-#pragma message ("* Debug messages enabled  *")
-#ifdef DEBUG_UART
-#pragma message ("* Debug messages output thru the UART1 (serial) output  *")
-#else
-#pragma message ("* Debug messages output thru the USB Serial output      *")
-#endif
-#endif //DEBUG 
-
 /*-----------------------------------------------------------------------------------------------*
  * In order to establish the initial WiFi credentials at compilation time you might create it
  * editing a file named wifi_credentials.h with the following content
@@ -65,14 +50,7 @@
  * Place this file in the same directory the rest of the firmware is in order to be incorporated
  * as part of the compilation process if the TCP/IP functionality is enabled (#define WIFI 1)
  *------------------------------------------------------------------------------------------------*/
-#ifdef WIFI
-#if __has_include("wifi_credentials.h")
-#pragma message("Wifi credentials found")
-#else
-#pragma message("Wifi credentials not found, please supply to enable TCP/IP related functionality")
-#undef WIFI
-#endif
-#endif //WIFI
+
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            Data definitions                                                 *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -174,10 +152,10 @@ double pfo = 0; // Previous output frequency
 //*       GLOBAL VARIABLE DEFINITION CONDITIIONAL TO DIFFERENT OPTIONAL FUNCTIONS               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 
-
 #ifdef WDT
 uint32_t      wdt_tout    = 0;
 #endif //WDT
+
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                    CODE INFRASTRUCTURE                                                      *
@@ -972,6 +950,16 @@ void definePinOut() {
 #endif //DEBUG
 
 }
+#ifdef WIFI
+  String IpAddress2String(const IPAddress& ipAddress)
+{
+  return String(ipAddress[0]) + String(".") +\
+  String(ipAddress[1]) + String(".") +\
+  String(ipAddress[2]) + String(".") +\
+  String(ipAddress[3])  ; 
+}
+
+#endif //WIFI
 /*---------------------------------------------------------------------------------------------
    setup()
    This is the main setup cycle executed once on the Arduino architecture
@@ -988,21 +976,18 @@ void setup()
   Serial.ignoreDTR();
 #endif
 
-//#if defined(DEBUG) || defined(TERMINAL)
-  Serial.begin(BAUD);
-  while (!Serial);
-//#endif //DEBUG
+#if defined(DEBUG) || defined(TERMINAL)
+    Serial.begin(BAUD);
+    while (!Serial);
+#endif //DEBUG
   
-  Serial1.setTX(UART_TX);
-  Serial1.setRX(UART_RX);  
-  Serial1.begin(BAUD);
+    Serial1.setTX(UART_TX);
+    Serial1.setRX(UART_RX);  
+    Serial1.begin(BAUD);
 
 #ifdef DEBUG
   const char * proc = "RP2040";
   _INFOLIST("%s: PDX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
-  sprintf(hi,"%s: PDX Firmware V(%s) build(%d) board(%s)\n", __func__, VERSION, BUILD, proc);
-  Serial1.write(hi);
-  Serial.write(hi);
 #endif //DEBUG
 
   /*---
@@ -1040,10 +1025,6 @@ void setup()
   _INFOLIST("%s Quad Band filter support activated\n", __func__);
 #endif //ONEBAND
 
-#ifdef FSK_PEG
-  _INFOLIST("%s PEG decoding algorithm used Mult(%d) Window[uSec]=%d \n", __func__, uint16_t(FSK_MULT), uint16_t(FSK_WINDOW_USEC));
-#endif //ONEBAND
-
 #ifdef FSK_ZCD
   _INFOLIST("%s ZCD decoding algorithm used (@core2)\n", __func__);
 #endif //FSK_ZCD
@@ -1056,15 +1037,11 @@ void setup()
   _INFOLIST("%s FREQPIO decoding algorithm used (@core1)\n", __func__);
 #endif //FREQPIO
 
-#endif //DEBUG
+#ifdef NTPSYNC
+  _INFOLIST("%s NTP time synchronization enabled\n", __func__);
+#endif //FREQPIO
 
-#ifdef WIFI
-  init_WiFi();
-#ifdef DEBUG
-  _INFOLIST("%s WiFi connectivity triggered\n", __func__);
 #endif //DEBUG
-#endif //WIFI
-
 
   definePinOut();
 
@@ -1072,6 +1049,14 @@ void setup()
   _INFOLIST("%s definePinOut() ok\n", __func__);
 #endif //DEBUG
 
+#ifdef NTPSYNC
+   int rcsync=syncTime();
+   #ifdef DEBUG
+     _INFOLIST("%s syncTime(%d)\n", __func__,rcsync);
+   #endif //DEBUG
+#endif //NTPSYNC
+
+  
   blinkLED(TX);
 
 #ifdef DEBUG
@@ -1179,7 +1164,6 @@ void setup()
 #endif //DEBUG
 
 
-
 #ifdef DEBUG
   _INFOLIST("%s setup configuration completed\n", __func__);
 #endif //DEBUG
@@ -1232,12 +1216,7 @@ void loop()
   //*--- if WDT enabled reset the watchdog
   wdt_reset();
 #endif //WDT
-/*---------------------------------------------------------------------------------*
- * Manage WiFi connection status while not transmitting
- *---------------------------------------------------------------------------------*/
-#ifdef WIFI
-  check_WiFi();
-#endif //WIFI
+
 
   //=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
   //*                                                                                *

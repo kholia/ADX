@@ -18,7 +18,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "2.0"
-#define BUILD          10
+#define BUILD          12
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                       External libraries used                                               *
@@ -40,7 +40,7 @@
 #include "pico/multicore.h"
 #include "hardware/adc.h"
 #include "hardware/uart.h"
-
+#include <WiFi.h>
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            MACRO DEFINES                                                    *
@@ -64,7 +64,7 @@
 #define ATUCTL            1      //Brief 200 mSec pulse to reset ATU on each band change
 #define ONEBAND           1      //Define a single band (defined when Bands[] are selected)..
 #define TERMINAL          1      //Serial configuration terminal used
-#define WIFI              1      //Enable TCP/IP connectivity thru a WiFi AP
+#define NTPSYNC           1      //Enable time sync using a WiFi AP
 
 //#define CAT               1      //Enable CAT protocol over serial port
 //#define FT817             1      //Yaesu FT817 CAT protocol
@@ -181,6 +181,8 @@
 #define QFSK        0B00000100    //FSK detection
 #define PIOIRQ      0B00001000    //Signal IRQ interrupt
 #define WIFIOK      0B00010000    //Wifi Connection status
+#define INETOK      0B00100000    //Internet access Ok
+#define NTPOK       0B01000000    //NTP synchronization Ok
 /*----------------------------------------------------------------*
    Miscellaneour definitions
    ---------------------------------------------------------------*/
@@ -196,9 +198,9 @@
 #define  CAL_COMMIT      12
 #define  CAL_ERROR       1
 
-#define FSK_FREQPIO        1
+//#define FSK_FREQPIO        1
 //#define  FSK_ADCZ        1
-//#define  FSK_ZCD         1
+#define  FSK_ZCD         1
 
 #define FSKMIN             300    //Minimum FSK frequency computed
 #define FSKMAX            3000    //Maximum FSK frequency computed
@@ -391,10 +393,10 @@ extern CALLBACK upCall;
 #endif
 
 #ifdef INFO
-#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
-#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
-//#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);Serial.flush();
-//#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.write(hi);Serial.flush();
+//#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); _SERIAL.print(hi);_SERIAL.flush();
+//#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);_SERIAL.write(hi);_SERIAL.flush();
+#define _INFO           sprintf(hi,"@%s: Ok\n",__func__); Serial.print(hi);Serial.flush();
+#define _INFOLIST(...)  strcpy(hi,"@");sprintf(hi+1,__VA_ARGS__);Serial.write(hi);Serial.flush();
 
 #else
 
@@ -537,12 +539,12 @@ extern uint16_t       atu_delay;
 extern uint32_t       tATU;
 #endif //ATUCTL
 
-#ifdef WIFI
-extern void           init_WiFi();
-extern void           check_WiFi();
-extern uint32_t       tout_WIFI;
 
-#endif //WIFI
+//extern void           init_WiFi();
+//extern void           check_WiFi();
+//extern uint32_t       tout_WIFI;
+
+
 
 #ifdef EE
 extern void           updateEEPROM();
@@ -553,6 +555,10 @@ extern void           initEEPROM();
 extern uint16_t       eeprom_tout;
 extern uint32_t       tout;
 #endif //EE
+
+#ifdef NTPSYNC
+extern int            syncTime();
+#endif //NTPSYNC
 
 #ifdef QUAD
 extern int            band2QUAD(uint16_t b);
@@ -566,10 +572,7 @@ extern uint32_t      wdt_tout;
 #ifdef FSK_FREQPIO
 extern void               PIO_init();
 extern volatile uint32_t   period;
-
-
 #endif //FSK_FREQPIO
-
 
 extern const unsigned long slot[MAXBAND][MAXMODE];
 extern unsigned long f[MAXMODE];

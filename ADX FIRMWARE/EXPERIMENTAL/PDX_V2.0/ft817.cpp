@@ -264,7 +264,7 @@ void processCATCommand2(byte* cmd) {
       }
       switch_RXTX(LOW);
       #ifdef DEBUG
-         _serial1("%s frequency change=%ld\n",__func__,freq);
+         _INFOLIST("%s frequency change=%ld\n",__func__,freq);
       #endif //DEBUG   
 
       }
@@ -332,7 +332,7 @@ void processCATCommand2(byte* cmd) {
          }
       }
       #ifdef DEBUG
-         _serial1("%s mode change=%0x\n",__func__,cmd[0]);
+         _INFOLIST("%s mode change=%0x\n",__func__,cmd[0]);
       #endif //DEBUG   
       break;
 
@@ -351,7 +351,7 @@ void processCATCommand2(byte* cmd) {
       Serial.write(response, 1);
       Serial.flush();
       #ifdef DEBUG
-         _serial1("%s PTT ON\n",__func__);
+         _INFOLIST("%s PTT ON\n",__func__);
       #endif //DEBUG   
       break;
 
@@ -368,7 +368,7 @@ void processCATCommand2(byte* cmd) {
       Serial.write(response, 1);
       Serial.flush();
       #ifdef DEBUG
-         _serial1("%s PTT OFF\n",__func__);
+         _INFOLIST("%s PTT OFF\n",__func__);
       #endif //DEBUG   
 
       break;

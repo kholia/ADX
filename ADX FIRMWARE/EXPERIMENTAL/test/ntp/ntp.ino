@@ -1,6 +1,6 @@
-#include <NTPClient.h>
 // change next line to use with another board/shield
 //#include <ESP8266WiFi.h>
+#include <NTPClient.h>
 #include <WiFi.h> // for WiFi shield
 //#include <WiFi101.h> // for WiFi 101 shield or MKR1000
 #include <WiFiUdp.h>
@@ -21,8 +21,8 @@ char datetime_buf[256];
 char *datetime_str = &datetime_buf[0];
 datetime_t t;
 
-const char *ssid     = "Fibertel WiFi996 2.4GHz";
-const char *password = "00413322447";
+const char *ssid     = "Fibertel WiFi754 2.4GHz";
+const char *password = "0041332244";
 
 WiFiUDP ntpUDP;
 //NTPClient timeClient(ntpUDP);
