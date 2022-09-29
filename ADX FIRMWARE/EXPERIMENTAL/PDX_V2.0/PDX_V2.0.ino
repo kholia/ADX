@@ -140,6 +140,15 @@ unsigned long downTimer[3] = {PUSHSTATE, PUSHSTATE, PUSHSTATE};
 
 
 /*-------------------------------------*
+   Keep track of the hour
+  -------------------------------------*/
+#ifdef DEBUG
+#ifdef NTPSYNC
+uint16_t prevHour=0;
+#endif //DEBUG
+#endif //NTPSYNC
+
+/*-------------------------------------*
    Control communication across cores
   -------------------------------------*/
 
@@ -871,28 +880,8 @@ void keepAlive() {
   ----------------------------------------------------------*/
 void initTransceiver() {
 
-
-#ifdef EE
-  initEEPROM();
-#endif // EE
-
-#ifdef DEBUG
-  _INFOLIST("%s entering setup_si5351()\n", __func__, Band_slot);
-#endif //DEBUG
-
   setup_si5351();
-
-#ifdef DEBUG
-  _INFOLIST("%s entering resetBand(%d)\n", __func__, Band_slot);
-#endif //DEBUG
-
   resetBand(Band_slot);  //@@@
-
-#ifdef DEBUG
-  _INFOLIST("%s completed resetBand(%d)\n", __func__, Band_slot);
-#endif //DEBUG
-
-
   switch_RXTX(LOW);   //Turn-off transmitter, establish RX LOW
   delay(100);
 
@@ -950,16 +939,6 @@ void definePinOut() {
 #endif //DEBUG
 
 }
-#ifdef WIFI
-  String IpAddress2String(const IPAddress& ipAddress)
-{
-  return String(ipAddress[0]) + String(".") +\
-  String(ipAddress[1]) + String(".") +\
-  String(ipAddress[2]) + String(".") +\
-  String(ipAddress[3])  ; 
-}
-
-#endif //WIFI
 /*---------------------------------------------------------------------------------------------
    setup()
    This is the main setup cycle executed once on the Arduino architecture
@@ -973,17 +952,19 @@ void setup()
 
 //#define HAVE_USB_PATCHES 1
 #ifdef HAVE_USB_PATCHES
-  Serial.ignoreDTR();
+    Serial.ignoreDTR();
 #endif
 
 #if defined(DEBUG) || defined(TERMINAL)
     Serial.begin(BAUD);
     while (!Serial);
 #endif //DEBUG
-  
+
+#ifndef NTPSYNC
     Serial1.setTX(UART_TX);
     Serial1.setRX(UART_RX);  
     Serial1.begin(BAUD);
+#endif //NTPSYNC --- There is a conflict between the usage of Serial1 and WiFi.h still unknown but consistent
 
 #ifdef DEBUG
   const char * proc = "RP2040";
@@ -1048,14 +1029,6 @@ void setup()
 #ifdef DEBUG
   _INFOLIST("%s definePinOut() ok\n", __func__);
 #endif //DEBUG
-
-#ifdef NTPSYNC
-   int rcsync=syncTime();
-   #ifdef DEBUG
-     _INFOLIST("%s syncTime(%d)\n", __func__,rcsync);
-   #endif //DEBUG
-#endif //NTPSYNC
-
   
   blinkLED(TX);
 
@@ -1063,9 +1036,23 @@ void setup()
   _INFOLIST("%s blink LED blink dance Ok\n", __func__);
 #endif //DEBUG
 
-#ifdef DEBUG
-  _INFOLIST("%s setup_si5351 ok\n", __func__);
-#endif //DEBUG
+#ifdef NTPSYNC
+
+  sprintf(wifi.ssid,"%s",WIFI_SSID);
+  sprintf(wifi.password,"%s",WIFI_PSK);
+  
+#endif //NTPSYNC
+
+#ifdef EE
+  initEEPROM();
+#endif // EE
+
+#ifdef NTPSYNC
+   int rcsync=syncTime();
+   #ifdef DEBUG
+     _INFOLIST("%s syncTime(%d)\n", __func__,rcsync);
+   #endif //DEBUG
+#endif //NTPSYNC
 
   initTransceiver();
 
@@ -1096,8 +1083,18 @@ void setup()
   _INFOLIST("%s calibration mode not required\n", __func__);
 #endif //DEBUG
 
+//#ifdef TERMINAL
+  /*------------------
+     if UP switch pressed at bootup then enter Terminal mode
+  */
+  if (detectKey(UP, LOW, WAIT) == LOW) {
+    cli_init();
+    cli_command();
+  }
+//#endif //TERMINAL
 
-  // trigger counting algorithm on the second core
+
+// trigger counting algorithm on the second core
   rp2040.idleOtherCore();
 
 #ifdef DEBUG
@@ -1127,6 +1124,9 @@ void setup()
 
 #endif //FSK_FREQPIO
 
+/*------------------
+ * Turn the transceiver TX off
+ */
   delay(500);
   switch_RXTX(LOW);
 
@@ -1134,6 +1134,9 @@ void setup()
   _INFOLIST("%s switch_RXTX Low ok\n", __func__);
 #endif //DEBUG
 
+/*-------------------
+ * Setup and arm watchdog
+ */
 #ifdef WDT
   watchdog_enable(8000, 1);
   setWord(&TSW, TX_WDT, false);
@@ -1141,15 +1144,6 @@ void setup()
   _INFOLIST("%s watchdog configuration completed\n", __func__);
 #endif //DEBUG
 #endif //WDT
-
-#ifdef TERMINAL
-  /*------------------
-     if UP switch pressed at bootup then enter Terminal mode
-  */
-  if (detectKey(UP, LOW, WAIT) == LOW) {
-    execTerminal();
-  }
-#endif //TERMINAL
 
 
   /*------------
@@ -1184,6 +1178,18 @@ void loop()
     ---------------------------------------------------------------------------------*/
   checkMode();
 
+
+#ifdef NTPSYNC
+#ifdef DEBUG
+  time_t now = time(nullptr);
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+  if ( (timeinfo.tm_min%30) == 0 && timeinfo.tm_hour != prevHour) { 
+       prevHour=timeinfo.tm_hour;
+       _INFOLIST("%s %s",__func__,asctime(&timeinfo));
+  }
+#endif //DEBUG
+#endif //NTPSYNC
   /*---------------------------------------------------------------------------------*
       Save EEPROM if a change has been flagged anywhere in the logic
     ---------------------------------------------------------------------------------*/

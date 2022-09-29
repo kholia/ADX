@@ -18,7 +18,7 @@
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 #define VERSION        "2.0"
-#define BUILD          12
+#define BUILD          21
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                       External libraries used                                               *
@@ -99,6 +99,8 @@
 #define CAT_RECEIVE_TIMEOUT 500
 #define numChars 256
 #define ATU_DELAY     200       //How long the ATU control line (D5) is held HIGH on band changes, in mSecs
+#define WIFI_TOUT     20        //WiFi connection timeout (in Secs)
+
 
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -183,6 +185,7 @@
 #define WIFIOK      0B00010000    //Wifi Connection status
 #define INETOK      0B00100000    //Internet access Ok
 #define NTPOK       0B01000000    //NTP synchronization Ok
+#define CLIOK       0B10000000    //Define CLI loop
 /*----------------------------------------------------------------*
    Miscellaneour definitions
    ---------------------------------------------------------------*/
@@ -441,26 +444,33 @@ uint16_t cwshift = CWSHIFT;
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*       DEFINITIONS RELATED TO THE USAGE OF EEPROM AS A PERMANENT STORAGE                     *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
+
 #define EEPROM_CAL          10
 #define EEPROM_BUILD        20
 #define EEPROM_TEMP         30
 #define EEPROM_MODE         40
 #define EEPROM_BAND         50
-
-#ifdef TERMINAL
 #define EEPROM_ATU          60
 #define EEPROM_ATU_DELAY    70
 #define EEPROM_BOUNCE_TIME  80
 #define EEPROM_SHORT_TIME   90
 #define EEPROM_MAXTRY      100
 #define EEPROM_MAX_BLINK   120
-#define EEPROM_EEPROM_TOUT 10000   //Timeout to commit to EEPROM any change
-#define EEPROM_AVOXTIME    170
-#define EEPROM_END         200
-#endif //TERMINAL
 
-#define EEPROM_SAVED  100     //Signature of EEPROM being updated at least once
-#define EEPROM_TOUT  2000     //Timeout in mSecs to wait till commit to EEPROM any change
+#ifdef NTPSYNC
+#define EEPROM_WIFI        130 //50 characters [130..179] Wifi credentials (SSID and password)
+#endif //NTPSYNC
+
+#define EEPROM_AVOXTIME    180
+#define EEPROM_EEPROM_TOUT 190
+#define EEPROM_WIFI_TOUT   200
+#define EEPROM_CAL_FREQ    210
+#define EEPROM_END         250
+
+
+#define EEPROM_SAVED       100       //Signature of EEPROM being updated at least once
+#define EEPROM_TOUT       2000       //Timeout in mSecs to wait till commit to EEPROM any change
+//#define EEPROM_DEV           1       //While defined the EEPROM won't be reset by change the BUILD number
 #endif //EEPROM
 
 #ifdef WDT
@@ -540,12 +550,6 @@ extern uint32_t       tATU;
 #endif //ATUCTL
 
 
-//extern void           init_WiFi();
-//extern void           check_WiFi();
-//extern uint32_t       tout_WIFI;
-
-
-
 #ifdef EE
 extern void           updateEEPROM();
 extern void           resetEEPROM();
@@ -556,8 +560,26 @@ extern uint16_t       eeprom_tout;
 extern uint32_t       tout;
 #endif //EE
 
+#ifdef TERMINAL
+extern void           perform_listToken();
+#endif //TERMINAL
+
+
+extern void           cli_init();
+extern void           cli_command();
+
 #ifdef NTPSYNC
+
+struct EEPROM_WIFI_SSID{
+  char ssid[30];
+  char password[20];
+};
+#define WIFI_SSID     "Fibertel WiFi754 2.4GHz"
+#define WIFI_PSK      "00413322447"
+
+extern EEPROM_WIFI_SSID wifi;
 extern int            syncTime();
+extern uint16_t       wifi_tout;
 #endif //NTPSYNC
 
 #ifdef QUAD

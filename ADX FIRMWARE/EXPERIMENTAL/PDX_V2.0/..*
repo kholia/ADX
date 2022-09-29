@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include "pdx_common.h"
-
 #ifdef TERMINAL
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*               DEFINITIONS SPECIFIC TO THE CONFIGURATION TERMINAL FUNCTION                   *
@@ -18,6 +17,7 @@ char     cmdLine[COMMAND_BUFFER_LENGTH + 1];                 //Read commands int
 
 const char *delimiters            = ", \n";                  //commands can be separated by return, space or comma
 char     printBuffer[80];
+char     cmd[80];
 
 /*----------------------------------------------------------*
    Serial configuration terminal commands
@@ -37,11 +37,19 @@ const char *eeprom_toutToken = "*eet";
 const char *eeprom_listToken = "*list";
 #endif //EE
 
+#ifdef NTPSYNC
+const char *wifi_pskToken   = "*psk";
+const char *wifi_ssidToken  = "*ssid";
+#endif //NTPSYNC
+
 const char *saveToken       = "*save";
 const char *quitToken       = "*quit";
 const char *resetToken      = "*reset";
 const char *helpToken       = "*help";
 const char *endList         = "XXX";
+
+char strbuf[128];
+char argBuffer[128];
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                   Configuration Terminal Function                                           *
 //* This is an optional function allowing to modify operational parameters without recompiling  *
@@ -68,6 +76,7 @@ void setupCallback(CALLBACK s,QSOCALL q) {
       FSMHandler=q;
    }
 }
+
 /*---------------------------------------
  * execute generic (sample) upcall
  */
@@ -82,6 +91,7 @@ void doupCall() {
 
 bool getCommand(char * commandLine)
 {
+  bool toLower=true;
   static uint8_t charsRead = 0;                      //note: COMAND_BUFFER_LENGTH must be less than 255 chars long
   //read asynchronously until full command input
 
@@ -89,7 +99,10 @@ bool getCommand(char * commandLine)
      Read till the serial buffer is exhausted
     ------------------------------------------*/
   while (Serial.available()) {
-    char c = tolower(Serial.read());
+    
+    //char c = tolower(Serial.read());
+    char c=Serial.read();
+    (toLower==true ? c=tolower(c) : c=c);
     switch (c) {
       case CR:      //likely have full command in buffer now, commands are terminated by CR and/or LS
       case LF:
@@ -109,6 +122,9 @@ bool getCommand(char * commandLine)
         break;
       default:
         // c = tolower(c);
+        if (c==' ') {
+           toLower=false;
+        }
         if (charsRead < COMMAND_BUFFER_LENGTH) {
           commandLine[charsRead++] = c;
         }
@@ -127,14 +143,7 @@ uint16_t readNumber () {
   char * numTextPtr = strtok(NULL, delimiters);         //K&R string.h  pg. 250
   return atoi(numTextPtr);                              //K&R string.h  pg. 251
 }
-/*----------------------------------------------------------------------------------*
-   readWord
-   Reads a string of characters
-*/
-char * readWord() {
-  char * word = strtok(NULL, delimiters);               //K&R string.h  pg. 250
-  return word;
-}
+
 /*----------------------------------------------------------------------------------*
    nullCommand
    Handle a command that hasn't been identified
@@ -272,6 +281,15 @@ void perform_helpToken() {
   
 #endif //ATUCTL
 
+#ifdef NTPSYNC
+
+  sprintf(hi,"%s, ",wifi_pskToken + 1);
+  Serial.print(hi);
+
+  sprintf(hi,"%s, ",wifi_ssidToken + 1);
+  Serial.print(hi);
+  
+#endif //NTPSYNC
   
   sprintf(hi,"%s, ",saveToken + 1);
   Serial.print(hi);
@@ -319,6 +337,9 @@ void printMessage(char * token) {
 void execCommand(char * commandLine) {
   //  int result;
 
+  char t[30];
+  strcpy(t,commandLine);
+  
   char * ptrToCommandName = strtok(commandLine, delimiters);
   char msgSave[] = "Parameters saved";
   char msgReset[] = "Reset to default values";
@@ -367,6 +388,19 @@ void execCommand(char * commandLine) {
     return;
   }
 #endif //EE
+
+#ifdef NTPSYNC
+
+  if (strcmp(ptrToCommandName, wifi_pskToken + 1)       == 0) {
+     return;
+  }  
+
+  if (strcmp(ptrToCommandName, wifi_ssidToken + 1)       == 0) {
+     return;    
+  }
+
+
+#endif //NTPSYNC
 
   if (strcmp(ptrToCommandName, saveToken + 1)        == 0) {
     perform_saveToken();

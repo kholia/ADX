@@ -42,13 +42,13 @@ uint16_t calibrateADC(uint16_t min, uint16_t max) {
    restore all calibration values
 */
 void ADCreset() {
-  adc_min = ADCMAX;
-  adc_max = ADCMIN;
+  adc_min  = ADCMAX;
+  adc_max  = ADCMIN;
   adc_zero = ADCZERO;
-  adc_uh = adc_zero * 110 / 100;
-  adc_ul = adc_zero * 90 / 100;
-  ffmin = FSKMAX;
-  ffmax = FSKMIN;
+  adc_uh   = adc_zero * 110 / 100;
+  adc_ul   = adc_zero * 90 / 100;
+  ffmin    = FSKMAX;
+  ffmax    = FSKMIN;
 #ifdef DEBUG
   _TRACELIST("%s Timeout break QSTATE=0, recalibrate input level", __func__);
 #endif //DEBUG
@@ -66,9 +66,11 @@ uint16_t getADCsample() {
     adc_zero = calibrateADC(adc_min, adc_max);
     adc_uh = adc_zero * 110 / 100;
     adc_ul = adc_zero * 90 / 100;
+
 #ifdef DEBUG
     _TRACELIST("%s calibration (max) adc_max=%d adc_min=%d adc_Zero=%d\n", __func__, adc_max, adc_min, adc_zero);
 #endif //DEBUG
+
     return v;
   }
   if (v <= adc_min) {

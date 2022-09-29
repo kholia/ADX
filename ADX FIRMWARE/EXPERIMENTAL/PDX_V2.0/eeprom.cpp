@@ -14,6 +14,8 @@
 #ifdef EE
 uint32_t tout = 0;
 uint16_t eeprom_tout = EEPROM_TOUT;
+
+EEPROM_WIFI_SSID wifi;
 /*------------------------------------------------------------------------------*
    updateEEPROM
    selectively sets values into EEPROM
@@ -28,7 +30,6 @@ void updateEEPROM() {
   EEPROM.put(EEPROM_MODE, mode);
   EEPROM.put(EEPROM_BAND, Band_slot);
 
-#ifdef TERMINAL
 #ifdef ATUCTL
   EEPROM.put(EEPROM_ATU, atu);
   EEPROM.put(EEPROM_ATU_DELAY, atu_delay);
@@ -39,19 +40,28 @@ void updateEEPROM() {
   EEPROM.put(EEPROM_MAX_BLINK, max_blink);
   EEPROM.put(EEPROM_EEPROM_TOUT, eeprom_tout);
   EEPROM.put(EEPROM_MAXTRY,vox_maxtry);
+  EEPROM.put(EEPROM_CAL_FREQ,Cal_freq);
 
-#endif //TERMINAL
+#ifdef NTPSYNC
+  EEPROM.put(EEPROM_WIFI,wifi);
+  #ifdef DEBUG
+    _INFOLIST("%s EEPROM WIFI credentials written ssid(%s) password(%s)\n",__func__,wifi.ssid,wifi.password);
+  #endif //DEBUG   
+  EEPROM.put(EEPROM_WIFI_TOUT,wifi_tout);
+#endif //NTPSYNC
 
-  EEPROM.commit();
 
-#ifdef DEBUG
-  _INFOLIST("%s commit()\n", __func__);
-#endif //DEBUG
+  if (EEPROM.commit()) {
+      _INFOLIST("%s EEPROM successfully committed\n",__func__);
+  } else {
+      _INFOLIST("%s EEPROM commit error\n",__func__);
+  }
 
   setWord(&SSW, SAVEEE, false);
 
 #ifdef DEBUG
   _INFOLIST("%s save(%d) cal(%d) m(%d) slot(%d) save=%d build=%d vox=%d\n", __func__, save, cal_factor, mode, Band_slot, save, build,vox_maxtry);
+  delay(1000);
 #endif //DEBUG
 
 }
@@ -80,6 +90,8 @@ void resetEEPROM() {
   max_blink  = MAX_BLINK;
   vox_maxtry = VOX_MAXTRY;
   eeprom_tout = EEPROM_TOUT;
+  wifi_tout  = WIFI_TOUT;
+  Cal_freq   = 1000000;
 
 #endif //TERMINAL
 
@@ -107,6 +119,7 @@ void flagEEPROM() {
     setWord(&SSW, SAVEEE, true);
 
 }
+
 /*----------------------------------------
  * initEEPROM
  * initialize values from EEPROM on start
@@ -115,12 +128,10 @@ void flagEEPROM() {
  */
 void initEEPROM() {
 
-
-
   EEPROM.begin(512);
 
 #ifdef DEBUG
-  _INFOLIST("%s: EEPROM reserved (%d)\n", __func__, EEPROM.length());
+  _INFOLIST("%s EEPROM reserved (%d)\n", __func__, EEPROM.length());
 #endif //DEBUG
   
   uint16_t temp = 0;
@@ -141,20 +152,25 @@ void initEEPROM() {
 
 
   if (build != uint16_t(BUILD)) {
+
+#ifndef EEPROM_DEV
     resetEEPROM();
+
 #ifdef DEBUG
     _INFOLIST("%s EEPROM Reset Build<> cal(%ld) m(%d) slot(%d)\n", __func__, cal_factor, mode, Band_slot);
 #endif //DEBUG
-
+#endif //EEPROM_DEV
   }
 
   if (temp != save) {
 
+#ifndef EEPROM_DEV
     updateEEPROM();
 
 #ifdef DEBUG
     _INFOLIST("%s EEPROM Reset cal(%ld) m(%d) slot(%d)\n", __func__, cal_factor, mode, Band_slot);
 #endif //DEBUG
+#endif //EEPROM_DEV -- avoid to reset the EEPROM by changing the build while it's a development version
 
   } else {
 
@@ -175,7 +191,6 @@ void initEEPROM() {
     EEPROM.get(EEPROM_MODE, mode);
     EEPROM.get(EEPROM_BAND, Band_slot);
 
-#ifdef TERMINAL
 
 #ifdef ATUCTL
     EEPROM.get(EEPROM_ATU, atu);
@@ -187,9 +202,18 @@ void initEEPROM() {
     EEPROM.get(EEPROM_MAX_BLINK, max_blink);
     EEPROM.get(EEPROM_EEPROM_TOUT, eeprom_tout);
     EEPROM.get(EEPROM_MAXTRY,vox_maxtry);
+    EEPROM.get(EEPROM_CAL_FREQ,Cal_freq);
 
-#endif //TERMINAL
 
+#ifdef NTPSYNC
+
+    EEPROM.get(EEPROM_WIFI, wifi);
+    #ifdef DEBUG
+       _INFOLIST("%s EEPROM Read ssid(%s) password(%s)\n", __func__, wifi.ssid,wifi.password);
+    #endif //DEBUG
+    EEPROM.get(EEPROM_WIFI_TOUT,wifi_tout);
+
+#endif //NTPSYNC
 
 #ifdef DEBUG
     _INFOLIST("%s EEPROM Read cal(%ld) m(%d) slot(%d)\n", __func__, cal_factor, mode, Band_slot);

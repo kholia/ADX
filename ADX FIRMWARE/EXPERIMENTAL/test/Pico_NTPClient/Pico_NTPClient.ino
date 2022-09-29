@@ -23,7 +23,7 @@ const char* hostPing="www.google.com";
 
 
 
-  String IpAddress2String(const IPAddress& ipAddress)
+String IpAddress2String(const IPAddress& ipAddress)
 {
   return String(ipAddress[0]) + String(".") +\
   String(ipAddress[1]) + String(".") +\
