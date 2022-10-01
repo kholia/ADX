@@ -12,8 +12,6 @@
 #ifndef PDX_common
 #define PDX_common
 
-
-
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                            VERSION HEADER                                                   *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
@@ -69,8 +67,7 @@
 //#define CAT               1      //Enable CAT protocol over serial port
 //#define FT817             1      //Yaesu FT817 CAT protocol
 //#define QUAD              1      //Support for QUAD board
-
-//#define CW              1      //CW support
+//#define CW                1      //CW support
 
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                      GENERAL PURPOSE GLOBAL DEFINITIONS                                     *
@@ -185,7 +182,7 @@
 #define WIFIOK      0B00010000    //Wifi Connection status
 #define INETOK      0B00100000    //Internet access Ok
 #define NTPOK       0B01000000    //NTP synchronization Ok
-#define CLIOK       0B10000000    //Define CLI loop
+#define CLIOK       0B10000000    //Stay in a CLI loop
 /*----------------------------------------------------------------*
    Miscellaneour definitions
    ---------------------------------------------------------------*/
@@ -470,7 +467,6 @@ uint16_t cwshift = CWSHIFT;
 
 #define EEPROM_SAVED       100       //Signature of EEPROM being updated at least once
 #define EEPROM_TOUT       2000       //Timeout in mSecs to wait till commit to EEPROM any change
-//#define EEPROM_DEV           1       //While defined the EEPROM won't be reset by change the BUILD number
 #endif //EEPROM
 
 #ifdef WDT
@@ -574,8 +570,9 @@ struct EEPROM_WIFI_SSID{
   char ssid[30];
   char password[20];
 };
-#define WIFI_SSID     "Fibertel WiFi754 2.4GHz"
-#define WIFI_PSK      "00413322447"
+
+#define WIFI_SSID     "SSID AP Name"
+#define WIFI_PSK      "000000000000"
 
 extern EEPROM_WIFI_SSID wifi;
 extern int            syncTime();

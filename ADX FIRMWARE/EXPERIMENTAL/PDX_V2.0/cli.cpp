@@ -4,6 +4,7 @@
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 //*                             CONFIGURATION TERMINAL SUB-SYSTEM                               *
 //*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*   
+#ifdef TERMINAL
 /*----------------------------------------------------------------------------------------------*
  * Instead of changing the main parameters and create a new firmware image as a way to tune     *
  * the behaviour of the program few of the main parameters can be stored on EEPROM to become    *
@@ -25,6 +26,7 @@ const char *max_tryToken     = "vox";
 const char *bounce_timeToken = "bt";
 const char *short_timeToken  = "st";
 const char *max_blinkToken   = "mbl";
+const char *map_asciiToken   = "map";
 
 #ifdef EE
 const char *eeprom_toutToken = "eet";
@@ -34,6 +36,7 @@ const char *listToken = "list";
 #ifdef NTPSYNC
 const char *pskToken   = "psk";
 const char *ssidToken  = "ssid";
+const char *dateToken  = "date";
 const char *wifi_toutToken = "wtout";
 #endif //NTPSYNC
 
@@ -135,6 +138,38 @@ void perform_listToken () {
   return;
 }
 #endif //EE
+/*--------------
+ * perform_date
+ * print date and hour from system clock
+ */
+void perform_date() {
+
+  time_t now = time(nullptr);
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+  Serial.println();
+  sprintf(hi,"%s\n>",asctime(&timeinfo));
+  Serial.print(hi);
+
+}
+/*--------------
+ * perform_mapAscii
+ * 
+ */
+void perform_mapAscii() {
+
+  Serial.println("");
+  Serial.println("ASCII Map");
+  
+  for (int j = 0; j < 256; j++) {
+    
+    sprintf(hi, "%03d %02x %c\n", (byte)j,(byte)j,(char)j);
+    Serial.print(hi);
+  }
+
+  Serial.println("");
+  
+}
 /*---
    quit command
 */
@@ -201,6 +236,9 @@ void perform_helpToken() {
   Serial.print(hi);
  
   sprintf(hi,"%s, ",pskToken);
+  Serial.print(hi);
+
+  sprintf(hi,"%s, ",dateToken);
   Serial.print(hi);
 
   sprintf(hi,"%s, ",wifi_toutToken);
@@ -362,6 +400,8 @@ char argv[128]="";
      if (strcmp(cmd,resetToken) == 0) { perform_resetToken(); return;}
      if (strcmp(cmd,listToken)  == 0) { perform_listToken(); return;}
      if (strcmp(cmd,quitToken)  == 0) { perform_quitToken(); return;}
+     if (strcmp(cmd,map_asciiToken) == 0) { perform_mapAscii(); return;}
+     if (strcmp(cmd,dateToken)  == 0) { perform_date(); return;}
 
      cli_printError(cmd);
 }
@@ -404,3 +444,4 @@ void cli_command() {
      }
   }    
 }
+#endif //TERMINAL

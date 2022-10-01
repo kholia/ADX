@@ -957,7 +957,9 @@ void setup()
 
 #if defined(DEBUG) || defined(TERMINAL)
     Serial.begin(BAUD);
-    while (!Serial);
+    #ifndef HAVE_USB_PATCHES 
+       while (!Serial);
+    #endif //DEBUG   
 #endif //DEBUG
 
 #ifndef NTPSYNC
@@ -1020,7 +1022,7 @@ void setup()
 
 #ifdef NTPSYNC
   _INFOLIST("%s NTP time synchronization enabled\n", __func__);
-#endif //FREQPIO
+#endif //NTPSYNC
 
 #endif //DEBUG
 
@@ -1036,6 +1038,10 @@ void setup()
   _INFOLIST("%s blink LED blink dance Ok\n", __func__);
 #endif //DEBUG
 
+/*-----
+ * Establish initial credentials for the WiFi connectivity
+ * see pdx_common.h
+ */
 #ifdef NTPSYNC
 
   sprintf(wifi.ssid,"%s",WIFI_SSID);
@@ -1043,11 +1049,18 @@ void setup()
   
 #endif //NTPSYNC
 
+/*------
+ * initialize values from EEPROM
+ */
 #ifdef EE
   initEEPROM();
 #endif // EE
 
 #ifdef NTPSYNC
+
+/*------
+ * Connect to WiFi if enabled and sync time
+ */
    int rcsync=syncTime();
    #ifdef DEBUG
      _INFOLIST("%s syncTime(%d)\n", __func__,rcsync);
@@ -1066,16 +1079,17 @@ void setup()
 
   if (detectKey(DOWN, LOW, WAIT) == LOW) {
 
-#ifdef DEBUG
-    _INFOLIST("%s Calibration mode detected\n", __func__);
-#endif //DEBUG
+    #ifdef DEBUG
+       _INFOLIST("%s Calibration mode detected\n", __func__);
+    #endif //DEBUG
 
     setWord(&QSW, QCAL, true);
     setWord(&QSW, QWAIT, true);
     while (true) {
-#ifdef WDT
+
+    #ifdef WDT
       wdt_reset();
-#endif //WDT
+    #endif //WDT
     }
   }
 
@@ -1093,7 +1107,11 @@ void setup()
   }
 //#endif //TERMINAL
 
-
+/*------------------
+ * Do NOT stop core1 until all EEPROM activities had ceased
+ * otherwise a race condition happens that will block the
+ * processor
+ */
 // trigger counting algorithm on the second core
   rp2040.idleOtherCore();
 
@@ -1140,11 +1158,10 @@ void setup()
 #ifdef WDT
   watchdog_enable(8000, 1);
   setWord(&TSW, TX_WDT, false);
-#ifdef DEBUG
-  _INFOLIST("%s watchdog configuration completed\n", __func__);
-#endif //DEBUG
+  #ifdef DEBUG
+     _INFOLIST("%s watchdog configuration completed\n", __func__);
+  #endif //DEBUG
 #endif //WDT
-
 
   /*------------
      re-start the core1 where the FSK counting or ADC zero crossing algorithms
@@ -1156,7 +1173,6 @@ void setup()
 #ifdef DEBUG
   _INFOLIST("%s Core1 resumed ok\n", __func__);
 #endif //DEBUG
-
 
 #ifdef DEBUG
   _INFOLIST("%s setup configuration completed\n", __func__);
@@ -1180,7 +1196,11 @@ void loop()
 
 
 #ifdef NTPSYNC
-#ifdef DEBUG
+/*-----
+ * Periodically print the timestamp over the serial port for
+ * stability tests, every half and hour
+ */
+  #ifdef DEBUG
   time_t now = time(nullptr);
   struct tm timeinfo;
   gmtime_r(&now, &timeinfo);
@@ -1188,7 +1208,7 @@ void loop()
        prevHour=timeinfo.tm_hour;
        _INFOLIST("%s %s",__func__,asctime(&timeinfo));
   }
-#endif //DEBUG
+  #endif //DEBUG
 #endif //NTPSYNC
   /*---------------------------------------------------------------------------------*
       Save EEPROM if a change has been flagged anywhere in the logic
@@ -1237,7 +1257,7 @@ void loop()
      Whenever the frequency falls within the [FSKMIN,FSKMAX] limits it's FIFOed here
      Additional heuristic of validation are also applied to manage counting common
      counting errors.
-     FSK_PEG (deprecated, way too much error)
+     FSK_PEG (deprecated, way too much errors)
      The counting algorithm has a common error of +/- 1 count because of the moment
      the sampling starts (which might include or exclude one edge), because of the
      window measurement applied this is translated into a +/- FSK_MULT (Hz) error
@@ -1279,9 +1299,11 @@ void loop()
       switch_RXTX(LOW);
       setWord(&TSW, TX_WDT, HIGH);
       wdt_tout = millis();
+      
 #ifdef DEBUG
       _INFOLIST("%s TX watchdog condition triggered\n", __func__);
 #endif //DEBUG
+      
       break;
     }
 #endif //WDT
@@ -1330,9 +1352,11 @@ void loop()
           ----------------------------------------------------*/
 
         if (getWord(SSW, VOX) == false) {
+
 #ifdef DEBUG
           _INFOLIST("%s VOX activated n=%d f=%ld\n", __func__, n, codefreq);
 #endif //DEBUG
+
           switch_RXTX(HIGH);
           setWord(&SSW, VOX, true);
           prevfreq = 0;
@@ -1346,9 +1370,11 @@ void loop()
 #ifdef FSK_ZCD
         if (pfo != codefreq) {
           si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0);
+
 #ifdef DEBUG
           _INFOLIST("%s Frequency change fo=%ld\n", __func__, codefreq);
 #endif //DEBUG
+
           pfo = codefreq;
           continue;
         }
@@ -1401,9 +1427,11 @@ if (getWord(QSW,PIOIRQ) == true) {
        Frequency IS NOT changed on the first sample
        ----------------------------------------------------*/
       if (getWord(SSW, VOX) == false) {
+
 #ifdef DEBUG
          _INFOLIST("%s VOX activated n=%d f=%ld\n", __func__, n, codefreq);
 #endif //DEBUG
+
           switch_RXTX(HIGH);
           setWord(&SSW, VOX, true);
           prevfreq = 0;
@@ -1416,6 +1444,7 @@ if (getWord(QSW,PIOIRQ) == true) {
        */
       if (abs(int(codefreq-prevfreq))>=FSK_ERROR) {
          si5351.set_freq(((freq + codefreq) * 100ULL), SI5351_CLK0);
+
 #ifdef DEBUG
          k++;
          if (k=1000) {
@@ -1423,6 +1452,7 @@ if (getWord(QSW,PIOIRQ) == true) {
          k=0;
          }
 #endif //DEBUG
+
          prevfreq = codefreq;
       }
    }        
@@ -1430,15 +1460,16 @@ if (getWord(QSW,PIOIRQ) == true) {
 
 #endif //End the processing made by the FSK_FREQPIO algorithms    
 //*===================================================================================================================    
-    
-    
+        
     else {   //within the nth loop but no signal is detected, so it's a waiting pattern to turn off the VOX or CAT
+      
       /*--------------------
          Waiting for signal
         --------------------*/
       uint32_t tcnt = time_us_32() + uint32_t(FSK_IDLE);
       while (time_us_32() < tcnt);
       n--;
+
 #ifdef WDT
       wdt_reset();
 #endif //WDT
@@ -1516,10 +1547,10 @@ if (getWord(QSW,PIOIRQ) == true) {
      At this point it must be in RX mode so perform the switch
     ------------------------------------------------------------*/
   if (getWord(SSW, CATTX) != true) {
-    switch_RXTX(LOW);
-    setWord(&SSW, VOX, false);
-    setWord(&SSW, TXON, false);
-    pfo = 0;                         //Force next TX mode to setup frequency
+     switch_RXTX(LOW);
+     setWord(&SSW, VOX, false);
+     setWord(&SSW, TXON, false);
+     pfo = 0;                         //Force next TX mode to setup frequency
   }
 
   /*----------------------*

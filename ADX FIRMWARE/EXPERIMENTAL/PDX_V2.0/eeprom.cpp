@@ -12,6 +12,7 @@
  * flash memory tolerates even less cycles. 
  */
 #ifdef EE
+
 uint32_t tout = 0;
 uint16_t eeprom_tout = EEPROM_TOUT;
 

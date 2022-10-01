@@ -138,14 +138,6 @@ int checkAP(char* s,char* p) {
  *    SYNC_NO_NTP   Synchronization failed, no NTP server
  */
 int syncTime() {
-
-/*
-  char           ssid[30];
-  char           password[20];
-  
-  sprintf(ssid,"%s",wifi.ssid);
-  sprintf(password,"%s",wifi.password);
-*/
   
   #ifdef DEBUG
     _INFOLIST("%s saving ssid(%s) password(%s)\n",__func__,wifi.ssid,wifi.password);
