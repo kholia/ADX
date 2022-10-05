@@ -24,7 +24,7 @@ arduino-cli lib install "Etherkit Si5351" &> /dev/null
 
 # Patch toolchain (hacky)
 cpath=`pwd`
-ver="2.5.2"
+ver="2.6.0"
 cd "ADX FIRMWARE/EXPERIMENTAL/patches"
 cp Serial* ~/.arduino15/packages/rp2040/hardware/rp2040/$ver/cores/rp2040/
 cp cdc* ~/.arduino15/packages/rp2040/hardware/rp2040/$ver/pico-sdk/lib/tinyusb/src/class/cdc/
